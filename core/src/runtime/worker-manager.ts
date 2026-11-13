@@ -30,6 +30,7 @@ interface WorkerManagerOptions {
     getOfflineAutoDeleteMs: () => number;
     triggerEventNotify: (payload: any) => void;
     sendConfiguredPush?: (payload: any) => Promise<void> | void;
+    noteAccountRecovered?: (accountId: string, accountName?: string) => void;
     addOrUpdateAccount: (acc: any) => any;
     deleteAccount: (id: string) => void;
     onStatusSync?: (accountId: string, status: any, accountName?: string) => void;
@@ -54,6 +55,7 @@ function createWorkerManager(options: WorkerManagerOptions) {
         getOfflineAutoDeleteMs,
         triggerEventNotify,
         sendConfiguredPush,
+    noteAccountRecovered,
     addOrUpdateAccount,
     deleteAccount,
     onStatusSync,
@@ -320,6 +322,12 @@ function createWorkerManager(options: WorkerManagerOptions) {
                 worker.disconnectedSince = 0;
                 worker.autoDeleteTriggered = false;
                 worker.wsError = null;
+                // 连接已恢复：取消挂起中的「已离线」提醒，只保留恢复在线那条
+                if (typeof noteAccountRecovered === 'function') {
+                    try {
+                        noteAccountRecovered(accountId, worker.name);
+                    } catch (err) { ignoreError('core/src/runtime/worker-manager.ts:recovered', err); }
+                }
             } else if (!worker.stopping) {
                 const now = Date.now();
                 if (!worker.disconnectedSince) worker.disconnectedSince = now;
@@ -419,12 +427,15 @@ function createWorkerManager(options: WorkerManagerOptions) {
                 worker.name,
                 { reason, reasonCode, diagnostics: msg.diagnostics || null },
             );
-            triggerEventNotify({
-                accountId,
-                accountName: worker.name,
-                reason: `kickout:${reason}`,
-                offlineMs: 0,
-            });
+            // 主动停止（用户点停止、重登前的 stopWorker）不算掉线，不推提醒
+            if (!worker.stopping) {
+                triggerEventNotify({
+                    accountId,
+                    accountName: worker.name,
+                    reason: `kickout:${reason}`,
+                    offlineMs: 0,
+                });
+            }
             if (onAccountDisconnectCb) {
                 onAccountDisconnectCb(accountId, worker.name, `kickout:${reason}`);
             }
@@ -453,12 +464,14 @@ function createWorkerManager(options: WorkerManagerOptions) {
                 reason,
                 diagnostics: msg.diagnostics || null,
             });
-            triggerEventNotify({
-                accountId,
-                accountName: worker.name,
-                reason: `disconnect:${source}:${phase}:${code}`,
-                offlineMs: 0,
-            });
+            if (!worker.stopping) {
+                triggerEventNotify({
+                    accountId,
+                    accountName: worker.name,
+                    reason: `disconnect:${source}:${phase}:${code}`,
+                    offlineMs: 0,
+                });
+            }
             addAccountLog(
                 'disconnect_stop',
                 `账号 ${worker.name} 连接已断开，已停止运行并等待 Helper 刷新 Code 或重新扫码`,

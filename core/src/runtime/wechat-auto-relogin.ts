@@ -340,7 +340,8 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
             forget(id);
             log('系统', `账号 ${name} 没有可用的微信登录会话，等待重新扫码`, { accountId: id, accountName: name, reason });
             addAccountLog('wx_auto_relogin_missing_session', `账号 ${name} 没有可用的微信登录会话，等待重新扫码`, id, name, { reason });
-            triggerEventNotify({ accountId: id, accountName: name, reason, offlineMs: 0 });
+            // 没有会话可用 = 终态，自动重登救不回来，立即推送（no_session 前缀见 event-notify 的终态白名单）
+            triggerEventNotify({ accountId: id, accountName: name, reason: `no_session:${reason}`, offlineMs: 0 });
             return;
         }
 
