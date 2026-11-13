@@ -92,8 +92,11 @@ pnpm dev
 bash ./start.sh              # 缺依赖或代码变化时自动安装并增量重建
 bash ./start.sh --rebuild    # 忽略缓存完整重建
 tail -f app_dev.log          # 查看日志
-bash ./stop.sh               # 停止服务
+bash ./stop.sh               # 停止服务（含 3000 端口转发）
 ```
+
+> [!TIP]
+> 不要直接在终端前台运行 `node core/client.js`：关闭该终端会向进程发 `SIGHUP`，Node 在退出阶段重置 stdio 时可能 abort 并落地一个近百 MB 的 core dump。用 `start.sh` 后台启动，标准输入输出重定向到日志文件，不受终端开关影响。
 
 ### 常见问题
 
