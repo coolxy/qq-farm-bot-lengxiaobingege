@@ -12,10 +12,9 @@ const { isHostSleepReason } = require('../utils/host-sleep');
 const { getServerTimeSec, toNum, log, sleep } = require('../utils/utils');
 
 const DEFAULT_RETRY_DELAYS_MS = [30000, 12000, 30000];
-// 巡检频率：每 10 分钟看一下是否到了刷新周期
-const SESSION_REFRESH_CHECK_INTERVAL_MS = 10 * 60 * 1000;
-// 用户要求：每小时主动刷新一次 access token / login buffer，不等临期
-const SESSION_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+// 用户要求：每小时整点主动刷新一次 access token / login buffer，不等临期
+const SESSION_REFRESH_INTERVAL_MS = HOUR_MS;
 // 传给底层换码的提前量，与刷新周期保持一致
 const SESSION_REFRESH_AHEAD_MS = SESSION_REFRESH_INTERVAL_MS;
 
@@ -99,10 +98,10 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
 
     function isWechatAccountNeedsRefresh(account: any): boolean {
         if (!String(account?.loginBuffer || '').trim()) return false;
-        // 以「上次成功刷新时间」为准做节流；历史账号没有该字段时退回到 updatedAt
+        // 对齐整点：上次刷新落在哪个小时，和当前小时不同就刷新，保证每个整点最多一次
         const last = Number(account?.wxSessionRefreshedAt || 0) || Number(account?.updatedAt || 0);
         if (last <= 0) return true;
-        return Date.now() - last >= SESSION_REFRESH_INTERVAL_MS;
+        return Math.floor(last / HOUR_MS) < Math.floor(Date.now() / HOUR_MS);
     }
 
     async function pushSessionRefresh(account: any, push: { title: string; content: string }): Promise<void> {
@@ -173,21 +172,34 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
         }
     }
 
-    function startSessionRefreshScheduler(): void {
-        scheduler.setIntervalTask(sessionRefreshTask, SESSION_REFRESH_CHECK_INTERVAL_MS, async () => {
-            const data = store.getAccounts ? store.getAccounts() : { accounts: [] };
-            const accounts = Array.isArray(data?.accounts) ? data.accounts : [];
-            for (const account of accounts) {
-                try {
-                    if (!account || String(account.platform || '').toLowerCase() !== 'wx') continue;
-                    if (account?.wechatAutoRelogin === false) continue;
-                    await refreshSessionIfNeeded(account);
-                } catch (err) { ignoreError('core/src/runtime/wechat-auto-relogin.ts:120', err); }
+    // 整点对齐：每小时的第 0 分触发（+1 秒缓冲，避免边界抖动落在上一小时）
+    function msUntilNextHour(now: number = Date.now()): number {
+        const next = (Math.floor(now / HOUR_MS) + 1) * HOUR_MS + 1000;
+        return Math.max(1000, next - now);
+    }
+
+    let hourlyRefreshStopped = false;
+
+    function scheduleNextHourlyRefresh(): void {
+        if (hourlyRefreshStopped) return;
+        scheduler.setTimeoutTask(sessionRefreshTask, msUntilNextHour(), async () => {
+            try {
+                await refreshAllSessionsIfNeeded();
+            } catch (err) {
+                ignoreError('core/src/runtime/wechat-auto-relogin.ts:hourlyRefresh', err);
+            } finally {
+                scheduleNextHourlyRefresh();
             }
-        }, { preventOverlap: true });
+        });
+    }
+
+    function startSessionRefreshScheduler(): void {
+        hourlyRefreshStopped = false;
+        scheduleNextHourlyRefresh();
     }
 
     function stopSessionRefreshScheduler(): void {
+        hourlyRefreshStopped = true;
         scheduler.clear(sessionRefreshTask);
     }
     const setTimeoutTask = options.setTimeoutTask

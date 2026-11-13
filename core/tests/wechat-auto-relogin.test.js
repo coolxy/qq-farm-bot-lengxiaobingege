@@ -298,24 +298,26 @@ test('manual cancel prevents a later worker restart', async () => {
     assert.equal(harness.reminders.length, 0);
 });
 
-function primeWxSession(harness, refreshedAgoMs) {
+function primeWxSession(harness, refreshedAt) {
     const acc = harness.accounts[0];
     acc.wxOpenId = 'openid-1';
     acc.wxAccessToken = 'token-1';
     acc.wxRefreshToken = 'refresh-1';
     acc.wxExpiresAt = Math.floor(Date.now() / 1000) + 7200;
-    acc.wxSessionRefreshedAt = Date.now() - refreshedAgoMs;
+    acc.wxSessionRefreshedAt = refreshedAt;
 }
 
 test('pushes a dedicated reminder after each hourly session refresh', async () => {
     const harness = createHarness();
-    primeWxSession(harness, 30 * 60 * 1000);
+    // 同一小时内已经刷过 → 不刷新也不推送
+    primeWxSession(harness, Date.now() - 60 * 1000);
 
     await harness.service.refreshAllSessionsIfNeeded();
-    assert.equal(harness.issued.length, 0, '未满 1 小时不应刷新');
+    assert.equal(harness.issued.length, 0, '同一小时内不应重复刷新');
     assert.equal(harness.pushes.length, 0, '未刷新不应推送');
 
-    primeWxSession(harness, 61 * 60 * 1000);
+    // 上一个整点之前刷过 → 本整点刷新并推一条
+    primeWxSession(harness, Date.now() - 2 * 60 * 60 * 1000);
     harness.setIssueWxLoginCode(async () => 'new-code');
     await harness.service.refreshAllSessionsIfNeeded();
 
@@ -327,7 +329,7 @@ test('pushes a dedicated reminder after each hourly session refresh', async () =
 
 test('pushes a failure reminder when the hourly refresh fails', async () => {
     const harness = createHarness();
-    primeWxSession(harness, 61 * 60 * 1000);
+    primeWxSession(harness, Date.now() - 2 * 60 * 60 * 1000);
     harness.setIssueWxLoginCode(async () => { throw new Error('session dead'); });
 
     await harness.service.refreshAllSessionsIfNeeded();
