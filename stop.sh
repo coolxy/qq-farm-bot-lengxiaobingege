@@ -6,7 +6,14 @@ PID_FILE="$SCRIPT_DIR/app_dev.pid"
 
 cd "$SCRIPT_DIR"
 
+# start.sh 在 PORT 与 3000 不一致时会起 socat 做转发，它已 setsid 脱离进程组，
+# 只 kill node 的进程组清不掉。这里统一收尾，避免停服后 3000 仍被占着。
+stop_forwarder() {
+    pkill -f '^socat TCP-LISTEN:3000' 2>/dev/null || true
+}
+
 if [[ ! -f "$PID_FILE" ]]; then
+    stop_forwarder
     echo "qq-farm-bot is not running."
     exit 0
 fi
@@ -15,12 +22,14 @@ app_pid="$(tr -d '[:space:]' < "$PID_FILE")"
 if [[ ! "$app_pid" =~ ^[0-9]+$ ]]; then
     echo "Invalid PID file; removing it." >&2
     rm -f -- "$PID_FILE"
+    stop_forwarder
     exit 1
 fi
 
 if ! kill -0 "$app_pid" 2>/dev/null; then
     echo "qq-farm-bot is not running; removing stale PID file."
     rm -f -- "$PID_FILE"
+    stop_forwarder
     exit 0
 fi
 
@@ -52,6 +61,7 @@ fi
 for _ in {1..30}; do
     if ! kill -0 "$app_pid" 2>/dev/null; then
         rm -f -- "$PID_FILE"
+        stop_forwarder
         echo "Stopped qq-farm-bot."
         exit 0
     fi
@@ -66,4 +76,5 @@ else
 fi
 
 rm -f -- "$PID_FILE"
+stop_forwarder
 echo "Stopped qq-farm-bot."

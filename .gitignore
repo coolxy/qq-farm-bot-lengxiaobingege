@@ -41,6 +41,9 @@ Update.log
 .DS_Store
 Thumbs.db
 
+# Crash dumps (node abort / WASM trap 时生成)
+core.[0-9]*
+
 # Test/coverage
 **/test/
 **/tests/
