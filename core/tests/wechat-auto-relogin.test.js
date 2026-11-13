@@ -307,7 +307,7 @@ function primeWxSession(harness, refreshedAt) {
     acc.wxSessionRefreshedAt = refreshedAt;
 }
 
-test('pushes a dedicated reminder after each hourly session refresh', async () => {
+test('refreshes at the top of the hour and stays silent on success', async () => {
     const harness = createHarness();
     // 同一小时内已经刷过 → 不刷新也不推送
     primeWxSession(harness, Date.now() - 60 * 1000);
@@ -316,15 +316,20 @@ test('pushes a dedicated reminder after each hourly session refresh', async () =
     assert.equal(harness.issued.length, 0, '同一小时内不应重复刷新');
     assert.equal(harness.pushes.length, 0, '未刷新不应推送');
 
-    // 上一个整点之前刷过 → 本整点刷新并推一条
+    // 上一个整点之前刷过 → 本整点刷新，但成功不发推送
     primeWxSession(harness, Date.now() - 2 * 60 * 60 * 1000);
     harness.setIssueWxLoginCode(async () => 'new-code');
     await harness.service.refreshAllSessionsIfNeeded();
 
     assert.equal(harness.issued.length, 1);
-    assert.equal(harness.pushes.length, 1);
-    assert.match(harness.pushes[0].title, /微信会话自动刷新成功/);
-    assert.match(harness.pushes[0].content, /账号：wx-user/);
+    assert.equal(harness.accounts[0].code, 'new-code');
+    assert.equal(harness.pushes.length, 0, '刷新成功不推送');
+
+    // 成功文案仍可用于手动查看
+    const { buildSessionRefreshPush } = require('../dist/runtime/wechat-auto-relogin');
+    const okPush = buildSessionRefreshPush({ name: 'wx-user' }, { ok: true, expiresAt: 1794573390, now: 1794570000000 });
+    assert.match(okPush.title, /微信会话自动刷新成功/);
+    assert.match(okPush.content, /新会话有效期至/);
 });
 
 test('pushes a failure reminder when the hourly refresh fails', async () => {

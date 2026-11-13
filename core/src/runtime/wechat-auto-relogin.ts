@@ -17,6 +17,8 @@ const HOUR_MS = 60 * 60 * 1000;
 const SESSION_REFRESH_INTERVAL_MS = HOUR_MS;
 // 传给底层换码的提前量，与刷新周期保持一致
 const SESSION_REFRESH_AHEAD_MS = SESSION_REFRESH_INTERVAL_MS;
+// 用户要求：成功后不推送，只在续期失败时提醒；想恢复「每小时一条成功提醒」改成 true 即可
+const PUSH_SESSION_REFRESH_SUCCESS = false;
 
 interface WechatAutoReloginOptions {
     store: any;
@@ -132,8 +134,7 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
                 accountId: id, accountName: name,
                 lastRefreshedAt: Number(account.wxSessionRefreshedAt || 0),
                 expiresAt: Number(account.wxExpiresAt || 0),
-            });
-            const issued = await issueWxLoginCode(loginBuffer, WX_FARM_APP_ID, credentials, SESSION_REFRESH_AHEAD_MS);
+            });            const issued = await issueWxLoginCode(loginBuffer, WX_FARM_APP_ID, credentials, SESSION_REFRESH_AHEAD_MS);
             let code: string, nextBuffer: string, nextCredentials: any;
             if (typeof issued === 'string') {
                 code = String(issued || '').trim();
@@ -148,10 +149,13 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
             store.addOrUpdateAccount({ id, code, ...accountFieldsFromCredentials(nextBuffer, nextCredentials) });
             log('系统', `账号 ${name} 微信会话自动刷新成功`, { accountId: id, accountName: name });
             addAccountLog('wx_session_refreshed', `账号 ${name} 微信会话自动刷新成功（每小时一次）`, id, name);
-            await pushSessionRefresh(account, buildSessionRefreshPush(account, {
-                ok: true,
-                expiresAt: Number(nextCredentials?.expiresAt || 0),
-            }));
+            // 成功不推送：每小时一条太吵，只有失败才需要人介入
+            if (PUSH_SESSION_REFRESH_SUCCESS) {
+                await pushSessionRefresh(account, buildSessionRefreshPush(account, {
+                    ok: true,
+                    expiresAt: Number(nextCredentials?.expiresAt || 0),
+                }));
+            }
         } catch (error: any) {
             log('错误', `账号 ${name} 微信会话自动刷新失败: ${error?.message || error}`, {
                 accountId: id, accountName: name,
