@@ -73,6 +73,7 @@ function normalizeAccount(raw: any): Account {
         wxExpiresIn: source.wxExpiresIn,
         wxLoginType: source.wxLoginType,
         wxRefreshTokenObservedAt: source.wxRefreshTokenObservedAt,
+        wxSessionRefreshedAt: source.wxSessionRefreshedAt,
         wechatAutoRelogin: source.wechatAutoRelogin,
         hasCode: source.hasCode,
         hasLoginBuffer: source.hasLoginBuffer,
@@ -90,10 +91,14 @@ function addOrUpdateAccount(acc: Partial<Account> & { avatarUrl?: string }): Acc
     let touchedAccountId = '';
     const source: any = acc || {};
     const cleanAccount: any = {};
-    for (const key of ['id', 'name', 'code', 'platform', 'uin', 'qq', 'gid', 'uid', 'avatar', 'avatarUrl', 'nick', 'loginBuffer', 'wxOpenId', 'wxAccessToken', 'wxRefreshToken', 'wxExpiresAt', 'wxExpiresIn', 'wxLoginType', 'wxRefreshTokenObservedAt', 'wechatAutoRelogin', 'hasCode', 'hasLoginBuffer']) {
+    for (const key of ['id', 'name', 'code', 'platform', 'uin', 'qq', 'gid', 'uid', 'avatar', 'avatarUrl', 'nick', 'loginBuffer', 'wxOpenId', 'wxAccessToken', 'wxRefreshToken', 'wxExpiresAt', 'wxExpiresIn', 'wxLoginType', 'wxRefreshTokenObservedAt', 'wxSessionRefreshedAt', 'wechatAutoRelogin', 'hasCode', 'hasLoginBuffer']) {
         if (source[key] !== undefined) cleanAccount[key] = source[key];
     }
     acc = cleanAccount;
+    // 写入新的 code / loginBuffer（扫码、刷新、重登）即视为会话刚续期，用于「每小时刷新一次」的节流
+    if ((acc.code || acc.loginBuffer) && acc.wxSessionRefreshedAt === undefined) {
+        acc.wxSessionRefreshedAt = Date.now();
+    }
     if (acc.id) {
         const idx = data.accounts.findIndex(a => a.id === acc.id);
         if (idx >= 0) {
@@ -117,7 +122,7 @@ function addOrUpdateAccount(acc: Partial<Account> & { avatarUrl?: string }): Acc
         };
         // 微信扫码会话字段必须在新建时就保留，否则掉线后无法自动重登
         const accRecord = acc as Record<string, any>;
-        for (const key of ['loginBuffer', 'wxOpenId', 'wxAccessToken', 'wxRefreshToken', 'wxExpiresAt', 'wxExpiresIn', 'wxLoginType', 'wxRefreshTokenObservedAt', 'wechatAutoRelogin']) {
+        for (const key of ['loginBuffer', 'wxOpenId', 'wxAccessToken', 'wxRefreshToken', 'wxExpiresAt', 'wxExpiresIn', 'wxLoginType', 'wxRefreshTokenObservedAt', 'wxSessionRefreshedAt', 'wechatAutoRelogin']) {
             if (accRecord[key] !== undefined) created[key] = accRecord[key];
         }
         if (created.loginBuffer) created.hasLoginBuffer = true;

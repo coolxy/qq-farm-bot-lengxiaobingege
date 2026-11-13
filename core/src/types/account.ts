@@ -20,6 +20,8 @@ export interface Account {
   wxExpiresIn?: number;
   wxLoginType?: string;
   wxRefreshTokenObservedAt?: number;
+  /** 上次成功刷新微信会话（code / access token）的时间，毫秒；用于「每小时刷新一次」节流 */
+  wxSessionRefreshedAt?: number;
   wechatAutoRelogin?: boolean;
   hasCode?: boolean;
   hasLoginBuffer?: boolean;

@@ -9,12 +9,15 @@ const {
 const { ignoreError } = require('../utils/ignore-error');
 const { createScheduler } = require('../services/scheduler');
 const { isHostSleepReason } = require('../utils/host-sleep');
-const { getServerTimeSec, toNum, log, sleep, unixSeconds } = require('../utils/utils');
+const { getServerTimeSec, toNum, log, sleep } = require('../utils/utils');
 
 const DEFAULT_RETRY_DELAYS_MS = [30000, 12000, 30000];
-const SESSION_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
-// 到期前 30 分钟主动刷新 access token / login buffer（用户要求：过期前半小时执行一次刷新）
-const SESSION_REFRESH_AHEAD_MS = 30 * 60 * 1000;
+// 巡检频率：每 10 分钟看一下是否到了刷新周期
+const SESSION_REFRESH_CHECK_INTERVAL_MS = 10 * 60 * 1000;
+// 用户要求：每小时主动刷新一次 access token / login buffer，不等临期
+const SESSION_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
+// 传给底层换码的提前量，与刷新周期保持一致
+const SESSION_REFRESH_AHEAD_MS = SESSION_REFRESH_INTERVAL_MS;
 
 interface WechatAutoReloginOptions {
     store: any;
@@ -59,9 +62,11 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
     const sessionRefreshTask = `wx_session_refresh_all`;
 
     function isWechatAccountNeedsRefresh(account: any): boolean {
-        const expiresAt = Number(account?.wxExpiresAt || 0);
-        if (expiresAt <= 0) return false;
-        return unixSeconds(Date.now() + SESSION_REFRESH_AHEAD_MS) >= expiresAt;
+        if (!String(account?.loginBuffer || '').trim()) return false;
+        // 以「上次成功刷新时间」为准做节流；历史账号没有该字段时退回到 updatedAt
+        const last = Number(account?.wxSessionRefreshedAt || 0) || Number(account?.updatedAt || 0);
+        if (last <= 0) return true;
+        return Date.now() - last >= SESSION_REFRESH_INTERVAL_MS;
     }
 
     async function refreshSessionIfNeeded(account: any): Promise<void> {
@@ -73,8 +78,10 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
         if (!isWechatAccountNeedsRefresh(account)) return;
         if (cancelled.has(id)) return;
         try {
-            log('系统', `账号 ${name} 微信会话将过期，提前自动刷新`, {
-                accountId: id, accountName: name, expiresAt: Number(account.wxExpiresAt || 0),
+            log('系统', `账号 ${name} 微信会话满 1 小时，自动刷新`, {
+                accountId: id, accountName: name,
+                lastRefreshedAt: Number(account.wxSessionRefreshedAt || 0),
+                expiresAt: Number(account.wxExpiresAt || 0),
             });
             const issued = await issueWxLoginCode(loginBuffer, WX_FARM_APP_ID, credentials, SESSION_REFRESH_AHEAD_MS);
             let code: string, nextBuffer: string, nextCredentials: any;
@@ -89,10 +96,10 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
             }
             if (!code) throw new Error('empty wx login code');
             store.addOrUpdateAccount({ id, code, ...accountFieldsFromCredentials(nextBuffer, nextCredentials) });
-            log('系统', `账号 ${name} 微信会话提前自动刷新成功`, { accountId: id, accountName: name });
-            addAccountLog('wx_session_refreshed', `账号 ${name} 微信会话提前自动刷新成功`, id, name);
+            log('系统', `账号 ${name} 微信会话自动刷新成功`, { accountId: id, accountName: name });
+            addAccountLog('wx_session_refreshed', `账号 ${name} 微信会话自动刷新成功（每小时一次）`, id, name);
         } catch (error: any) {
-            log('错误', `账号 ${name} 微信会话提前自动刷新失败: ${error?.message || error}`, {
+            log('错误', `账号 ${name} 微信会话自动刷新失败: ${error?.message || error}`, {
                 accountId: id, accountName: name,
             });
         }
@@ -111,7 +118,7 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
     }
 
     function startSessionRefreshScheduler(): void {
-        scheduler.setIntervalTask(sessionRefreshTask, SESSION_REFRESH_INTERVAL_MS, async () => {
+        scheduler.setIntervalTask(sessionRefreshTask, SESSION_REFRESH_CHECK_INTERVAL_MS, async () => {
             const data = store.getAccounts ? store.getAccounts() : { accounts: [] };
             const accounts = Array.isArray(data?.accounts) ? data.accounts : [];
             for (const account of accounts) {
