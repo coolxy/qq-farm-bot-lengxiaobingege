@@ -27,6 +27,8 @@ interface WechatAutoReloginOptions {
     stopWorker: (accountId: string, options?: { preserveAutoRelogin?: boolean }) => void;
     waitForWorkerExit?: (accountId: string) => Promise<void>;
     triggerEventNotify: (payload: any) => void;
+    /** 走事件通知渠道发送自定义消息（每小时会话续期提醒） */
+    sendPush?: (payload: { title: string; content: string; accountId?: string; accountName?: string; logLabel?: string }) => Promise<void> | void;
     setTimeoutTask?: (taskName: string, delayMs: number, taskFn: () => Promise<void> | void) => any;
     clearTimeoutTask?: (taskName: string) => void;
     issueWxLoginCode?: (loginBuffer: string, appId: string, credentials?: any, aheadMs?: number) => Promise<any>;
@@ -36,6 +38,39 @@ interface WechatAutoReloginOptions {
 function isWechatPlatform(platform: unknown): boolean {
     const value = String(platform || '').trim().toLowerCase();
     return value === 'wx' || value === 'wechat';
+}
+
+function formatStamp(ms: number): string {
+    if (!Number.isFinite(ms) || ms <= 0) return '-';
+    const d = new Date(ms);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+// 每小时续期是一条独立提醒：成功报一次“续上了”，失败要让人立刻知道下次可能掉线
+function buildSessionRefreshPush(
+    account: any,
+    result: { ok: boolean; expiresAt?: number; error?: any; now?: number },
+): { title: string; content: string } {
+    const name = String(account?.name || account?.id || '账号');
+    const now = Number(result.now || Date.now());
+    const lines = [
+        `账号：${name}`,
+        `结果：${result.ok ? '刷新成功' : '刷新失败'}`,
+        `时间：${formatStamp(now)}`,
+    ];
+    if (result.ok) {
+        const expiresAtMs = Number(result.expiresAt || 0) * 1000;
+        lines.push(`新会话有效期至：${expiresAtMs > 0 ? formatStamp(expiresAtMs) : '未知'}`);
+        lines.push('说明：每小时自动续期一次，正常情况无需重新扫码');
+    } else {
+        lines.push(`原因：${String(result.error?.message || result.error || 'unknown')}`);
+        lines.push('说明：本次续期失败，10 分钟后巡检会再试；若账号已掉线需要重新扫码');
+    }
+    return {
+        title: result.ok ? '微信会话自动刷新成功' : '微信会话自动刷新失败',
+        content: lines.join('\n'),
+    };
 }
 
 function hasSavedWxSession(account: any): boolean {
@@ -56,6 +91,7 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
         stopWorker,
         waitForWorkerExit,
         triggerEventNotify,
+        sendPush,
         retryDelaysMs = DEFAULT_RETRY_DELAYS_MS,
     } = options;
     const scheduler = createScheduler('wechat_auto_relogin');
@@ -67,6 +103,21 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
         const last = Number(account?.wxSessionRefreshedAt || 0) || Number(account?.updatedAt || 0);
         if (last <= 0) return true;
         return Date.now() - last >= SESSION_REFRESH_INTERVAL_MS;
+    }
+
+    async function pushSessionRefresh(account: any, push: { title: string; content: string }): Promise<void> {
+        if (typeof sendPush !== 'function') return;
+        try {
+            await sendPush({
+                title: push.title,
+                content: push.content,
+                accountId: String(account?.id || ''),
+                accountName: String(account?.name || ''),
+                logLabel: '会话刷新提醒',
+            });
+        } catch (e: any) {
+            log('错误', `会话刷新提醒发送异常: ${e?.message || e}`);
+        }
     }
 
     async function refreshSessionIfNeeded(account: any): Promise<void> {
@@ -98,10 +149,15 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
             store.addOrUpdateAccount({ id, code, ...accountFieldsFromCredentials(nextBuffer, nextCredentials) });
             log('系统', `账号 ${name} 微信会话自动刷新成功`, { accountId: id, accountName: name });
             addAccountLog('wx_session_refreshed', `账号 ${name} 微信会话自动刷新成功（每小时一次）`, id, name);
+            await pushSessionRefresh(account, buildSessionRefreshPush(account, {
+                ok: true,
+                expiresAt: Number(nextCredentials?.expiresAt || 0),
+            }));
         } catch (error: any) {
             log('错误', `账号 ${name} 微信会话自动刷新失败: ${error?.message || error}`, {
                 accountId: id, accountName: name,
             });
+            await pushSessionRefresh(account, buildSessionRefreshPush(account, { ok: false, error }));
         }
     }
 
@@ -396,5 +452,6 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
 
 module.exports = {
     createWechatAutoReloginService,
+    buildSessionRefreshPush,
     WX_FARM_APP_ID,
 };

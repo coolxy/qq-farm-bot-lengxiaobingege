@@ -23,6 +23,7 @@ function createHarness(overrides = {}) {
     const reminders = [];
     const accountLogs = [];
     const clearedSessions = [];
+    const pushes = [];
     let issueWxLoginCode = overrides.issueWxLoginCode || (async () => 'new-code');
 
     const service = createWechatAutoReloginService({
@@ -60,6 +61,9 @@ function createHarness(overrides = {}) {
         triggerEventNotify(payload) {
             reminders.push(payload);
         },
+        sendPush(payload) {
+            pushes.push(payload);
+        },
         setTimeoutTask(name, delayMs, fn) {
             tasks.set(name, { delayMs, fn });
         },
@@ -81,6 +85,7 @@ function createHarness(overrides = {}) {
         accounts,
         accountLogs,
         issued,
+        pushes,
         reminders,
         service,
         started,
@@ -291,6 +296,45 @@ test('manual cancel prevents a later worker restart', async () => {
 
     assert.equal(harness.started.length, 0);
     assert.equal(harness.reminders.length, 0);
+});
+
+function primeWxSession(harness, refreshedAgoMs) {
+    const acc = harness.accounts[0];
+    acc.wxOpenId = 'openid-1';
+    acc.wxAccessToken = 'token-1';
+    acc.wxRefreshToken = 'refresh-1';
+    acc.wxExpiresAt = Math.floor(Date.now() / 1000) + 7200;
+    acc.wxSessionRefreshedAt = Date.now() - refreshedAgoMs;
+}
+
+test('pushes a dedicated reminder after each hourly session refresh', async () => {
+    const harness = createHarness();
+    primeWxSession(harness, 30 * 60 * 1000);
+
+    await harness.service.refreshAllSessionsIfNeeded();
+    assert.equal(harness.issued.length, 0, '未满 1 小时不应刷新');
+    assert.equal(harness.pushes.length, 0, '未刷新不应推送');
+
+    primeWxSession(harness, 61 * 60 * 1000);
+    harness.setIssueWxLoginCode(async () => 'new-code');
+    await harness.service.refreshAllSessionsIfNeeded();
+
+    assert.equal(harness.issued.length, 1);
+    assert.equal(harness.pushes.length, 1);
+    assert.match(harness.pushes[0].title, /微信会话自动刷新成功/);
+    assert.match(harness.pushes[0].content, /账号：wx-user/);
+});
+
+test('pushes a failure reminder when the hourly refresh fails', async () => {
+    const harness = createHarness();
+    primeWxSession(harness, 61 * 60 * 1000);
+    harness.setIssueWxLoginCode(async () => { throw new Error('session dead'); });
+
+    await harness.service.refreshAllSessionsIfNeeded();
+
+    assert.equal(harness.pushes.length, 1);
+    assert.match(harness.pushes[0].title, /微信会话自动刷新失败/);
+    assert.match(harness.pushes[0].content, /session dead/);
 });
 
 after(() => {

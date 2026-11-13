@@ -118,6 +118,7 @@ function createRuntimeEngine(options: RuntimeEngineOptions = {}) {
             check();
         }),
         triggerEventNotify,
+        sendPush: sendConfiguredPush,
         setTimeoutTask: (taskName: string, delayMs: number, taskFn: () => Promise<void> | void) => {
             return autoReloginScheduler.setTimeoutTask(taskName, delayMs, taskFn);
         },
