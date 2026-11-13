@@ -41,10 +41,12 @@ const usernameValid = computed(() => {
 function randomInt(max: number): number {
   const buf = new Uint32Array(1)
   const limit = Math.floor(0x100000000 / max) * max
+  let value = 0
   do {
     crypto.getRandomValues(buf)
-  } while (buf[0] >= limit)
-  return buf[0] % max
+    value = buf[0] ?? 0
+  } while (value >= limit)
+  return value % max
 }
 
 function generateRandomPassword(): void {
@@ -54,13 +56,15 @@ function generateRandomPassword(): void {
     '23456789',
     '#%^*+?!-_=',
   ]
-  const chars: string[] = groups.map(g => g[randomInt(g.length)])
+  const chars: string[] = groups.map(g => g[randomInt(g.length)] ?? '')
   const all = groups.join('')
   while (chars.length < 16)
-    chars.push(all[randomInt(all.length)])
+    chars.push(all[randomInt(all.length)] ?? '')
   for (let i = chars.length - 1; i > 0; i--) {
     const j = randomInt(i + 1)
-    ;[chars[i], chars[j]] = [chars[j], chars[i]]
+    const picked = chars[i] ?? ''
+    chars[i] = chars[j] ?? ''
+    chars[j] = picked
   }
   const value = chars.join('')
   password.value = value

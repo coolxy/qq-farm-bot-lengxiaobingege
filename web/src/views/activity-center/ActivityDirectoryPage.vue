@@ -46,10 +46,6 @@ const displayActivities = computed<ActivityDirectoryItemDto[]>(() => {
       } satisfies ActivityDirectoryItemDto]
       : []
 
-  const appendDetailEntry = (entry: ActivityDirectoryItemDto) => {
-    if (!entries.some(item => item.activityIds.some(id => entry.activityIds.includes(id))))
-      entries.push(entry)
-  }
   const statusRank: Record<ActivityStatus, number> = { active: 0, upcoming: 1, ended: 2 }
   return entries
     .filter((activity) => activityStatus(activity) !== 'ended')

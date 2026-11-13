@@ -850,7 +850,7 @@ export const useActivityCenterStore = defineStore('activity-center', () => {
     return responsePayload(response.data)
   }
 
-  async function loadDetails(accountId: string, gameplayKey: ActivityGameplayKey) {
+  async function loadDetails(accountId: string, _gameplayKey: ActivityGameplayKey) {
     const requestedAccountId = String(accountId || '').trim()
     if (!requestedAccountId)
       return false
