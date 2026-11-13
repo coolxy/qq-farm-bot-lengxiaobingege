@@ -237,6 +237,16 @@ function createEventNotifyService(options: ReloginReminderOptions) {
         const accountId = String(payload.accountId || '').trim();
         const accountName = String(payload.accountName || '').trim();
         const reason = String(payload.reason || 'unknown');
+        // 刚推过这条账号的掉线提醒（可能是终态），晚到的过程态消息不再重复挂起，
+        // 否则终态推送之后又来一条 disconnect，会在窗口到期后再喊一次
+        const recent = lastOfflinePush.get(accountId);
+        if (recent && Date.now() - recent.at < offlineDedupeMs) {
+            const ago = Math.round((Date.now() - recent.at) / 1000);
+            log('系统', `账号 ${accountName || accountId} ${ago} 秒前已推送掉线提醒，本次断线不再重复判定`, {
+                accountId, accountName, reason,
+            });
+            return;
+        }
         // 同账号再次断线：重置计时，但保留最初那条原因，避免抖动刷屏
         const existed = pendingOffline.get(accountId);
         if (existed && existed.timer) clearTimeout(existed.timer);

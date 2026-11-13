@@ -106,6 +106,18 @@ test('missing session is terminal and pushes right away', async () => {
     assert.equal(h.pushes.length, 1, '没有可重登的会话，不必等窗口');
 });
 
+test('a late process-level disconnect does not reschedule after a terminal push', async () => {
+    const h = createHarness({ offlineDeferMs: 20, offlineDedupeMs: 500 });
+
+    await h.service.triggerEventNotify({ accountId: '1', accountName: 'acc', reason: 'no_session:ws_error:400' });
+    assert.equal(h.pushes.length, 1, '终态立即推一条');
+
+    // 终态之后晚到的过程态消息：不能重新挂起，否则窗口到期会再喊一次
+    await h.service.triggerEventNotify({ accountId: '1', accountName: 'acc', reason: 'disconnect:ws_error:connecting:400' });
+    await wait(60);
+    assert.equal(h.pushes.length, 1, '已提醒过就不该再挂起推送');
+});
+
 test('runtime stopping suppresses every offline push', async () => {
     const h = createHarness({ offlineDeferMs: 20 });
 

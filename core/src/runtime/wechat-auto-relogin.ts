@@ -297,7 +297,12 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
         const account = findAccount(id);
         if (!account || !isWechatPlatform(account.platform)) return false;
         if (!isAccountEnabled(account)) return skip(id, name, reason, '该账号未开启自动重新登录');
-        if (!hasSavedWxSession(account)) return skip(id, name, reason, '没有已保存的扫码会话，请重新微信扫码登录');
+        if (!hasSavedWxSession(account)) {
+            skip(id, name, reason, '没有已保存的扫码会话，请重新微信扫码登录');
+            // 完全没有会话 = 确定救不回来，立即推送，不再等掉线兜底窗口
+            triggerEventNotify({ accountId: id, accountName: name, reason: `no_session:${reason}`, offlineMs: 0 });
+            return false;
+        }
 
         cancelled.delete(id);
         trackedIds.add(id);
