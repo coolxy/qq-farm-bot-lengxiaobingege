@@ -2,7 +2,7 @@
 
 [![version](https://img.shields.io/badge/version-20261104-green)](https://github.com/lengxiaobingege/qq-farm-bot)
 [![protocol](https://img.shields.io/badge/protocol-1.16.3.8_20261028-blue)](https://github.com/lengxiaobingege/qq-farm-bot)
-[![tests](https://img.shields.io/badge/tests-266%20passing-brightgreen)](#开发命令)
+[![tests](https://img.shields.io/badge/tests-282-brightgreen)](#开发命令)
 [![node](https://img.shields.io/badge/node-20.19%2B-339933)](#环境要求)
 
 基于 Node.js 的 QQ 农场微信端自动化助手：多账号挂机、农场与好友自动化、活动自动化、活动中心、商城、数据分析与 Web 控制面板。
@@ -10,7 +10,7 @@
 本页面向所有读者。部署与使用请从[快速开始](#快速开始)读起；安全机制说明见[管理端安全设计](#-管理端安全设计)；开发者请继续阅读[项目结构](#项目结构)与[专题文档](#项目文档)。
 
 > [!NOTE]
-> 本项目基于 [liyangpengs/qq-farm-bot](https://github.com/liyangpengs/qq-farm-bot) 二次开发，原项目版权归原作者所有。本版本仅保留微信端，已同步官方 v20261102（协议 1.16.1.6_20261028），完整跟进藏品宝典、独立图鉴与双端资源。二创变更清单见文末[二创变更摘要](#二创变更摘要)。
+> 本项目基于 [liyangpengs/qq-farm-bot](https://github.com/liyangpengs/qq-farm-bot) 二次开发，原项目版权归原作者所有。本版本仅保留微信端，已同步官方 v20261104（协议 `1.16.3.8_20261028`），完整跟进藏品宝典、独立图鉴与双端资源。二创变更清单见文末[二创变更摘要](#二创变更摘要)。
 
 ## 产品简介
 
@@ -30,7 +30,7 @@
 | 好友自动化 | 偷菜、帮忙、捣乱合并为单次访问，支持黑名单、安静时段与互动上限 |
 | 活动自动化 | 奶茶热销中、快乐不独享、节令日历等活动的全流程自动化，单步容错，详见[活动自动化](#活动自动化) |
 | 经营分析 | 作物收益分析、策略预览、背包估值、商城与神秘商人价格查询 |
-| 事件推送 | 基于 pushoo 的实例级通知，掉线与关键事件第一时间知晓 |
+| 事件推送 | 基于 pushoo 的实例级通知；断线先等 150 秒自动重登，重登失败才提醒，恢复在线不打扰 |
 
 ### 适用场景与边界
 
@@ -84,7 +84,7 @@ pnpm dev
 
 1. 面板概览页应显示账号在线状态与角色 ID。
 2. 实时日志应出现任务调度记录（如收获、种植、活动任务）。
-3. 如配置了事件推送，手动停用账号网络应能收到掉线通知。
+3. 如配置了事件推送，手动停用账号网络后约 2 分钟内应能收到掉线通知（系统先等 150 秒自动重登，重登成功则不推送）。
 
 ### 后台常驻运行（Linux）
 
@@ -159,6 +159,17 @@ bash ./stop.sh               # 停止服务
 - Socket.IO 实时状态与日志流，液态玻璃风格界面；PC 固定侧栏，移动端顶部栏与底部导航
 - 设置页统一管理游戏账号、自动化策略、运行环境、管理员密码与事件通知
 
+### 事件推送与掉线判定
+
+- **断线不立刻喊**：连接断开后先挂起 150 秒，把这段时间让给自动重登；期间恢复在线则取消提醒，只留一条「农场已恢复在线」
+- **真失败才推**：重登三次全失败、无可用会话、持续离线超时属于终态，立即推送，不再等窗口
+- **兜底不漏**：既不成功也不失败（卡住）时，150 秒到期补一条
+- **不刷屏**：同账号同类掉线 10 分钟内只推一条；推送串行发送，失败重试一次
+- **会话保活**：每小时整点刷新一次会话，成功不推送，失败才提醒
+- **重启不误报**：进程收到 `SIGTERM`/`SIGINT`/`SIGHUP` 退出时，期间的断线一律不推
+
+判定流程与参数说明见[事件推送与掉线判定](docs/event-notify.md)。
+
 ## 🔐 管理端安全设计
 
 面板不设注册体系，全局仅一名超级管理员，账号固定为 `admin`。本章说明安全机制的设计原理与使用边界。
@@ -196,13 +207,14 @@ bash ./stop.sh               # 停止服务
 - [ ] 不要将 `3007`/`5173` 直接暴露公网；生产环境使用 Nginx/Caddy 反向代理 + HTTPS，面板路径叠加访问控制（IP 白名单或 Basic Auth）
 - [ ] `core/data/` 目录包含账号凭据、会话令牌与运行数据：权限建议 700，纳入备份但绝不提交到公开仓库
 - [ ] 定期审计 `core/data/logs/` 中 `admin` 模块日志，关注异常来源 IP
-- [ ] 公网部署建议配置实例级事件推送（pushoo），掉线与异常第一时间知晓
+- [ ] 公网部署建议配置实例级事件推送（pushoo），终态掉线与异常第一时间知晓
 
 ### 端口与网络
 
 | 服务 | 端口 | 说明 |
 | --- | --- | --- |
 | 后端 API | `3007` | Express + Socket.IO，REST API 与 WebSocket |
+| 公网入口（可选） | `3000` | `start.sh` 检测到 `PORT` 不是 `3000` 时，自动用 socat 把 `3000` 转发到后端端口，外部访问地址保持不变 |
 | 前端开发服务器 | `5173` | 仅开发使用；生产模式由后端托管 `web/dist/` 静态资源 |
 
 ## 项目结构
@@ -221,7 +233,7 @@ qq-farm-bot/
 │   │   ├── activity-data/ # 活动静态配置与本地题库
 │   │   └── models/        # 超级管理员、游戏账号与配置持久化
 │   ├── data/              # 运行数据（凭据哈希、账号、日志等，请勿提交）
-│   └── tests/             # 协议、活动与并发测试（284 个）
+│   └── tests/             # 协议、活动与并发测试（282 个，含 1 条默认跳过的慢测）
 ├── web/                   # Vue 3 Web 面板
 │   ├── src/components/    # 农场、图鉴、背包、任务、活动与基础组件
 │   ├── src/stores/        # Pinia 状态管理
@@ -241,7 +253,8 @@ qq-farm-bot/
 | `pnpm lint` | 检查并自动修复前后端代码风格 |
 | `pnpm -C core typecheck` / `pnpm typecheck:web` | 后端 / 前端类型检查 |
 | `pnpm build:web` / `pnpm build:core` / `pnpm build` | 分别或依次构建前后端 |
-| `pnpm -C core test` | 编译 Core 并运行 284 个协议、活动与并发测试 |
+| `pnpm -C core test` | 编译 Core 并运行 281 个协议、活动与并发测试（另 1 条慢测默认跳过，见下） |
+| `SLOW_OFFLINE_E2E=1 pnpm -C core test` | 连同掉线兜底慢测一起跑：真等 150 秒窗口，约 3 分钟 |
 | `pnpm -C web build:compressed` | 构建前端并额外生成预压缩 .gz 文件 |
 | `pnpm -C web build:analyze` | 构建前端并生成 bundle 分析报告 |
 
@@ -262,7 +275,7 @@ pnpm -C core exec tsx ../tools/audit-capture-compatibility.js <capture-dir>
 | 主题 | 文档 |
 | --- | --- |
 | 工具链 | [工具脚本](docs/tools.md) |
-| 架构与运行时 | [网络并发模型](docs/network-concurrency.md)、[TSDK Node.js 运行约定](docs/tsdk-runtime.md)、[配置存储、迁移与缓存](docs/config-storage.md) |
+| 架构与运行时 | [网络并发模型](docs/network-concurrency.md)、[事件推送与掉线判定](docs/event-notify.md)、[TSDK Node.js 运行约定](docs/tsdk-runtime.md)、[配置存储、迁移与缓存](docs/config-storage.md) |
 | 活动协议实现 | [神秘商人、游戏商城与购买协议](docs/shop-protocols.md)、[图鉴、变异宝典与藏品](docs/collections-20261101.md)、[奶茶活动与客户端更新](docs/milk-tea-20261015.md)、[节令日历与资源更新](docs/solar-calendar-20261016.md) |
 | 宠物体系 | [好友宠物缓存与每日同步](docs/friend-pet-cache.md)、[个人页宠物协议](docs/pet-protocols.md) |
 
@@ -273,6 +286,8 @@ pnpm -C core exec tsx ../tools/audit-capture-compatibility.js <capture-dir>
 - 移除 QQ 端：仅保留微信扫码与抓包 Code 登录
 - 活动自动化重构：`activity-auto/` 按活动拆分独立文件，单步容错与错误 30 分钟去重；奶茶活动支持阶梯雇佣与按工位上限补满
 - 管理员凭据加固：首次部署不预设密码，由用户在首次登录页自行设置，支持一键生成 16 位随机强密码；服务端仅存 PBKDF2 哈希，不存任何明文
+- 掉线提醒改为延迟判定：断线先挂起 150 秒等自动重登，终态才立即推送，恢复在线不打扰；同账号同类 10 分钟内去重
+- 微信会话改为整点保活：每小时刷新一次，成功静默、失败才推送；无可用会话时补发终态提醒
 - 日志时间统一为北京时间（UTC+8）
 
 ## 免责声明

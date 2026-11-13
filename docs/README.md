@@ -12,6 +12,7 @@
 | 接入或维护某个活动 | 对应活动文档（如 [奶茶活动与客户端更新](milk-tea-20261015.md)、[节令日历与资源更新](solar-calendar-20261016.md)） |
 | 排查协议或字段映射问题 | [TSDK Node.js 运行约定](tsdk-runtime.md)、[微信连接适配与掉线诊断](wechat-connection.md)、对应功能协议文档（如 [神秘商人、游戏商城与购买协议](shop-protocols.md)、[个人页宠物协议](pet-protocols.md)） |
 | 理解或调整请求调度与并发 | [网络并发模型](network-concurrency.md)、[微信连接适配与掉线诊断](wechat-connection.md) |
+| 调整掉线提醒节奏或排查推送不到 | [事件推送与掉线判定](event-notify.md) |
 | 维护账号、配置或缓存 | [配置存储、迁移与缓存](config-storage.md) |
 | 维护好友宠物功能 | [好友宠物缓存与每日同步](friend-pet-cache.md) |
 | 使用或扩展工具脚本 | [工具脚本](tools.md) |
@@ -25,6 +26,7 @@
 | [TSDK Node.js 运行约定](tsdk-runtime.md) | WASM 来源、宿主映射、ABI、ACE 生命周期与限制 | 后端和协议开发者 |
 | [配置存储、迁移与缓存](config-storage.md) | 账号缓存、逐账号 JSON、迁移备份与恢复边界 | 用户、后端维护者 |
 | [网络并发模型](network-concurrency.md) | 请求班次分层、并发与排队上限、让路门控、登录启动序列 | 全体开发者 |
+| [事件推送与掉线判定](event-notify.md) | 延迟判定窗口、终态与兜底、去重、会话保活与停机抑制 | 运维、后端维护者 |
 | [微信连接适配与掉线诊断](wechat-connection.md) | 微信连接适配与掉线诊断，含 2026-11-02 双端分别更新 | 连接与协议维护者 |
 | [图鉴、变异宝典与藏品](collections-20261101.md) | 独立图鉴、藏品进度、变异概率和双端资源更新 | 用户、协议维护者 |
 | [好友宠物缓存与每日同步](friend-pet-cache.md) | 护主犬识别、三态缓存、每日分片同步与让路门控 | 好友功能维护者 |
