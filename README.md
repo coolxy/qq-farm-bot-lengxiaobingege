@@ -121,6 +121,8 @@ bash ./preflight.sh --full   # 额外跑一遍 core 测试套件
 
 > [!TIP]
 > 不要直接在终端前台运行 `node core/client.js`：关闭该终端会向进程发 `SIGHUP`，Node 在退出阶段重置 stdio 时可能 abort 并落地一个近百 MB 的 core dump。用 `start.sh` 后台启动，标准输入输出重定向到日志文件，不受终端开关影响。
+>
+> 也不要在终端里留 `PORT=3000 node core/client.js` 这类历史命令：开发环境的终端会话恢复会重放它，起来的是个 `PORT=3000` 的野实例——不落日志、没有看门狗、还把 3000 入口占掉，与标准实例并存时表现为“服务像是活着但日志不动”。`preflight.sh` 会用「pid 文件不一致 / 3007 无响应 / 看门狗未运行」三项把它抓出来，`stop.sh` 会按 cwd + argv 清理。
 
 ### 常见问题
 

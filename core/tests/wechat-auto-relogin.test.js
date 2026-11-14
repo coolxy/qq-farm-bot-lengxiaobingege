@@ -203,6 +203,45 @@ test('kickout backoff survives a restart', () => {
     }
 });
 
+test('holds the remaining yield window across a restart', () => {
+    const file = path.join(os.tmpdir(), `kickout-guard-${process.pid}-${Date.now()}-yield.json`);
+    try {
+        const first = createHarness({ retryDelaysMs: undefined, kickoutStateFile: file });
+        first.service.handleDisconnect('1', 'wx-user', 'kickout:test');
+        const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+        assert.ok(saved.guard['1'].yieldUntil > Date.now(), '让位截止时间要落盘');
+
+        // 重启后内存定时器丢了，普通断线也不能立刻抢登录
+        const restarted = createHarness({ retryDelaysMs: undefined, kickoutStateFile: file });
+        restarted.service.handleDisconnect('1', 'wx-user', 'disconnect:ws_error:connecting:400');
+        const delay = restarted.tasks.get('wx_auto_relogin_1').delayMs;
+        assert.ok(delay > 50000 && delay <= 60000, `应等剩余让位时间，实际 ${delay}`);
+        assert.equal(
+            restarted.accountLogs.some(entry => String(entry[1] || '').includes('仍在让位期')),
+            false,
+            '这条走系统日志，不进账号日志',
+        );
+    } finally {
+        try { fs.unlinkSync(file); } catch { /* ignore */ }
+    }
+});
+
+test('uses the normal retry delay once the yield window has passed', () => {
+    const file = path.join(os.tmpdir(), `kickout-guard-${process.pid}-${Date.now()}-expired.json`);
+    try {
+        fs.writeFileSync(file, JSON.stringify({
+            version: 1,
+            updatedAt: Date.now(),
+            guard: { '1': { times: [Date.now() - 60000], pausedUntil: 0, yieldUntil: Date.now() - 5000 } },
+        }), 'utf8');
+        const harness = createHarness({ retryDelaysMs: undefined, kickoutStateFile: file });
+        harness.service.handleDisconnect('1', 'wx-user', 'disconnect:ws_error:400');
+        assert.equal(harness.tasks.get('wx_auto_relogin_1').delayMs, 30000);
+    } finally {
+        try { fs.unlinkSync(file); } catch { /* ignore */ }
+    }
+});
+
 test('skips auto relogin when the setting is disabled or loginBuffer is missing', () => {
     const disabled = createHarness({ loginSettings: { wechatAutoRelogin: false } });
     assert.equal(disabled.service.handleDisconnect('1', 'wx-user', 'kickout:test'), false);

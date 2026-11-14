@@ -248,6 +248,8 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
         if (!id) return;
         attempts.delete(id);
         trackedIds.delete(id);
+        // 重登任务结束（成功或取消）：让位截止时间失效，别影响下一次掉线
+        if (kickoutYieldUntil.delete(id)) persistKickoutGuard();
     }
 
     function cancel(accountId: string): void {
@@ -445,6 +447,8 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
     const KICKOUT_GUARD_FILE = 'kickout-guard.json';
     // 让位截止时间与计数要跨重启保留，否则重启一次就从 1 分钟重新开始，等于没有退避
     const kickoutPausedUntil = new Map<string, number>();
+    // 本轮让位允许重登的最早时刻：重启会丢掉内存里的定时器，靠它把让位剩余时间补回来
+    const kickoutYieldUntil = new Map<string, number>();
 
     function resolveKickoutStateFile(): string {
         if (options.kickoutStateFile === '') return '';
@@ -459,12 +463,19 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
     function persistKickoutGuard(): void {
         if (!kickoutStateFile) return;
         try {
-            const guard: Record<string, { times: number[]; pausedUntil: number }> = {};
+            const guard: Record<string, { times: number[]; pausedUntil: number; yieldUntil: number }> = {};
             for (const [id, times] of kickoutReloginTimes) {
-                guard[id] = { times, pausedUntil: Number(kickoutPausedUntil.get(id) || 0) };
+                guard[id] = {
+                    times,
+                    pausedUntil: Number(kickoutPausedUntil.get(id) || 0),
+                    yieldUntil: Number(kickoutYieldUntil.get(id) || 0),
+                };
             }
             for (const [id, until] of kickoutPausedUntil) {
-                if (!guard[id]) guard[id] = { times: [], pausedUntil: until };
+                if (!guard[id]) guard[id] = { times: [], pausedUntil: until, yieldUntil: Number(kickoutYieldUntil.get(id) || 0) };
+            }
+            for (const [id, until] of kickoutYieldUntil) {
+                if (!guard[id]) guard[id] = { times: [], pausedUntil: Number(kickoutPausedUntil.get(id) || 0), yieldUntil: until };
             }
             const tmp = `${kickoutStateFile}.tmp`;
             fs.writeFileSync(tmp, JSON.stringify({ version: 1, updatedAt: Date.now(), guard }), 'utf8');
@@ -489,6 +500,8 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
                 if (times.length > 0) kickoutReloginTimes.set(id, times);
                 const until = Number(value?.pausedUntil) || 0;
                 if (until > now) kickoutPausedUntil.set(id, until);
+                const yieldUntil = Number(value?.yieldUntil) || 0;
+                if (yieldUntil > now) kickoutYieldUntil.set(id, yieldUntil);
             }
         } catch {
             // 文件损坏时按无记录处理
@@ -505,6 +518,7 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
         setTimeoutTask(resumeTask, delay, () => {
             kickoutReloginTimes.delete(id);
             kickoutPausedUntil.delete(id);
+            kickoutYieldUntil.delete(id);
             persistKickoutGuard();
             log('系统', `账号 ${accountName || id} 让位期结束，重新尝试自动登录`, { accountId: id, accountName });
             addAccountLog('wx_kickout_resume', `账号 ${accountName || id} 让位期结束，重新尝试自动登录`, id, accountName);
@@ -528,6 +542,7 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
                 kickoutReloginTimes.set(id, times);
                 const until = now + KICKOUT_PAUSE_MS;
                 kickoutPausedUntil.set(id, until);
+                kickoutYieldUntil.set(id, until);
                 persistKickoutGuard();
                 scheduleKickoutResume(id, name, until);
                 triggerEventNotify({
@@ -540,8 +555,10 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
             }
             kickoutReloginTimes.set(id, times);
             kickoutPausedUntil.delete(id);
-            persistKickoutGuard();
             const delayMs = KICKOUT_BACKOFF_MS[times.length - 1];
+            // 让位截止时间落盘：重启后仍按剩余时间等待，不会被「重新启动账号」立刻打断
+            kickoutYieldUntil.set(id, now + delayMs);
+            persistKickoutGuard();
             log('系统', `账号 ${name} 被其他终端挤下线，让位 ${Math.round(delayMs / 60000)} 分钟后重试（第 ${times.length} 次）`, {
                 accountId: id,
                 accountName: name,
@@ -550,6 +567,14 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
                 delayMs,
             });
             return schedule(accountId, name, reason, delayMs);
+        }
+        // 让位期没走完（重启会丢掉内存定时器）：把重登推到让位截止，避免刚让位就抢登录
+        const remainingYieldMs = Math.max(0, Number(kickoutYieldUntil.get(String(accountId || '')) || 0) - Date.now());
+        if (remainingYieldMs > 0) {
+            log('系统', `账号 ${accountName || accountId} 仍在让位期，剩余 ${Math.round(remainingYieldMs / 1000)} 秒后再重登`, {
+                accountId, accountName, reason, remainingYieldMs,
+            });
+            return schedule(accountId, accountName, reason, remainingYieldMs);
         }
         const delayMs = isHostSleepReason(reason) ? 0 : (retryDelaysMs[0] || 30000);
         return schedule(accountId, accountName, reason, delayMs);
