@@ -41,6 +41,31 @@ function createHarness(opts = {}) {
     return { pushes, logs, service, setSend: (fn) => { sendImpl = fn; } };
 }
 
+test('被挤下线走让位窗口：150 秒内不催用户', async () => {
+    const h = createHarness({ offlineDeferMs: 30 });
+
+    await h.service.triggerEventNotify({ accountId: '1', accountName: 'acc', reason: 'kickout:已在其他终端登录' });
+    await wait(80);
+
+    assert.equal(h.pushes.length, 0, '让位期间属于预期行为，不能按 150 秒窗口催');
+    assert.ok(h.logs.some(([, msg]) => /让位给用户/.test(msg)), '日志要写明是在让位');
+    assert.ok(h.logs.some(([, msg]) => /延后 900 秒/.test(msg)), '窗口应拉长到 15 分钟');
+});
+
+test('连续被挤到暂停时立即推送，并说明无需扫码', async () => {
+    const h = createHarness({ offlineDeferMs: 30 });
+
+    await h.service.triggerEventNotify({ accountId: '1', accountName: 'acc', reason: 'kickout:已在其他终端登录' });
+    await wait(30);
+    assert.equal(h.pushes.length, 0);
+
+    await h.service.triggerEventNotify({ accountId: '1', accountName: 'acc', reason: 'kickout_limit:kickout:已在其他终端登录' });
+    await wait(30);
+
+    assert.equal(h.pushes.length, 1, '暂停自动重登要立刻让用户知道');
+    assert.match(String(h.pushes[0].content), /无需扫码/);
+});
+
 test('推送失败不记为已提醒：下一次终态会重新尝试并送达', async () => {
     const h = createHarness();
 

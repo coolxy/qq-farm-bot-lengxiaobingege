@@ -29,6 +29,8 @@ interface OfflineCycle {
     startedAt: number;
     lastEventAt: number;
     reason: string;
+    // 本周期使用的判定窗口：普通断线用 offlineDeferMs，被挤下线用让位窗口
+    deferMs: number;
     terminal: boolean;
     noticeSent: boolean;
     noticeSentAt: number;
@@ -51,6 +53,9 @@ const STALE_CYCLE_MS = 30 * 60 * 1000;
 const NOTICE_RETRY_DELAY_MS = 30 * 1000;
 const NOTICE_MAX_RETRY = 2;
 const STATE_FILE_NAME = 'event-notify-state.json';
+// 被挤下线（kickout）时 bot 会主动让位 1/3/5/10 分钟，这段等待是预期行为而非故障。
+// 判定窗口取让位最长档 + 5 分钟余量：让位期间静默，真的救不回来才提醒。
+const KICKOUT_YIELD_DEFER_MS = 15 * 60 * 1000;
 
 // 这些原因已经是终态，自动重登救不回来了，必须立刻推
 const IMMEDIATE_REASON_PREFIXES = ['auto_relogin_failed:', 'no_session', 'offline_timeout', 'kickout_limit'];
@@ -153,6 +158,7 @@ function createEventNotifyService(options: ReloginReminderOptions) {
             startedAt,
             lastEventAt,
             reason: String(value.reason || 'unknown'),
+            deferMs: Number(value.deferMs) > 0 ? Number(value.deferMs) : offlineDeferMs,
             terminal: value.terminal === true,
             noticeSent: value.noticeSent === true,
             noticeSentAt: Number(value.noticeSentAt) || 0,
@@ -258,6 +264,11 @@ function createEventNotifyService(options: ReloginReminderOptions) {
         return IMMEDIATE_REASON_PREFIXES.some(prefix => value.startsWith(prefix));
     }
 
+    // 被挤下线不是故障，是用户自己在别处登录：让位期间不该催，窗口要给足
+    function isYieldReason(reason: string): boolean {
+        return String(reason || '').startsWith('kickout');
+    }
+
     function buildOfflineMessage(payload: EventNotifyPayload): { title: string; content: string; accountId: string; accountName: string } | null {
         const accountId = String(payload.accountId || '').trim();
         const accountName = String(payload.accountName || '').trim();
@@ -315,7 +326,7 @@ function createEventNotifyService(options: ReloginReminderOptions) {
             if (!current || current.noticeSent || isRuntimeStopping()) return;
             const note = current.terminal
                 ? '自动重新登录未成功，需要重新扫码登录。'
-                : `已等待 ${Math.round(offlineDeferMs / 1000)} 秒自动重登未成功，请检查账号或重新扫码。`;
+                : `已等待 ${Math.round(current.deferMs / 1000)} 秒自动重登未成功，请检查账号或重新扫码。`;
             deliverNotice(current, note).catch(() => null);
         }, NOTICE_RETRY_DELAY_MS);
         if (typeof timer.unref === 'function') timer.unref();
@@ -364,20 +375,21 @@ function createEventNotifyService(options: ReloginReminderOptions) {
     function scheduleCycleNotice(cycle: OfflineCycle): void {
         clearCycleTimer(cycle.accountId);
         const id = cycle.accountId;
+        const waitSec = Math.round(cycle.deferMs / 1000);
         const timer = setTimeout(() => {
             cycleTimers.delete(id);
             const current = cycles.get(id);
             if (!current || current.noticeSent || isRuntimeStopping()) return;
-            const waitSec = Math.round(offlineDeferMs / 1000);
-            deliverNotice(current, `已等待 ${waitSec} 秒自动重登未成功，请检查账号或重新扫码。`).catch(() => null);
-        }, offlineDeferMs);
+            deliverNotice(current, `已等待 ${Math.round(current.deferMs / 1000)} 秒自动重登未成功，请检查账号或重新扫码。`).catch(() => null);
+        }, cycle.deferMs);
         if (typeof timer.unref === 'function') timer.unref();
         cycleTimers.set(id, timer);
-        const waitSec = Math.round(offlineDeferMs / 1000);
-        log('系统', `账号 ${cycle.accountName || id} 连接断开，延后 ${waitSec} 秒判定是否提醒（等待自动重登结果）`, {
+        const yieldNote = isYieldReason(cycle.reason) ? '（被其他终端挤下线，先让位给用户）' : '（等待自动重登结果）';
+        log('系统', `账号 ${cycle.accountName || id} 连接断开，延后 ${waitSec} 秒判定是否提醒${yieldNote}`, {
             accountId: id,
             accountName: cycle.accountName,
             reason: cycle.reason,
+            deferMs: cycle.deferMs,
         });
     }
 
@@ -414,6 +426,7 @@ function createEventNotifyService(options: ReloginReminderOptions) {
                     startedAt: now,
                     lastEventAt: now,
                     reason,
+                    deferMs: isYieldReason(reason) ? KICKOUT_YIELD_DEFER_MS : offlineDeferMs,
                     terminal: false,
                     noticeSent: false,
                     noticeSentAt: 0,
@@ -423,6 +436,8 @@ function createEventNotifyService(options: ReloginReminderOptions) {
             } else {
                 cycle.lastEventAt = now;
                 if (accountName) cycle.accountName = accountName;
+                // 被挤下线：把窗口拉长到让位时长，别在 bot 主动退让时催用户
+                if (isYieldReason(reason) && !cycle.noticeSent) cycle.deferMs = KICKOUT_YIELD_DEFER_MS;
                 // 原因只保留首次那条，终态会单独标记，避免日志被后续抖动原因淹没
                 if (isImmediateReason(reason)) cycle.terminal = true;
             }
@@ -440,7 +455,10 @@ function createEventNotifyService(options: ReloginReminderOptions) {
                 cycle.terminal = true;
                 clearCycleTimer(accountId);
                 persistState();
-                await deliverNotice(cycle, '自动重新登录未成功，需要重新扫码登录。');
+                const terminalNote = String(reason).startsWith('kickout_limit')
+                    ? '检测到账号在其他终端登录，自动重登已暂停 30 分钟让位；退出小程序后会自动恢复，无需扫码。'
+                    : '自动重新登录未成功，需要重新扫码登录。';
+                await deliverNotice(cycle, terminalNote);
                 return;
             }
 

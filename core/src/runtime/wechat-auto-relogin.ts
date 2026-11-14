@@ -1,5 +1,8 @@
 export {};
 
+const fs = require('node:fs');
+const path = require('node:path');
+
 const {
     WX_FARM_APP_ID,
     WxLoginService,
@@ -34,6 +37,8 @@ interface WechatAutoReloginOptions {
     clearTimeoutTask?: (taskName: string) => void;
     issueWxLoginCode?: (loginBuffer: string, appId: string, credentials?: any, aheadMs?: number) => Promise<any>;
     retryDelaysMs?: number[];
+    // 让位（kickout 退避）状态落盘路径；传空串禁用，测试用
+    kickoutStateFile?: string;
 }
 
 function isWechatPlatform(platform: unknown): boolean {
@@ -431,25 +436,120 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
         }
     }
 
-    // 被挤下线（kickout）的重登保护：延迟重登避免与用户手机端立即互踢，
-    // 且同一账号短时间内被挤多次时暂停自动重登，防止 bot 与手机循环互挤
+    // 被挤下线（kickout）的让位策略：被挤一次就多让一会儿，避免 bot 与手机端互踢。
+    // 阶梯 1 → 3 → 5 → 10 分钟；走到 10 分钟档仍被挤，说明用户一直在玩，暂停 30 分钟再试。
     const kickoutReloginTimes = new Map<string, number[]>();
-    const KICKOUT_WINDOW_MS = 10 * 60 * 1000;
-    const KICKOUT_MAX_RELOGINS = 3;
-    const KICKOUT_DELAY_MS = 60000;
+    const KICKOUT_WINDOW_MS = 30 * 60 * 1000;
+    const KICKOUT_BACKOFF_MS = [60 * 1000, 3 * 60 * 1000, 5 * 60 * 1000, 10 * 60 * 1000];
+    const KICKOUT_PAUSE_MS = 30 * 60 * 1000;
+    const KICKOUT_GUARD_FILE = 'kickout-guard.json';
+    // 让位截止时间与计数要跨重启保留，否则重启一次就从 1 分钟重新开始，等于没有退避
+    const kickoutPausedUntil = new Map<string, number>();
+
+    function resolveKickoutStateFile(): string {
+        if (options.kickoutStateFile === '') return '';
+        if (options.kickoutStateFile) return options.kickoutStateFile;
+        if (process.env.NODE_TEST_CONTEXT) return '';
+        const { getDataDir } = require('../config/runtime-paths');
+        return path.join(getDataDir(), KICKOUT_GUARD_FILE);
+    }
+
+    const kickoutStateFile = resolveKickoutStateFile();
+
+    function persistKickoutGuard(): void {
+        if (!kickoutStateFile) return;
+        try {
+            const guard: Record<string, { times: number[]; pausedUntil: number }> = {};
+            for (const [id, times] of kickoutReloginTimes) {
+                guard[id] = { times, pausedUntil: Number(kickoutPausedUntil.get(id) || 0) };
+            }
+            for (const [id, until] of kickoutPausedUntil) {
+                if (!guard[id]) guard[id] = { times: [], pausedUntil: until };
+            }
+            const tmp = `${kickoutStateFile}.tmp`;
+            fs.writeFileSync(tmp, JSON.stringify({ version: 1, updatedAt: Date.now(), guard }), 'utf8');
+            fs.renameSync(tmp, kickoutStateFile);
+        } catch {
+            // 落盘失败不影响让位判定
+        }
+    }
+
+    function loadKickoutGuard(): void {
+        if (!kickoutStateFile) return;
+        try {
+            if (!fs.existsSync(kickoutStateFile)) return;
+            const raw = JSON.parse(fs.readFileSync(kickoutStateFile, 'utf8'));
+            const guard = raw && typeof raw === 'object' ? raw.guard : null;
+            if (!guard || typeof guard !== 'object') return;
+            const now = Date.now();
+            for (const [id, value] of Object.entries<any>(guard)) {
+                const times = Array.isArray(value?.times)
+                    ? value.times.map(Number).filter((t: number) => Number.isFinite(t) && now - t < KICKOUT_WINDOW_MS)
+                    : [];
+                if (times.length > 0) kickoutReloginTimes.set(id, times);
+                const until = Number(value?.pausedUntil) || 0;
+                if (until > now) kickoutPausedUntil.set(id, until);
+            }
+        } catch {
+            // 文件损坏时按无记录处理
+        }
+    }
+
+    // 让位到期后自动再试一次，避免「暂停」变成永远不上线
+    function scheduleKickoutResume(accountId: string, accountName: string, until: number): void {
+        const id = String(accountId || '');
+        if (!id) return;
+        const delay = Math.max(1000, until - Date.now());
+        const resumeTask = `wx_kickout_resume_${id}`;
+        clearTimeoutTask(resumeTask);
+        setTimeoutTask(resumeTask, delay, () => {
+            kickoutReloginTimes.delete(id);
+            kickoutPausedUntil.delete(id);
+            persistKickoutGuard();
+            log('系统', `账号 ${accountName || id} 让位期结束，重新尝试自动登录`, { accountId: id, accountName });
+            addAccountLog('wx_kickout_resume', `账号 ${accountName || id} 让位期结束，重新尝试自动登录`, id, accountName);
+            schedule(id, accountName, 'kickout_resume', 0);
+        });
+    }
 
     function handleDisconnect(accountId: string, accountName: string, reason: string): boolean {
         if (String(reason || '').startsWith('kickout')) {
             const id = String(accountId || '');
+            const name = String(accountName || id);
             const now = Date.now();
-            const times = (kickoutReloginTimes.get(id) || []).filter((t: number) => now - t < KICKOUT_WINDOW_MS);
-            if (times.length >= KICKOUT_MAX_RELOGINS) {
-                kickoutReloginTimes.set(id, times);
-                return skip(id, accountName, reason, `短时间内已被挤下线 ${times.length} 次，已暂停自动重登，避免与手机端循环互挤，请手动处理`);
+            const pausedUntil = Number(kickoutPausedUntil.get(id) || 0);
+            if (pausedUntil > now) {
+                return skip(id, name, reason, `仍在让位期（至 ${formatStamp(pausedUntil)}），暂不自动重登`);
             }
+            const times = (kickoutReloginTimes.get(id) || []).filter((t: number) => now - t < KICKOUT_WINDOW_MS);
             times.push(now);
+            if (times.length > KICKOUT_BACKOFF_MS.length) {
+                // 10 分钟档之后还被挤：暂停，让位给用户，并告诉用户需要手动处理
+                kickoutReloginTimes.set(id, times);
+                const until = now + KICKOUT_PAUSE_MS;
+                kickoutPausedUntil.set(id, until);
+                persistKickoutGuard();
+                scheduleKickoutResume(id, name, until);
+                triggerEventNotify({
+                    accountId: id,
+                    accountName: name,
+                    reason: `kickout_limit:${reason}`,
+                    offlineMs: 0,
+                });
+                return skip(id, name, reason, `连续被挤下线 ${times.length} 次，暂停自动重登 ${Math.round(KICKOUT_PAUSE_MS / 60000)} 分钟，请手动处理`);
+            }
             kickoutReloginTimes.set(id, times);
-            return schedule(accountId, accountName, reason, KICKOUT_DELAY_MS);
+            kickoutPausedUntil.delete(id);
+            persistKickoutGuard();
+            const delayMs = KICKOUT_BACKOFF_MS[times.length - 1];
+            log('系统', `账号 ${name} 被其他终端挤下线，让位 ${Math.round(delayMs / 60000)} 分钟后重试（第 ${times.length} 次）`, {
+                accountId: id,
+                accountName: name,
+                reason,
+                kickoutCount: times.length,
+                delayMs,
+            });
+            return schedule(accountId, name, reason, delayMs);
         }
         const delayMs = isHostSleepReason(reason) ? 0 : (retryDelaysMs[0] || 30000);
         return schedule(accountId, accountName, reason, delayMs);
@@ -461,6 +561,19 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
     }
 
     startSessionRefreshScheduler();
+
+    // 重启后继承让位状态：暂停中的重新排定时器，避免一重启就抢回登录
+    loadKickoutGuard();
+    for (const [id, until] of kickoutPausedUntil) {
+        const account = findAccount(id);
+        if (!account) continue;
+        log('系统', `账号 ${account.name || id} 仍在让位期，${formatStamp(until)} 后再尝试自动登录`, {
+            accountId: id,
+            accountName: account.name,
+            pausedUntil: until,
+        });
+        scheduleKickoutResume(id, String(account.name || id), until);
+    }
 
     return {
         cancel,

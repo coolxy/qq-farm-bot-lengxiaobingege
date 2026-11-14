@@ -1,6 +1,9 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { after } = require('node:test');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 
 // 每个 harness 都会启动一个 10 分钟的会话刷新周期任务，测试结束必须统一清理，
 // 否则 node --test 的进程会因残留 interval 无法退出。
@@ -74,6 +77,9 @@ function createHarness(overrides = {}) {
             issued.push({ loginBuffer, appId, credentials });
             return issueWxLoginCode(loginBuffer, appId, credentials);
         },
+        kickoutStateFile: Object.prototype.hasOwnProperty.call(overrides, 'kickoutStateFile')
+            ? overrides.kickoutStateFile
+            : '',
         ...(Object.prototype.hasOwnProperty.call(overrides, 'retryDelaysMs')
             ? (overrides.retryDelaysMs ? { retryDelaysMs: overrides.retryDelaysMs } : {})
             : { retryDelaysMs: [5, 10, 15] }),
@@ -151,16 +157,50 @@ test('waits 60 seconds before the first kickout code refresh', () => {
     assert.equal([...harness.tasks.values()][0].delayMs, 60000);
 });
 
-test('pauses kickout relogin after 3 kicks within 10 minutes', () => {
+test('kickout backoff walks 1 → 3 → 5 → 10 minutes', () => {
     const harness = createHarness({ retryDelaysMs: undefined });
-    for (let i = 0; i < 3; i++) {
+    const expected = [60000, 180000, 300000, 600000];
+    for (const delayMs of expected) {
+        assert.equal(harness.service.handleDisconnect('1', 'wx-user', 'kickout:test'), true);
+        assert.equal(harness.tasks.get('wx_auto_relogin_1').delayMs, delayMs);
+    }
+});
+
+test('pauses kickout relogin for 30 minutes after 5 consecutive kicks', () => {
+    const harness = createHarness({ retryDelaysMs: undefined });
+    for (let i = 0; i < 4; i++) {
         assert.equal(harness.service.handleDisconnect('1', 'wx-user', 'kickout:test'), true);
     }
     assert.equal(harness.service.handleDisconnect('1', 'wx-user', 'kickout:test'), false);
     assert.equal(
-        harness.accountLogs.some(entry => entry[0] === 'wx_auto_relogin_skipped' && String(entry[1] || '').includes('已暂停自动重登')),
+        harness.accountLogs.some(entry => entry[0] === 'wx_auto_relogin_skipped' && String(entry[1] || '').includes('暂停自动重登')),
         true,
     );
+    // 暂停要让用户知道「bot 已经让位，不用扫码」，但不能催他马上处理
+    assert.equal(harness.reminders.length, 1);
+    assert.match(String(harness.reminders[0].reason), /^kickout_limit:/);
+    assert.ok(harness.tasks.has('wx_kickout_resume_1'), '暂停到期后要自动再试，不能永远不上线');
+
+    // 让位期内再被挤：不重登、不重复通知
+    assert.equal(harness.service.handleDisconnect('1', 'wx-user', 'kickout:test'), false);
+    assert.equal(harness.reminders.length, 1);
+});
+
+test('kickout backoff survives a restart', () => {
+    const file = path.join(os.tmpdir(), `kickout-guard-${process.pid}-${Date.now()}.json`);
+    try {
+        const first = createHarness({ retryDelaysMs: undefined, kickoutStateFile: file });
+        first.service.handleDisconnect('1', 'wx-user', 'kickout:test');
+        first.service.handleDisconnect('1', 'wx-user', 'kickout:test');
+        assert.equal(first.tasks.get('wx_auto_relogin_1').delayMs, 180000);
+        assert.ok(fs.existsSync(file), '让位进度要落盘');
+
+        const restarted = createHarness({ retryDelaysMs: undefined, kickoutStateFile: file });
+        restarted.service.handleDisconnect('1', 'wx-user', 'kickout:test');
+        assert.equal(restarted.tasks.get('wx_auto_relogin_1').delayMs, 300000, '重启后继续走 5 分钟档');
+    } finally {
+        try { fs.unlinkSync(file); } catch { /* ignore */ }
+    }
 });
 
 test('skips auto relogin when the setting is disabled or loginBuffer is missing', () => {
