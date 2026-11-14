@@ -47,20 +47,42 @@ async function replenishActivitySeeds(state: any, settling: boolean): Promise<nu
         // 背包里还有活动种子（够下一轮种）就不买，避免囤积占金币
         if (owned > 0) return 0;
 
+        // 先看有多少空地再决定买多少：地满时买回来只能堆在背包里，既占金币又赶不上这一季。
+        // 2026-11-14 19:03 就是这样买了 24 颗（24 万金币），而 24 块地刚被普通作物种满。
+        let budget = SEED_REPLENISH_COUNT;
+        try {
+            const { getAllLands } = require('../farm/api');
+            const { analyzeLands } = require('../farm/land-analysis');
+            const resp: any = await getAllLands();
+            const lands = Array.isArray(resp && resp.lands) ? resp.lands : [];
+            if (lands.length > 0) {
+                const emptyCount = analyzeLands(lands).empty.length;
+                if (emptyCount === 0) {
+                    log('活动任务', '奶茶补种跳过：当前没有空地，等收获后再补', {
+                        module: 'activity_task', event: 'buy_milk_seed', result: 'skip', reason: 'no_empty_land',
+                    });
+                    return 0;
+                }
+                budget = Math.min(budget, emptyCount);
+            }
+        } catch {
+            // 拿不到土地状态时按原数量买，不因查询失败影响活动
+        }
+
         const exchange: any = await getMilkTeaActivity('exchange');
         const goods = (exchange.goods || []).filter((v: any) => ACTIVITY_SEED_GOODS.includes(v.name) && v.available);
         if (goods.length === 0) return 0;
 
         let bought = 0;
         for (const item of goods) {
-            if (bought >= SEED_REPLENISH_COUNT) break;
+            if (bought >= budget) break;
             // 只在金币支付时补货；奶茶券买的种子（黄金芽）性价比差，不自动买
             const coinCost = (item.costs || []).find((c: any) => String(toNum(c.id)) === '1001');
             if (!coinCost) continue;
             const remain = item.remaining === null || item.remaining === undefined
-                ? SEED_REPLENISH_COUNT
+                ? budget
                 : Math.max(0, toNum(item.remaining));
-            const count = Math.min(remain, SEED_REPLENISH_COUNT - bought);
+            const count = Math.min(remain, budget - bought);
             if (count <= 0) continue;
             const ok = await safeStep(`补充${item.name}`, async () => {
                 await operateMilkTeaActivity('exchange', {
