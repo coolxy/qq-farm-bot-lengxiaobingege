@@ -72,6 +72,30 @@ is_our_process() {
     [[ "$command_line" == *"core/client.js"* || "$command_line" == *"core/dist"* ]]
 }
 
+# 看门狗与手动 start.sh 可能同时触发，两个实例会重复购买。
+# 用目录锁串行化：node/socat 不会继承它，进程被 SIGKILL 后按 pid 判活清理。
+LOCK_DIR="$SCRIPT_DIR/.start.lock"
+acquire_start_lock() {
+    local holder=""
+    local attempt=0
+
+    for attempt in 1 2; do
+        if mkdir "$LOCK_DIR" 2>/dev/null; then
+            printf '%s\n' "$$" > "$LOCK_DIR/pid"
+            trap 'rm -rf "$LOCK_DIR"' EXIT
+            return 0
+        fi
+        holder="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
+        if [[ -n "$holder" ]] && kill -0 "$holder" 2>/dev/null; then
+            echo "start.sh is already running (PID $holder); refusing to start a second instance." >&2
+            return 1
+        fi
+        rm -rf "$LOCK_DIR"
+    done
+    echo "failed to acquire $LOCK_DIR" >&2
+    return 1
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --rebuild|--force-build)
@@ -100,6 +124,8 @@ if [[ -f "$PID_FILE" ]]; then
 fi
 
 command -v node >/dev/null 2>&1 || die "node is required."
+
+acquire_start_lock || exit 1
 
 dependency_inputs=(
     "$SCRIPT_DIR/package.json"
@@ -175,6 +201,10 @@ if [[ ! -f "$CORE_OUTPUT" ]]; then
     die "Build completed but core/client.js was not generated."
 fi
 
+# 保留上一轮日志：自动重启后仍能查崩溃/断线现场，而不是被新日志直接盖掉
+if [[ -s "$LOG_FILE" ]]; then
+    mv -f "$LOG_FILE" "${LOG_FILE}.prev"
+fi
 : > "$LOG_FILE"
 if command -v setsid >/dev/null 2>&1; then
     nohup setsid node "$SCRIPT_DIR/core/client.js" >> "$LOG_FILE" 2>&1 &

@@ -22,6 +22,8 @@ web/stats.html
 
 # Logs
 *.log
+*.log.prev
+*.beat
 
 # Runtime process state
 *.pid

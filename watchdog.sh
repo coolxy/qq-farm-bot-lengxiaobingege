@@ -14,6 +14,7 @@ cd "$SCRIPT_DIR"
 APP_PID_FILE="$SCRIPT_DIR/app_dev.pid"
 WD_PID_FILE="$SCRIPT_DIR/watchdog.pid"
 WD_LOG="$SCRIPT_DIR/watchdog.log"
+WD_BEAT="$SCRIPT_DIR/watchdog.beat"
 
 INTERVAL="${WATCHDOG_INTERVAL:-60}"
 MAX_FAILS=3
@@ -292,6 +293,7 @@ run_loop() {
         fi
 
         rotate_log
+        printf '%s\n' "$(date +%s)" > "$WD_BEAT" 2>/dev/null || true
         sleep "$INTERVAL"
     done
 }
@@ -342,10 +344,17 @@ stop_daemon() {
 }
 
 status_daemon() {
-    local pid
+    local pid beat age
     pid="$(read_wd_pid)"
     if is_watchdog_process "$pid"; then
         echo "watchdog is running with PID $pid."
+        beat="$(tr -d '[:space:]' < "$WD_BEAT" 2>/dev/null || true)"
+        if [[ "$beat" =~ ^[0-9]+$ ]]; then
+            age=$(( $(date +%s) - beat ))
+            echo "last check: ${age}s ago"
+        else
+            echo "last check: (尚未完成首轮)"
+        fi
         echo "--- recent log ---"
         tail -n 8 "$WD_LOG" 2>/dev/null || true
         return 0
