@@ -98,6 +98,9 @@ bash ./watchdog.sh status    # 查看看门狗状态与最近记录
 bash ./watchdog.sh start     # 单独启动看门狗（幂等）
 bash ./watchdog.sh stop      # 单独停止看门狗
 tail -f watchdog.log         # 看门狗的检查与重启记录
+
+bash ./preflight.sh          # 交付前自检：单实例、双口、转发一致性、看门狗心跳、日志、崩溃转储
+bash ./preflight.sh --full   # 额外跑一遍 core 测试套件
 ```
 
 看门狗每 60 秒检查一次，只在确认主进程真的不在时才动手：

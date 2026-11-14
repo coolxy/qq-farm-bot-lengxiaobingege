@@ -88,10 +88,33 @@ http_ok() {
     curl -fsS -o /dev/null --max-time 3 "http://127.0.0.1:$1/" >/dev/null 2>&1
 }
 
+front_hash() {
+    local body
+    body="$(curl -fsS --max-time 3 "http://127.0.0.1:$1/" 2>/dev/null)" || return 1
+    printf '%s' "$body" | md5sum | cut -d' ' -f1
+}
+
+# 3000 有响应不代表它转到了主端口：手工起的 PORT=3000 实例会把 3000 占住，
+# 外部访问到的是另一个进程。内容指纹不同就提示一次，不自动动手。
+check_forward_target() {
+    local h_edge h_main
+    h_edge="$(front_hash 3000 2>/dev/null || true)"
+    h_main="$(front_hash "$APP_PORT" 2>/dev/null || true)"
+    if [[ -n "$h_edge" && -n "$h_main" && "$h_edge" != "$h_main" ]]; then
+        if [[ "$last_forward_warn" != "mismatch" ]]; then
+            log "警告：3000 返回内容与 ${APP_PORT} 不一致，3000 可能被其它实例占用"
+            last_forward_warn="mismatch"
+        fi
+    else
+        last_forward_warn=""
+    fi
+}
+
 ensure_forwarder() {
     [[ "$APP_PORT" == "3000" ]] && return 0
     command -v socat >/dev/null 2>&1 || return 0
     if http_ok 3000; then
+        check_forward_target
         return 0
     fi
     log "3000 转发不可用，重建转发器（3000 -> ${APP_PORT}）"

@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 PID_FILE="$SCRIPT_DIR/app_dev.pid"
+LOCK_DIR="$SCRIPT_DIR/.start.lock"
 
 cd "$SCRIPT_DIR"
 
@@ -47,10 +48,31 @@ cleanup_runtime() {
     stop_forwarder
 }
 
+# 停掉看门狗那一刻，它可能正卡在 start.sh 里。那个 start.sh 是独立子进程，
+# 会继续把服务拉起来，等它结束后再清一遍，否则会出现“stop 完服务又活了”。
+wait_start_lock() {
+    local i holder
+    [[ -d "$LOCK_DIR" ]] || return 0
+    echo "Waiting for in-flight start.sh to finish..."
+    for i in {1..120}; do
+        [[ -d "$LOCK_DIR" ]] || return 0
+        sleep 0.5
+    done
+    holder="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
+    if [[ -n "$holder" ]] && kill -0 "$holder" 2>/dev/null; then
+        echo "start.sh (PID $holder) still running after 60s; terminating it." >&2
+        kill -TERM "$holder" 2>/dev/null || true
+        sleep 1
+    fi
+    rm -rf -- "$LOCK_DIR"
+}
+
 # 必须先停看门狗：否则它会在主进程退出后把服务重新拉起来。
 if [[ -f "$SCRIPT_DIR/watchdog.sh" ]]; then
     bash "$SCRIPT_DIR/watchdog.sh" stop || true
 fi
+
+wait_start_lock
 
 if [[ ! -f "$PID_FILE" ]]; then
     cleanup_runtime
