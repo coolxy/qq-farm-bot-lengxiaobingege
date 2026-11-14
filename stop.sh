@@ -12,6 +12,11 @@ stop_forwarder() {
     pkill -f '^socat TCP-LISTEN:3000' 2>/dev/null || true
 }
 
+# 必须先停看门狗：否则它会在主进程退出后把服务重新拉起来。
+if [[ -f "$SCRIPT_DIR/watchdog.sh" ]]; then
+    bash "$SCRIPT_DIR/watchdog.sh" stop || true
+fi
+
 if [[ ! -f "$PID_FILE" ]]; then
     stop_forwarder
     echo "qq-farm-bot is not running."

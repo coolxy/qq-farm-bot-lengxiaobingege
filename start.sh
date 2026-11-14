@@ -17,6 +17,13 @@ die() {
     exit 1
 }
 
+# 看门狗幂等启动；被看门狗自己调用时用 QQ_FARM_NO_WATCHDOG=1 跳过，避免递归。
+start_watchdog_if_needed() {
+    [[ "${QQ_FARM_NO_WATCHDOG:-0}" == "1" ]] && return 0
+    [[ -f "$SCRIPT_DIR/watchdog.sh" ]] || return 0
+    bash "$SCRIPT_DIR/watchdog.sh" start || true
+}
+
 usage() {
     echo "Usage: bash start.sh [--rebuild]"
     echo "  --rebuild  Force a full Web and Core rebuild before starting."
@@ -86,6 +93,7 @@ if [[ -f "$PID_FILE" ]]; then
     existing_pid="$(tr -d '[:space:]' < "$PID_FILE")"
     if [[ "$existing_pid" =~ ^[0-9]+$ ]] && is_our_process "$existing_pid"; then
         echo "qq-farm-bot is already running with PID $existing_pid."
+        start_watchdog_if_needed
         exit 0
     fi
     rm -f -- "$PID_FILE"
@@ -198,3 +206,5 @@ if [[ "$app_port" != "3000" ]] && command -v socat >/dev/null 2>&1; then
         >/dev/null 2>&1 &
     echo "Edge forward: 3000 -> ${app_port}"
 fi
+
+start_watchdog_if_needed
