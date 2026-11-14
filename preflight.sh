@@ -132,6 +132,47 @@ else
     bad "发现 ${dumps} 个崩溃转储：$(ls -lh "$SCRIPT_DIR"/core.[0-9]* 2>/dev/null | awk '{print $9"("$5")"}' | tr '\n' ' ')"
 fi
 
+# 主进程活着不等于账号在跑：掉线停摆时上面 11 项可以全绿，但自动化一件都没执行。
+ADMIN_TOKEN="$(python3 - <<'PY' 2>/dev/null
+import json, pathlib
+try:
+    tokens = json.loads(pathlib.Path('core/data/admin-sessions.json').read_text()).get('tokens') or []
+    print(tokens[0] if tokens else '')
+except Exception:
+    print('')
+PY
+)"
+if [[ -z "$ADMIN_TOKEN" ]]; then
+    printf '  - 无可用 admin token，跳过账号状态检查\n'
+else
+    acc_state="$(curl -s --max-time 5 -H "x-admin-token: $ADMIN_TOKEN" "http://127.0.0.1:$APP_PORT/api/accounts" 2>/dev/null | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print("")
+    raise SystemExit
+accs = ((d.get("data") or {}).get("accounts")) or d.get("accounts") or []
+if not accs:
+    print("")
+    raise SystemExit
+running = [a for a in accs if a.get("running")]
+offline = [a.get("name") or a.get("id") or "?" for a in accs if not a.get("running")]
+print("%d/%d|%s" % (len(running), len(accs), ",".join(offline)))
+' 2>/dev/null)"
+    if [[ -z "$acc_state" ]]; then
+        bad "查不到账号运行状态（接口无响应或返回异常）"
+    else
+        acc_online="${acc_state%%|*}"
+        acc_offline="${acc_state#*|}"
+        if [[ -z "$acc_offline" ]]; then
+            ok "账号在线 ${acc_online}"
+        else
+            bad "账号 ${acc_online} 在线，离线：${acc_offline}（需扫码或点启动）"
+        fi
+    fi
+fi
+
 if [[ "${1:-}" == "--full" ]]; then
     echo
     echo "测试套件"
