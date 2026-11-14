@@ -68,7 +68,7 @@ test('recovering inside the window cancels the offline push', async () => {
     await wait(90);
 
     assert.equal(h.pushes.length, 0, '已恢复在线就不该再提「已离线」');
-    assert.ok(h.logs.some(([, msg]) => /取消掉线提醒/.test(msg)));
+    assert.ok(h.logs.some(([, msg]) => /取消挂起的掉线提醒（本次未推送任何通知）/.test(msg)));
 });
 
 test('terminal relogin failure pushes immediately and replaces the pending one', async () => {

@@ -1,12 +1,17 @@
 export {};
 
+const fs = require('node:fs');
+const path = require('node:path');
+
 interface ReloginReminderOptions {
     store: any;
     sendPushooMessage: (payload: any) => Promise<any>;
     log: (tag: string, msg: string, extra?: any) => void;
-    // 延迟判定窗口与去重窗口可注入，便于测试与后续调参
+    // 延迟判定窗口与恢复通知节流窗口可注入，便于测试与后续调参
     offlineDeferMs?: number;
     offlineDedupeMs?: number;
+    // 掉线周期状态的落盘路径；传空串表示不落盘（测试用）
+    stateFile?: string;
 }
 
 interface EventNotifyPayload {
@@ -16,17 +21,36 @@ interface EventNotifyPayload {
     offlineMs?: number;
 }
 
+// 一次「掉线周期」= 从首次断线到连接恢复之间的全过程。
+// 同一次周期内最多推一条掉线提醒：过程态负责判定，终态负责补足原因，但都不再推第二条。
+interface OfflineCycle {
+    accountId: string;
+    accountName: string;
+    startedAt: number;
+    lastEventAt: number;
+    reason: string;
+    terminal: boolean;
+    noticeSent: boolean;
+    noticeSentAt: number;
+    retryCount: number;
+}
+
 // 掉线提醒延迟判定窗口：覆盖自动重登的 3 次重试（30s + 12s + 30s）。
 // 实测 11-06 完整失败链 43 秒，加上首次重试前等待与换码耗时最坏约 92 秒，
 // 因此兜底窗口取 150 秒——正常失败会在 75~90 秒由终态推送接管并清掉本定时器，
 // 这里只负责「既不成功也不失败」的卡死兜底
 const OFFLINE_DEFER_MS = 150 * 1000;
-// 同账号同类掉线 10 分钟内只推一条：pushplus 对重复内容返回 999 直接丢，
-// 与其推两条被判重，不如自己先去重
+// 恢复通知节流：同一账号短时间内反复掉线/恢复只报一次恢复，避免来回刷屏
 const OFFLINE_DEDUPE_MS = 10 * 60 * 1000;
 // 「已恢复」只在真推过「已离线」之后才补发；超过这个时长仍恢复也补，
 // 但隔夜或跨进程的陈旧记录不再补，避免第二天收到莫名通知
 const RECOVER_NOTICE_TTL_MS = 12 * 60 * 60 * 1000;
+// 掉线周期状态的保鲜期：超过这个时间仍未恢复的周期，重启后直接丢弃，不参与判定
+const STALE_CYCLE_MS = 30 * 60 * 1000;
+// 推送失败后的重试间隔与次数：失败不再假装已提醒，退避重试两次才放弃
+const NOTICE_RETRY_DELAY_MS = 30 * 1000;
+const NOTICE_MAX_RETRY = 2;
+const STATE_FILE_NAME = 'event-notify-state.json';
 
 // 这些原因已经是终态，自动重登救不回来了，必须立刻推
 const IMMEDIATE_REASON_PREFIXES = ['auto_relogin_failed:', 'no_session', 'offline_timeout', 'kickout_limit'];
@@ -65,12 +89,76 @@ function createEventNotifyService(options: ReloginReminderOptions) {
     // pushplus 一类渠道对同 token 并发会返回「服务端验证错误」，串行后不会互相顶掉。
     let pushQueue: Promise<any> = Promise.resolve();
 
-    // 挂起中的掉线提醒：key 是账号 id，恢复在线或转终态时清掉
-    const pendingOffline = new Map<string, { timer: any; payload: EventNotifyPayload }>();
-    // 已推送过的掉线提醒：用于同类原因 10 分钟内去重
-    const lastOfflinePush = new Map<string, { category: string; at: number }>();
-    // 已成功推送过「已离线」的账号及时间：恢复时据此补一条「已恢复」，形成完整闭环
-    const offlineNoticeSentAt = new Map<string, number>();
+    // 进行中的掉线周期：key 是账号 id，连接恢复时结束并删除
+    const cycles = new Map<string, OfflineCycle>();
+    // 各周期的判定/重试定时器
+    const cycleTimers = new Map<string, any>();
+    // 恢复通知节流：账号 → 最近一次恢复通知时间
+    const recoverNoticedAt = new Map<string, number>();
+
+    function resolveStateFile(): string {
+        if (options.stateFile === '') return '';
+        if (options.stateFile) return options.stateFile;
+        // 单元测试进程不落盘，避免把测试造的周期写进生产数据
+        if (process.env.NODE_TEST_CONTEXT) return '';
+        const { getDataDir } = require('../config/runtime-paths');
+        return path.join(getDataDir(), STATE_FILE_NAME);
+    }
+
+    const stateFile = resolveStateFile();
+
+    function persistState(): void {
+        if (!stateFile) return;
+        try {
+            const data: any = { version: 1, updatedAt: Date.now(), cycles: {} };
+            for (const [id, cycle] of cycles) data.cycles[id] = cycle;
+            const tmp = `${stateFile}.tmp`;
+            fs.writeFileSync(tmp, JSON.stringify(data), 'utf8');
+            fs.renameSync(tmp, stateFile);
+        } catch {
+            // 状态落盘失败不影响推送主流程
+        }
+    }
+
+    function loadState(): void {
+        if (!stateFile) return;
+        try {
+            if (!fs.existsSync(stateFile)) return;
+            const raw = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+            const saved = raw && typeof raw === 'object' ? raw.cycles : null;
+            if (!saved || typeof saved !== 'object') return;
+            const now = Date.now();
+            for (const [id, value] of Object.entries<any>(saved)) {
+                const cycle = normalizeCycle(id, value);
+                // 隔夜或长时间未更新的周期不继承，避免重启后按陈旧状态误判
+                if (!cycle || now - cycle.lastEventAt > STALE_CYCLE_MS) continue;
+                cycles.set(cycle.accountId, cycle);
+            }
+            if (cycles.size > 0) {
+                log('系统', `已恢复 ${cycles.size} 个未结束的掉线周期（重启前已推送过的不再重复提醒）`);
+            }
+        } catch {
+            // 状态文件损坏时按空状态启动
+        }
+    }
+
+    function normalizeCycle(accountId: string, value: any): OfflineCycle | null {
+        if (!value || typeof value !== 'object') return null;
+        const startedAt = Number(value.startedAt);
+        const lastEventAt = Number(value.lastEventAt) || startedAt;
+        if (!Number.isFinite(startedAt) || startedAt <= 0) return null;
+        return {
+            accountId: String(value.accountId || accountId),
+            accountName: String(value.accountName || ''),
+            startedAt,
+            lastEventAt,
+            reason: String(value.reason || 'unknown'),
+            terminal: value.terminal === true,
+            noticeSent: value.noticeSent === true,
+            noticeSentAt: Number(value.noticeSentAt) || 0,
+            retryCount: Math.max(0, Number(value.retryCount) || 0),
+        };
+    }
 
     function enqueuePush<T>(task: () => Promise<T>): Promise<T> {
         const run = pushQueue.then(task, task);
@@ -119,7 +207,8 @@ function createEventNotifyService(options: ReloginReminderOptions) {
         return `${title} ${name}`.trim();
     }
 
-    async function sendConfiguredPush(payload: { title?: string; content?: string; accountId?: string; accountName?: string; logLabel?: string } = {}): Promise<void> {
+    // 返回是否真的送达：只有送达才允许记「已提醒」，避免失败后把真提醒吞掉
+    async function sendConfiguredPush(payload: { title?: string; content?: string; accountId?: string; accountName?: string; logLabel?: string } = {}): Promise<boolean> {
         const accountId = String(payload.accountId || '').trim();
         const accountName = String(payload.accountName || '').trim();
         const baseTitle = String(payload.title || '').trim();
@@ -130,12 +219,12 @@ function createEventNotifyService(options: ReloginReminderOptions) {
             const channelCfg = resolvePushChannel();
             if (channelCfg.ok === false) {
                 reportConfigError(channelCfg.reason);
-                return;
+                return false;
             }
             lastConfigErrorReason = '';
             if (!title || !content) {
                 log('错误', '推送标题或内容为空');
-                return;
+                return false;
             }
             const sendOnce = () => sendPushooMessage({
                 channel: channelCfg.channel,
@@ -154,21 +243,14 @@ function createEventNotifyService(options: ReloginReminderOptions) {
             });
             if (result?.ok) {
                 log('系统', `${logLabel}发送成功: ${accountName || accountId || title}`);
-            } else {
-                log('错误', `${logLabel}发送失败: ${result?.msg || 'unknown'}`);
+                return true;
             }
+            log('错误', `${logLabel}发送失败: ${result?.msg || 'unknown'}`);
+            return false;
         } catch (e: any) {
             log('错误', `${logLabel}发送异常: ${e.message}`);
+            return false;
         }
-    }
-
-    function classifyOfflineReason(reason: string): string {
-        const value = String(reason || '');
-        if (value.startsWith('kickout')) return 'kickout';
-        if (value.startsWith('auto_relogin_failed') || value.startsWith('no_session')) return 'relogin_failed';
-        if (value.startsWith('offline_timeout')) return 'offline_timeout';
-        if (value.startsWith('ws_error')) return 'ws_error';
-        return 'disconnect';
     }
 
     function isImmediateReason(reason: string): boolean {
@@ -199,98 +281,104 @@ function createEventNotifyService(options: ReloginReminderOptions) {
         return { title, content, accountId, accountName };
     }
 
-    function clearPendingOffline(accountId: string, logMessage?: string): boolean {
-        const id = String(accountId || '').trim();
-        if (!id) return false;
-        const pending = pendingOffline.get(id);
-        if (!pending) return false;
-        if (pending.timer) clearTimeout(pending.timer);
-        pendingOffline.delete(id);
-        if (logMessage) {
-            log('系统', logMessage, { accountId: id, accountName: pending.payload.accountName, reason: pending.payload.reason });
+    function clearCycleTimer(accountId: string): void {
+        const timer = cycleTimers.get(accountId);
+        if (timer) {
+            clearTimeout(timer);
+            cycleTimers.delete(accountId);
         }
-        return true;
     }
 
-    async function deliverOfflineNotice(payload: EventNotifyPayload, extraNote = ''): Promise<void> {
-        const accountId = String(payload.accountId || '').trim();
-        const accountName = String(payload.accountName || '').trim();
-        const reason = String(payload.reason || 'unknown');
-        const category = classifyOfflineReason(reason);
-        const now = Date.now();
-        const last = lastOfflinePush.get(accountId);
-        if (last && last.category === category && now - last.at < offlineDedupeMs) {
-            log('系统', `账号 ${accountName || accountId} 同类掉线 ${Math.round((now - last.at) / 1000)} 秒前已提醒过，跳过重复推送`, {
-                accountId, accountName, reason, category,
-            });
-            return;
+    function endCycle(accountId: string, logMessage?: string): OfflineCycle | null {
+        const id = String(accountId || '').trim();
+        if (!id) return null;
+        const cycle = cycles.get(id);
+        clearCycleTimer(id);
+        if (!cycle) return null;
+        cycles.delete(id);
+        persistState();
+        if (logMessage) {
+            log('系统', logMessage, { accountId: id, accountName: cycle.accountName, reason: cycle.reason });
         }
-        const built = buildOfflineMessage(payload);
-        if (!built) return;
-        lastOfflinePush.set(accountId, { category, at: now });
-        if (accountId) offlineNoticeSentAt.set(accountId, now);
+        return cycle;
+    }
+
+    function scheduleRetry(cycle: OfflineCycle): void {
+        if (isRuntimeStopping()) return;
+        cycle.retryCount += 1;
+        persistState();
+        const id = cycle.accountId;
+        clearCycleTimer(id);
+        const timer = setTimeout(() => {
+            cycleTimers.delete(id);
+            const current = cycles.get(id);
+            if (!current || current.noticeSent || isRuntimeStopping()) return;
+            const note = current.terminal
+                ? '自动重新登录未成功，需要重新扫码登录。'
+                : `已等待 ${Math.round(offlineDeferMs / 1000)} 秒自动重登未成功，请检查账号或重新扫码。`;
+            deliverNotice(current, note).catch(() => null);
+        }, NOTICE_RETRY_DELAY_MS);
+        if (typeof timer.unref === 'function') timer.unref();
+        cycleTimers.set(id, timer);
+        log('系统', `账号 ${cycle.accountName || id} 掉线提醒未送达，${Math.round(NOTICE_RETRY_DELAY_MS / 1000)} 秒后重试（第 ${cycle.retryCount} 次）`, {
+            accountId: id,
+            accountName: cycle.accountName,
+            reason: cycle.reason,
+        });
+    }
+
+    async function deliverNotice(cycle: OfflineCycle, extraNote = ''): Promise<boolean> {
+        if (cycle.noticeSent) {
+            // 同一次掉线周期内已经提醒过：终态到来只补日志，不再推第二条
+            log('系统', `账号 ${cycle.accountName || cycle.accountId} 本次掉线已提醒过，不再重复推送`, {
+                accountId: cycle.accountId,
+                accountName: cycle.accountName,
+                reason: cycle.reason,
+            });
+            return true;
+        }
+        const built = buildOfflineMessage({
+            accountId: cycle.accountId,
+            accountName: cycle.accountName,
+            reason: cycle.reason,
+        });
+        if (!built) return false;
         const content = extraNote ? `${built.content}\n${extraNote}` : built.content;
-        await sendConfiguredPush({
+        const ok = await sendConfiguredPush({
             title: built.title,
             content,
             accountId: built.accountId,
             accountName: built.accountName,
             logLabel: '事件通知',
         });
+        if (ok) {
+            cycle.noticeSent = true;
+            cycle.noticeSentAt = Date.now();
+            persistState();
+            return true;
+        }
+        if (!cycle.noticeSent && cycle.retryCount < NOTICE_MAX_RETRY) scheduleRetry(cycle);
+        return false;
     }
 
-    function scheduleOfflineNotice(payload: EventNotifyPayload): void {
-        const accountId = String(payload.accountId || '').trim();
-        const accountName = String(payload.accountName || '').trim();
-        const reason = String(payload.reason || 'unknown');
-        // 刚推过这条账号的掉线提醒（可能是终态），晚到的过程态消息不再重复挂起，
-        // 否则终态推送之后又来一条 disconnect，会在窗口到期后再喊一次
-        const recent = lastOfflinePush.get(accountId);
-        if (recent && Date.now() - recent.at < offlineDedupeMs) {
-            const ago = Math.round((Date.now() - recent.at) / 1000);
-            log('系统', `账号 ${accountName || accountId} ${ago} 秒前已推送掉线提醒，本次断线不再重复判定`, {
-                accountId, accountName, reason,
-            });
-            return;
-        }
-        // 同账号再次断线：重置计时，但保留最初那条原因，避免抖动刷屏
-        const existed = pendingOffline.get(accountId);
-        if (existed && existed.timer) clearTimeout(existed.timer);
-        const keepPayload = existed ? { ...existed.payload, accountName: accountName || existed.payload.accountName } : payload;
+    function scheduleCycleNotice(cycle: OfflineCycle): void {
+        clearCycleTimer(cycle.accountId);
+        const id = cycle.accountId;
         const timer = setTimeout(() => {
-            pendingOffline.delete(accountId);
-            if (isRuntimeStopping()) return;
+            cycleTimers.delete(id);
+            const current = cycles.get(id);
+            if (!current || current.noticeSent || isRuntimeStopping()) return;
             const waitSec = Math.round(offlineDeferMs / 1000);
-            deliverOfflineNotice(keepPayload, `已等待 ${waitSec} 秒自动重登未成功，请检查账号或重新扫码。`).catch(() => null);
+            deliverNotice(current, `已等待 ${waitSec} 秒自动重登未成功，请检查账号或重新扫码。`).catch(() => null);
         }, offlineDeferMs);
         if (typeof timer.unref === 'function') timer.unref();
-        pendingOffline.set(accountId, { timer, payload: keepPayload });
+        cycleTimers.set(id, timer);
         const waitSec = Math.round(offlineDeferMs / 1000);
-        log('系统', `账号 ${accountName || accountId} 连接断开，延后 ${waitSec} 秒判定是否提醒（等待自动重登结果）`, {
-            accountId, accountName, reason,
-        });
-    }
-
-    // 连接已恢复：取消挂起的「已离线」。
-    // 若此前确实推送过掉线提醒，再补一条「已恢复」形成闭环——只有真掉过线才通知，
-    // 150 秒内的抖动恢复保持静默，不会因为重启或短暂断连打扰。
-    function noteAccountRecovered(accountId: string, accountName?: string): void {
-        const id = String(accountId || '').trim();
-        const sentAt = id ? offlineNoticeSentAt.get(id) : undefined;
-        const cleared = clearPendingOffline(accountId, `账号 ${accountName || accountId} 已恢复在线，取消掉线提醒`);
-        if (cleared) lastOfflinePush.delete(id);
-        if (!sentAt) return;
-        offlineNoticeSentAt.delete(id);
-        const now = Date.now();
-        if (now - sentAt > RECOVER_NOTICE_TTL_MS) return;
-        const minutes = Math.max(1, Math.round((now - sentAt) / 60000));
-        Promise.resolve(sendConfiguredPush({
-            title: '农场已恢复在线',
-            content: `账号 ${accountName || id} 掉线约 ${minutes} 分钟后已自动重新登录。`,
+        log('系统', `账号 ${cycle.accountName || id} 连接断开，延后 ${waitSec} 秒判定是否提醒（等待自动重登结果）`, {
             accountId: id,
-            accountName,
-            logLabel: '恢复通知',
-        })).catch(() => null);
+            accountName: cycle.accountName,
+            reason: cycle.reason,
+        });
     }
 
     async function triggerEventNotify(payload: EventNotifyPayload = {}): Promise<void> {
@@ -304,19 +392,113 @@ function createEventNotifyService(options: ReloginReminderOptions) {
             }
             log('系统', `触发事件通知: 账号=${accountName || accountId}, 原因=${reason}`, { accountId, accountName, reason });
 
+            const now = Date.now();
+            // 没有账号 id 时无法归属掉线周期，按单次判定处理
+            if (!accountId) {
+                const built = buildOfflineMessage(payload);
+                if (!built) return;
+                await sendConfiguredPush({
+                    title: built.title,
+                    content: built.content,
+                    accountId: built.accountId,
+                    accountName: built.accountName,
+                    logLabel: '事件通知',
+                });
+                return;
+            }
+            let cycle = cycles.get(accountId);
+            if (!cycle) {
+                cycle = {
+                    accountId,
+                    accountName,
+                    startedAt: now,
+                    lastEventAt: now,
+                    reason,
+                    terminal: false,
+                    noticeSent: false,
+                    noticeSentAt: 0,
+                    retryCount: 0,
+                };
+                cycles.set(accountId, cycle);
+            } else {
+                cycle.lastEventAt = now;
+                if (accountName) cycle.accountName = accountName;
+                // 原因只保留首次那条，终态会单独标记，避免日志被后续抖动原因淹没
+                if (isImmediateReason(reason)) cycle.terminal = true;
+            }
+
+            if (cycle.noticeSent) {
+                persistState();
+                log('系统', `账号 ${accountName || accountId} 本次掉线已提醒过，跳过重复推送`, {
+                    accountId, accountName, reason,
+                });
+                return;
+            }
+
             if (isImmediateReason(reason)) {
                 // 终态：自动重登已放弃或持续离线超时，此时「需要扫码」的判断才成立
-                clearPendingOffline(accountId);
-                await deliverOfflineNotice(payload);
+                cycle.terminal = true;
+                clearCycleTimer(accountId);
+                persistState();
+                await deliverNotice(cycle, '自动重新登录未成功，需要重新扫码登录。');
                 return;
             }
 
             // 过程态：先挂起，等自动重登结果再决定推不推（延迟判定）
-            scheduleOfflineNotice(payload);
+            scheduleCycleNotice(cycle);
+            persistState();
         } catch (e: any) {
             log('错误', `事件通知发送异常: ${e.message}`);
         }
     }
+
+    // 连接已恢复：结束本次掉线周期。
+    // 只有该周期真的推过「已离线」才补一条恢复通知，窗口内的抖动恢复保持静默。
+    function noteAccountRecovered(accountId: string, accountName?: string, source?: 'auto' | 'manual' | string): void {
+        const id = String(accountId || '').trim();
+        if (!id) return;
+        const cycle = endCycle(id, undefined);
+        if (!cycle) return;
+        const name = accountName || cycle.accountName || id;
+        if (!cycle.noticeSent) {
+            log('系统', `账号 ${name} 连接已恢复，取消挂起的掉线提醒（本次未推送任何通知）`, {
+                accountId: id, accountName: name, reason: cycle.reason,
+            });
+            return;
+        }
+        const now = Date.now();
+        if (now - cycle.noticeSentAt > RECOVER_NOTICE_TTL_MS) {
+            log('系统', `账号 ${name} 已恢复在线，但掉线提醒已超过 ${Math.round(RECOVER_NOTICE_TTL_MS / 3600000)} 小时，不再补发恢复通知`, {
+                accountId: id, accountName: name, reason: cycle.reason,
+            });
+            return;
+        }
+        const lastRecover = recoverNoticedAt.get(id) || 0;
+        if (now - lastRecover < offlineDedupeMs) {
+            log('系统', `账号 ${name} ${Math.round((now - lastRecover) / 1000)} 秒前已发过恢复通知，本次不再重复`, {
+                accountId: id, accountName: name, reason: cycle.reason,
+            });
+            return;
+        }
+        recoverNoticedAt.set(id, now);
+        // 恢复来源：终态（自动重登已放弃）后的恢复只可能是人工扫码，其余视为自动重连
+        const recoverSource = source || (cycle.terminal ? 'manual' : 'auto');
+        const minutes = Math.max(1, Math.round((now - cycle.startedAt) / 60000));
+        const tail = recoverSource === 'manual'
+            ? '已通过扫码重新登录。'
+            : recoverSource === 'auto'
+                ? '已自动重新连接。'
+                : '已恢复连接。';
+        Promise.resolve(sendConfiguredPush({
+            title: '农场已恢复在线',
+            content: `账号 ${name} 掉线约 ${minutes} 分钟后${tail}`,
+            accountId: id,
+            accountName: name,
+            logLabel: '恢复通知',
+        })).catch(() => null);
+    }
+
+    loadState();
 
     return { getOfflineAutoDeleteMs, triggerEventNotify, sendConfiguredPush, noteAccountRecovered };
 }
