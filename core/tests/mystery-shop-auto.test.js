@@ -183,7 +183,55 @@ test('checkMysteryShopTick buys once and returns a merged push', async () => {
         },
         state,
     });
-    assert.equal(bought, 2);
-    assert.equal(second.bought, true);
+    assert.equal(bought, 1, '同一次到货不应重复下单');
+    assert.equal(second.bought, false);
     assert.equal(second.push, undefined);
+});
+
+test('same visit key is skipped once it has been bought', () => {
+    const auto = automation({ mystery_shop_auto_buy: true });
+    const state = createMysteryShopAutoState();
+    const offer = shop();
+    const first = decideMysteryShopTick(offer, auto, state);
+    state.lastBoughtKey = first.visitKey;
+
+    const again = decideMysteryShopTick(offer, auto, state);
+    assert.equal(again.shouldBuy, false);
+    assert.equal(again.skipBuyReason, 'already_bought');
+
+    // activeTime 变了就是新一笔到货，允许继续买
+    const refreshed = shop({ activeTime: offer.activeTime + 60000 });
+    assert.equal(decideMysteryShopTick(refreshed, auto, state).shouldBuy, true);
+});
+
+test('failed purchase releases the claim so the next tick can retry', async () => {
+    const state = createMysteryShopAutoState();
+    const offer = shop();
+    const auto = automation({ mystery_shop_auto_buy: true });
+    let attempts = 0;
+    const failed = await checkMysteryShopTick({
+        getAutomation: () => auto,
+        getShop: async () => offer,
+        buy: async () => {
+            attempts += 1;
+            throw new Error('network down');
+        },
+        state,
+    });
+    assert.equal(attempts, 1);
+    assert.equal(failed.bought, false);
+    assert.equal(state.lastBoughtKey, '', '失败后应撤销占位');
+
+    const retried = await checkMysteryShopTick({
+        getAutomation: () => auto,
+        getShop: async () => offer,
+        buy: async () => {
+            attempts += 1;
+            return { ok: true };
+        },
+        state,
+    });
+    assert.equal(attempts, 2);
+    assert.equal(retried.bought, true);
+    assert.equal(state.lastBoughtKey, mysteryShopVisitKey(offer));
 });

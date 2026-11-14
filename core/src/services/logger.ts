@@ -59,7 +59,12 @@ function ensureFallbackLogDir(): string {
     return dir;
 }
 
+// 单测通过 node --test 运行时，日志一律不落盘：
+// 否则测试里造的"购买成功/失败"会混进 data/logs/combined-*.log，污染线上排查。
+const fileLoggingDisabled = !!process.env.NODE_TEST_CONTEXT || process.env.QQ_FARM_NO_FILE_LOG === '1';
+
 function appendFallbackLog(level: string, moduleName: string, message: string, meta: any): void {
+    if (fileLoggingDisabled) return;
     try {
         const dir = ensureFallbackLogDir();
         const payload = {
@@ -110,6 +115,13 @@ let rootLogger: any = null;
 
 function getRootLogger(): any {
     if (rootLogger) return rootLogger;
+
+    // 测试环境：返回静音 logger，不建任何文件 transport
+    if (fileLoggingDisabled) {
+        if (!winston) return null;
+        rootLogger = winston.createLogger({ silent: true, transports: [] });
+        return rootLogger;
+    }
 
     if (!winston) {
         rootLogger = null;

@@ -36,6 +36,9 @@ const STATE_FILE = 'mystery-shop-auto-state.json';
 interface MysteryShopAutoState {
     lastArrivalKey: string;
     lastPurchaseKey: string;
+    // 同一次到货只下单一次：与推送开关无关，购买成功后无条件落盘。
+    // 用于拦住重启后补检、并发 tick 对同一笔到货的重复下单。
+    lastBoughtKey: string;
     // 同一次到货的同一种跳过原因只记一条日志，避免 10 分钟一轮刷屏
     lastSkipKey?: string;
 }
@@ -45,7 +48,7 @@ interface MysteryShopDecision {
     visitKey?: string;
     notifyArrival: boolean;
     shouldBuy: boolean;
-    skipBuyReason?: 'auto_buy_off' | 'currency_not_allowed' | 'balance_unknown' | 'insufficient';
+    skipBuyReason?: 'auto_buy_off' | 'already_bought' | 'currency_not_allowed' | 'balance_unknown' | 'insufficient';
 }
 
 interface MysteryShopPushFlags {
@@ -56,6 +59,7 @@ interface MysteryShopPushFlags {
 const defaultState: MysteryShopAutoState = {
     lastArrivalKey: '',
     lastPurchaseKey: '',
+    lastBoughtKey: '',
 };
 
 // 巡检心跳：重启后前 3 轮各记一条（便于确认间隔生效），之后每小时一条，避免刷屏
@@ -70,7 +74,7 @@ function noteIdleTick(): void {
 }
 
 function createMysteryShopAutoState(): MysteryShopAutoState {
-    return { lastArrivalKey: '', lastPurchaseKey: '', lastSkipKey: '' };
+    return { lastArrivalKey: '', lastPurchaseKey: '', lastBoughtKey: '', lastSkipKey: '' };
 }
 
 // 通知去重标记落盘：进程重启后同一次到货不会重复推送
@@ -84,6 +88,7 @@ function loadMysteryShopAutoState(): MysteryShopAutoState {
         persistentState = {
             lastArrivalKey: String(raw?.lastArrivalKey || ''),
             lastPurchaseKey: String(raw?.lastPurchaseKey || ''),
+            lastBoughtKey: String(raw?.lastBoughtKey || ''),
             lastSkipKey: String(raw?.lastSkipKey || ''),
         };
     } catch {
@@ -141,6 +146,11 @@ function decideMysteryShopTick(shop: any, automation: any = {}, state: MysterySh
 
     if (automation.mystery_shop_auto_buy !== true) {
         return { visitKey, notifyArrival, shouldBuy: false, skipBuyReason: 'auto_buy_off' };
+    }
+    // 同一笔到货（npcId + activeTime 相同）只下单一次：
+    // 重启后的补检、并发 tick 都不该把同一件商品重复买一遍。
+    if (state.lastBoughtKey && state.lastBoughtKey === visitKey) {
+        return { visitKey, notifyArrival, shouldBuy: false, skipBuyReason: 'already_bought' };
     }
     if (!isCurrencyAllowed(npc.price?.id, automation)) {
         return { visitKey, notifyArrival, shouldBuy: false, skipBuyReason: 'currency_not_allowed' };
@@ -207,6 +217,9 @@ function buildMysteryShopPush(shop: any, flags: MysteryShopPushFlags): { title: 
 
 function skipBuyLog(decision: MysteryShopDecision, shop: any): string {
     const currencyName = shop?.npc?.price?.name || '该货币';
+    if (decision.skipBuyReason === 'already_bought') {
+        return '神秘商人本次到货已购买过，跳过重复下单';
+    }
     if (decision.skipBuyReason === 'currency_not_allowed') {
         return `神秘商人自动购买已跳过：未允许使用${currencyName}`;
     }
@@ -263,6 +276,11 @@ async function checkMysteryShopTick(options: {
 
     let bought = false;
     if (decision.shouldBuy) {
+        // 先占位再下单：两个 tick 撞车时，第二个会在 decide 阶段看到已购而放弃，
+        // 不会出现同一笔到货买两遍把金币花双份。
+        const visitKey = String(decision.visitKey || '');
+        state.lastBoughtKey = visitKey;
+        if (shouldPersist) saveMysteryShopAutoState(state);
         try {
             await buy(shop.npc.id);
             bought = true;
@@ -274,10 +292,22 @@ async function checkMysteryShopTick(options: {
                 count: shop.npc.reward.count,
                 currencyId: shop.npc.price.id,
                 price: shop.npc.price.count,
+                npcId: shop.npc.id,
+                activeTime: Math.max(0, Number(shop.activeTime) || 0),
+                visitKey,
             });
         } catch (err: any) {
+            // 下单失败不算“已买”，撤销占位留给下一轮重试
+            state.lastBoughtKey = '';
+            if (shouldPersist) saveMysteryShopAutoState(state);
             logWarn('商城', `神秘商人自动购买失败: ${err.message}`, {
-                module: 'shop', event: '神秘商人自动购买', result: 'error', error: err.message,
+                module: 'shop',
+                event: '神秘商人自动购买',
+                result: 'error',
+                error: err.message,
+                npcId: shop.npc.id,
+                activeTime: Math.max(0, Number(shop.activeTime) || 0),
+                visitKey,
             });
         }
     } else {
