@@ -45,6 +45,24 @@ let lastPushTime: number = 0;
 const FERTILIZER_RETRY_COOLDOWN_MS: number = 10 * 60 * 1000;
 let fertilizerCooldownUntil: number = 0;
 
+// 冷却判定与记账抽成独立函数，便于单测覆盖；业务侧只关心「现在能不能补肥」。
+function isFertilizerCooling(now: number = Date.now()): boolean {
+    return now < fertilizerCooldownUntil;
+}
+
+function noteFertilizerOutcome(succeededCount: number, now: number = Date.now()): number {
+    if (succeededCount > 0) {
+        fertilizerCooldownUntil = 0;
+        return 0;
+    }
+    fertilizerCooldownUntil = now + FERTILIZER_RETRY_COOLDOWN_MS;
+    return fertilizerCooldownUntil;
+}
+
+function resetFertilizerCooldown(): void {
+    fertilizerCooldownUntil = 0;
+}
+
 // ============ 农场循环 ============
 
 function canContinueFarm(generation: number): boolean {
@@ -396,7 +414,7 @@ async function runFarmOperation(
         const canApplyNormal = fertilizerConfig === 'normal'
             || fertilizerConfig === 'both'
             || fertilizerConfig === 'smart';
-        if (isAutomationOn('fertilizer_multi_season') && canApplyNormal && Date.now() >= fertilizerCooldownUntil) {
+        if (isAutomationOn('fertilizer_multi_season') && canApplyNormal && !isFertilizerCooling()) {
             try {
                 const latest = await getAllLands();
                 const latestLands = Array.isArray(latest && latest.lands) ? latest.lands : [];
@@ -427,9 +445,9 @@ async function runFarmOperation(
                     const result = await runFertilizerByConfig(targets, { reason: 'multi_season', propagateErrors });
                     if (result.normal > 0) {
                         actions.push(`补肥${result.normal}`);
-                        fertilizerCooldownUntil = 0;
+                        noteFertilizerOutcome(result.normal);
                     } else {
-                        fertilizerCooldownUntil = Date.now() + FERTILIZER_RETRY_COOLDOWN_MS;
+                        noteFertilizerOutcome(0);
                         logWarn('施肥', `巡田补肥 0 成功（化肥可能耗尽），${Math.round(FERTILIZER_RETRY_COOLDOWN_MS / 60000)} 分钟内不再重试，等待自动购买或手动补货`, {
                             module: 'farm',
                             event: '多季节施肥',
@@ -621,4 +639,8 @@ module.exports = {
     startFertilizerBuyCheckTimer,
     stopFertilizerBuyCheckTimer,
     checkFertilizerBuyOnce,
+    isFertilizerCooling,
+    noteFertilizerOutcome,
+    resetFertilizerCooldown,
+    FERTILIZER_RETRY_COOLDOWN_MS,
 };

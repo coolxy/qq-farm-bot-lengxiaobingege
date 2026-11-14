@@ -2,7 +2,7 @@
 
 [![version](https://img.shields.io/badge/version-20261104-green)](https://github.com/lengxiaobingege/qq-farm-bot)
 [![protocol](https://img.shields.io/badge/protocol-1.16.3.8_20261028-blue)](https://github.com/lengxiaobingege/qq-farm-bot)
-[![tests](https://img.shields.io/badge/tests-282-brightgreen)](#开发命令)
+[![tests](https://img.shields.io/badge/tests-286-brightgreen)](#开发命令)
 [![node](https://img.shields.io/badge/node-20.19%2B-339933)](#环境要求)
 
 基于 Node.js 的 QQ 农场微信端自动化助手：多账号挂机、农场与好友自动化、活动自动化、活动中心、商城、数据分析与 Web 控制面板。
@@ -262,7 +262,7 @@ qq-farm-bot/
 │   │   ├── activity-data/ # 活动静态配置与本地题库
 │   │   └── models/        # 超级管理员、游戏账号与配置持久化
 │   ├── data/              # 运行数据（凭据哈希、账号、日志等，请勿提交）
-│   └── tests/             # 协议、活动与并发测试（282 个，含 1 条默认跳过的慢测）
+│   └── tests/             # 协议、活动与并发测试（286 个，含 1 条默认跳过的慢测）
 ├── web/                   # Vue 3 Web 面板
 │   ├── src/components/    # 农场、图鉴、背包、任务、活动与基础组件
 │   ├── src/stores/        # Pinia 状态管理
@@ -282,7 +282,7 @@ qq-farm-bot/
 | `pnpm lint` | 检查并自动修复前后端代码风格 |
 | `pnpm -C core typecheck` / `pnpm typecheck:web` | 后端 / 前端类型检查 |
 | `pnpm build:web` / `pnpm build:core` / `pnpm build` | 分别或依次构建前后端 |
-| `pnpm -C core test` | 编译 Core 并运行 281 个协议、活动与并发测试（另 1 条慢测默认跳过，见下） |
+| `pnpm -C core test` | 编译 Core 并运行 285 个协议、活动与并发测试（另 1 条慢测默认跳过，见下） |
 | `SLOW_OFFLINE_E2E=1 pnpm -C core test` | 连同掉线兜底慢测一起跑：真等 150 秒窗口，约 3 分钟 |
 | `pnpm -C web build:compressed` | 构建前端并额外生成预压缩 .gz 文件 |
 | `pnpm -C web build:analyze` | 构建前端并生成 bundle 分析报告 |
