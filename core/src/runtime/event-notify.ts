@@ -24,6 +24,9 @@ const OFFLINE_DEFER_MS = 150 * 1000;
 // 同账号同类掉线 10 分钟内只推一条：pushplus 对重复内容返回 999 直接丢，
 // 与其推两条被判重，不如自己先去重
 const OFFLINE_DEDUPE_MS = 10 * 60 * 1000;
+// 「已恢复」只在真推过「已离线」之后才补发；超过这个时长仍恢复也补，
+// 但隔夜或跨进程的陈旧记录不再补，避免第二天收到莫名通知
+const RECOVER_NOTICE_TTL_MS = 12 * 60 * 60 * 1000;
 
 // 这些原因已经是终态，自动重登救不回来了，必须立刻推
 const IMMEDIATE_REASON_PREFIXES = ['auto_relogin_failed:', 'no_session', 'offline_timeout', 'kickout_limit'];
@@ -66,6 +69,8 @@ function createEventNotifyService(options: ReloginReminderOptions) {
     const pendingOffline = new Map<string, { timer: any; payload: EventNotifyPayload }>();
     // 已推送过的掉线提醒：用于同类原因 10 分钟内去重
     const lastOfflinePush = new Map<string, { category: string; at: number }>();
+    // 已成功推送过「已离线」的账号及时间：恢复时据此补一条「已恢复」，形成完整闭环
+    const offlineNoticeSentAt = new Map<string, number>();
 
     function enqueuePush<T>(task: () => Promise<T>): Promise<T> {
         const run = pushQueue.then(task, task);
@@ -223,6 +228,7 @@ function createEventNotifyService(options: ReloginReminderOptions) {
         const built = buildOfflineMessage(payload);
         if (!built) return;
         lastOfflinePush.set(accountId, { category, at: now });
+        if (accountId) offlineNoticeSentAt.set(accountId, now);
         const content = extraNote ? `${built.content}\n${extraNote}` : built.content;
         await sendConfiguredPush({
             title: built.title,
@@ -265,10 +271,26 @@ function createEventNotifyService(options: ReloginReminderOptions) {
         });
     }
 
-    // 连接已恢复：取消挂起的「已离线」，只留 worker 自己发的「农场已恢复在线」
+    // 连接已恢复：取消挂起的「已离线」。
+    // 若此前确实推送过掉线提醒，再补一条「已恢复」形成闭环——只有真掉过线才通知，
+    // 150 秒内的抖动恢复保持静默，不会因为重启或短暂断连打扰。
     function noteAccountRecovered(accountId: string, accountName?: string): void {
+        const id = String(accountId || '').trim();
+        const sentAt = id ? offlineNoticeSentAt.get(id) : undefined;
         const cleared = clearPendingOffline(accountId, `账号 ${accountName || accountId} 已恢复在线，取消掉线提醒`);
-        if (cleared) lastOfflinePush.delete(String(accountId || '').trim());
+        if (cleared) lastOfflinePush.delete(id);
+        if (!sentAt) return;
+        offlineNoticeSentAt.delete(id);
+        const now = Date.now();
+        if (now - sentAt > RECOVER_NOTICE_TTL_MS) return;
+        const minutes = Math.max(1, Math.round((now - sentAt) / 60000));
+        Promise.resolve(sendConfiguredPush({
+            title: '农场已恢复在线',
+            content: `账号 ${accountName || id} 掉线约 ${minutes} 分钟后已自动重新登录。`,
+            accountId: id,
+            accountName,
+            logLabel: '恢复通知',
+        })).catch(() => null);
     }
 
     async function triggerEventNotify(payload: EventNotifyPayload = {}): Promise<void> {

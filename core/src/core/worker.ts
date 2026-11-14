@@ -95,32 +95,6 @@ async function runStartupSequence(canContinue: () => boolean = () => st.loginRea
     }
 }
 
-/**
- * 登录成功事件推送。
- * 退避与去重：首次上线必推；自动重登恢复的场景在 10 分钟内最多推一次，
- * 避免网络抖动导致频繁重连时刷屏。
- */
-let lastLoginNotifyAt = 0;
-function notifyLoginSuccess(recoveredFromAutoLogin: boolean): void {
-    try {
-        if (!st.loginReady) return;
-        const now = Date.now();
-        if (recoveredFromAutoLogin && now - lastLoginNotifyAt < 10 * 60 * 1000) return;
-        lastLoginNotifyAt = now;
-        const state = getUserState();
-        const name = String(state.name || '').trim() || '账号';
-        const level = toNum(state.level);
-        const gold = toNum(state.gold);
-        const title = recoveredFromAutoLogin ? '农场已恢复在线' : '农场登录成功';
-        const modeText = recoveredFromAutoLogin ? '掉线后已自动重新登录' : '扫码登录成功';
-        const content = `${name}（Lv${level}）${modeText}，当前金币 ${gold}。`;
-        sendToMaster({ type: 'push_notify', title, content });
-    } catch (e: any) {
-        // 推送失败不影响登录主流程
-        log('错误', `登录成功提醒发送异常: ${e && e.message ? e.message : e}`);
-    }
-}
-
 // 接收主进程指令
 onMasterMessage(async (msg: any) => {
     try {
@@ -219,8 +193,6 @@ async function startBot(config: any): Promise<void> {
     const canContinueLogin = (): boolean => st.isRunning && !st.shutdownStarted && generation === st.runtimeGeneration;
     const onLoginSuccess = async (): Promise<void> => {
         if (!canContinueLogin() || st.loginReady) return;
-        // 先记录登录来源再重置标志：true 表示掉线后自动恢复，false 表示扫码登录
-        const recoveredFromAutoLogin = st.isAutoLoginMode;
         st.loginReady = true;
         st.isAutoLoginMode = false;
         st.autoLoginFailCount = 0;
@@ -228,7 +200,6 @@ async function startBot(config: any): Promise<void> {
             clearTimeout(st.autoLoginRetryTimer);
             st.autoLoginRetryTimer = null;
         }
-        notifyLoginSuccess(recoveredFromAutoLogin);
         if (st.onSellGain) {
             networkEvents.off('sell', st.onSellGain);
         }

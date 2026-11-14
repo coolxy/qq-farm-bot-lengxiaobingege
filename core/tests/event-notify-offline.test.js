@@ -130,3 +130,32 @@ test('runtime stopping suppresses every offline push', async () => {
         resetRuntimeStopping();
     }
 });
+
+test('recovery after a delivered offline notice sends one recovery notice', async () => {
+    const h = createHarness({ offlineDeferMs: 20, offlineDedupeMs: 500 });
+
+    await h.service.triggerEventNotify({ accountId: '1', accountName: 'acc', reason: 'disconnect:ws_error:400' });
+    await wait(50);
+    assert.equal(h.pushes.length, 1, '窗口到期先推掉线');
+
+    h.service.noteAccountRecovered('1', 'acc');
+    await wait(30);
+    assert.equal(h.pushes.length, 2, '真掉过线并恢复后补一条闭环通知');
+    assert.match(String(h.pushes[1].title || ''), /恢复在线/);
+    assert.match(String(h.pushes[1].content || ''), /掉线约/);
+
+    // 同一次掉线只补一条：再次调用恢复不能重复推
+    h.service.noteAccountRecovered('1', 'acc');
+    await wait(30);
+    assert.equal(h.pushes.length, 2, '恢复通知不能重复');
+});
+
+test('recovery without a prior offline notice stays silent', async () => {
+    const h = createHarness({ offlineDeferMs: 60 });
+
+    await h.service.triggerEventNotify({ accountId: '1', accountName: 'acc', reason: 'disconnect:ws_error:400' });
+    h.service.noteAccountRecovered('1', 'acc');
+    await wait(40);
+
+    assert.equal(h.pushes.length, 0, '窗口内恢复属于短暂抖动，不该补恢复通知');
+});

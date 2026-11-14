@@ -39,6 +39,12 @@ let automaticPlantPacing: any = { lastPlantAt: null, defer: true };
 const farmScheduler = createScheduler('farm');
 let lastPushTime: number = 0;
 
+// 巡田补肥失败冷却：化肥耗尽时，每一轮农场循环都会重新检测并重发必然失败的施肥请求。
+// 实测 18:59–19:53 期间按 21 秒一轮空转，产生 201 条「容器不足」告警、上千次无效请求。
+// 一次 0 成功后暂停巡田补肥，等自动购买（10 分钟一轮）或用户补货后再试。
+const FERTILIZER_RETRY_COOLDOWN_MS: number = 10 * 60 * 1000;
+let fertilizerCooldownUntil: number = 0;
+
 // ============ 农场循环 ============
 
 function canContinueFarm(generation: number): boolean {
@@ -390,7 +396,7 @@ async function runFarmOperation(
         const canApplyNormal = fertilizerConfig === 'normal'
             || fertilizerConfig === 'both'
             || fertilizerConfig === 'smart';
-        if (isAutomationOn('fertilizer_multi_season') && canApplyNormal) {
+        if (isAutomationOn('fertilizer_multi_season') && canApplyNormal && Date.now() >= fertilizerCooldownUntil) {
             try {
                 const latest = await getAllLands();
                 const latestLands = Array.isArray(latest && latest.lands) ? latest.lands : [];
@@ -419,7 +425,20 @@ async function runFarmOperation(
                         landIds: targets,
                     });
                     const result = await runFertilizerByConfig(targets, { reason: 'multi_season', propagateErrors });
-                    if (result.normal > 0) actions.push(`补肥${result.normal}`);
+                    if (result.normal > 0) {
+                        actions.push(`补肥${result.normal}`);
+                        fertilizerCooldownUntil = 0;
+                    } else {
+                        fertilizerCooldownUntil = Date.now() + FERTILIZER_RETRY_COOLDOWN_MS;
+                        logWarn('施肥', `巡田补肥 0 成功（化肥可能耗尽），${Math.round(FERTILIZER_RETRY_COOLDOWN_MS / 60000)} 分钟内不再重试，等待自动购买或手动补货`, {
+                            module: 'farm',
+                            event: '多季节施肥',
+                            result: 'cooldown',
+                            reason: 'fertilizer_exhausted',
+                            count: targets.length,
+                            cooldownMinutes: Math.round(FERTILIZER_RETRY_COOLDOWN_MS / 60000),
+                        });
+                    }
                 }
             } catch (e: any) {
                 logWarn('施肥', `巡田补肥失败: ${e.message}`, {
