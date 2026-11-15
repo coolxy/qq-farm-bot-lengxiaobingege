@@ -268,7 +268,7 @@ bash ./preflight.sh --full   # 额外跑一遍 core 测试套件
 
 | 服务 | 端口 | 说明 |
 | --- | --- | --- |
-| 后端 API | `3007` | Express + Socket.IO，REST API 与 WebSocket |
+| 后端 API | `3007` | Express + Socket.IO，REST API 与 WebSocket；默认只监听 `127.0.0.1`，需要直接暴露时设 `HOST=0.0.0.0` |
 | 公网入口（可选） | `3000` | `start.sh` 检测到 `PORT` 不是 `3000` 时，自动用 socat 把 `3000` 转发到后端端口，外部访问地址保持不变 |
 | 前端开发服务器 | `5173` | 仅开发使用；生产模式由后端托管 `web/dist/` 静态资源 |
 

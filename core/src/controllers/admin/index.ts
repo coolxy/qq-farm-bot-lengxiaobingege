@@ -86,8 +86,11 @@ function startAdminServer(dataProvider: any): void {
     });
 
     const port: number = CONFIG.adminPort || 3007;
-    adminCtx.server = app.listen(port, '0.0.0.0', () => {
-        adminLogger.info('admin panel started', { url: `http://localhost:${port}`, port });
+    // 默认只监听回环：外部统一走 3000 的 socat/反代入口，避免 3007 被绕过直接访问。
+    // 需要监听全部网卡（如容器内直接映射端口）时显式设置 HOST=0.0.0.0。
+    const host: string = String(process.env.HOST || '127.0.0.1').trim() || '127.0.0.1';
+    adminCtx.server = app.listen(port, host, () => {
+        adminLogger.info('admin panel started', { url: `http://${host}:${port}`, port, host });
     });
 
     // Setup Socket.IO
