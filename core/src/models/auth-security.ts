@@ -158,16 +158,23 @@ function hashPassword(password: string, salt: string | null = null): string {
 }
 
 function verifyPassword(password: string, storedPassword: string): boolean {
-    if (storedPassword.includes(':')) {
-        const [salt, hash] = storedPassword.split(':');
-        const nextHash = crypto.pbkdf2Sync(password, salt, ITERATIONS, KEY_LENGTH, DIGEST).toString('hex');
-        return hash === nextHash;
-    }
-    return storedPassword === crypto.createHash('sha256').update(password).digest('hex');
+    const stored = String(storedPassword || '');
+    // 只接受 pbkdf2 的 salt:hash 格式。早期无盐 sha256 摘要不再被承认：
+    // 那种格式一旦泄露可被直接离线爆破，且没有盐，必须强制重设密码而不是继续兼容。
+    if (!stored.includes(':')) return false;
+    const [salt, hash] = stored.split(':');
+    if (!salt || !hash || hash.length !== KEY_LENGTH * 2) return false;
+    const nextHash = crypto.pbkdf2Sync(password, salt, ITERATIONS, KEY_LENGTH, DIGEST);
+    const expected = Buffer.from(hash, 'hex');
+    if (expected.length !== nextHash.length) return false;
+    return crypto.timingSafeEqual(expected, nextHash);
 }
 
 function needsRehash(storedPassword: string): boolean {
-    return !storedPassword.includes(':');
+    const stored = String(storedPassword || '');
+    if (!stored.includes(':')) return false;
+    const [salt, hash] = stored.split(':');
+    return !salt || !hash;
 }
 
 module.exports = {

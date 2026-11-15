@@ -40,7 +40,11 @@ function startAdminServer(dataProvider: any): void {
     ctx = adminCtx;
 
     const app = express();
-    app.set('trust proxy', true);
+    // trust proxy 必须与 middleware 的 TRUSTED_PROXY_IPS 保持一致：
+    // 直接写 true 会让 Express 无条件采信 X-Forwarded-For，req.ip 可被任意伪造。
+    const trustedProxies = String(process.env.TRUSTED_PROXY_IPS || '')
+        .split(',').map(item => item.trim()).filter(Boolean);
+    app.set('trust proxy', trustedProxies.length ? trustedProxies : false);
     app.use(express.json());
 
     adminCtx.app = app;

@@ -223,13 +223,25 @@ bash ./preflight.sh --full   # 额外跑一遍 core 测试套件
 
 - 双层限流：每个 IP 每分钟最多 10 次请求；登录失败 5 次锁定该 IP 15 分钟，窗口自动过期清理
 - 锁定按 IP 分桶而非全局锁账号：单一来源的暴力尝试不会把账号整体锁死形成拒绝服务，也无法通过更换用户名绕过
-- 客户端 IP 经反向代理链路解析，不可伪造
+- 客户端 IP **默认只认 TCP 对端**：未配置 `TRUSTED_PROXY_IPS` 时，`X-Forwarded-For` / `X-Real-IP` / `CF-Connecting-IP` 一律忽略，伪造请求头无法换取新的限流桶
+- 部署在 Nginx/Caddy/CLB 之后时，必须把**代理自身的真实 IP** 填入 `TRUSTED_PROXY_IPS`（逗号分隔，不要填网段）；Express 的 `trust proxy` 与本白名单联动，不填则按直连处理
 - 登录成功与失败（含来源 IP）全部落日志，可审计
 
 ### 哈希与找回
 
-- 旧算法（裸 SHA-256）的存量记录在下次成功登录时透明升级为 PBKDF2，无需手动迁移
+- 密码只以 PBKDF2（SHA-512、10 万次迭代、32 字节盐）格式存储，校验使用 `crypto.timingSafeEqual` 常量时间比较
+- 早期无盐 `SHA-256` 摘要格式已**停止兼容**：这类哈希一旦泄露可被直接离线爆破，检测到只会拒绝登录，需要重设密码，不再"透明升级"
 - 管理员密码丢失后的找回属于服务器运维操作，需要文件系统级访问权限，具体流程不在本公开文档中说明
+
+### 凭据轮换
+
+一旦怀疑 `admin.json`、`admin-sessions.json` 或 `core/data/` 曾被提交、备份外泄或截图泄露，按以下顺序处理：
+
+1. 用新密码重算 `admin.json` 的 `password` 字段（`salt:hash` 格式，PBKDF2-SHA512/10 万次/64 字节）
+2. 将 `admin-sessions.json` 重置为 `{"tokens":[],"savedAt":"..."}`，让所有已签发令牌立即失效
+3. 清空 `login-attempts.json`，避免旧锁定记录干扰
+4. 重启服务使内存中的凭据缓存失效（`admin-store` 会缓存已加载的管理员记录）
+5. 若旧哈希曾进入版本库，用 `git filter-repo` 从历史中抹除并强推，同时视为该密码已永久泄露
 
 ### 部署侧加固清单
 
@@ -239,6 +251,18 @@ bash ./preflight.sh --full   # 额外跑一遍 core 测试套件
 - [ ] `core/data/` 目录包含账号凭据、会话令牌与运行数据：权限建议 700，纳入备份但绝不提交到公开仓库
 - [ ] 定期审计 `core/data/logs/` 中 `admin` 模块日志，关注异常来源 IP
 - [ ] 公网部署建议配置实例级事件推送（pushoo），终态掉线与异常第一时间知晓
+- [ ] 反向代理之后部署时设置 `TRUSTED_PROXY_IPS`，否则所有请求都会被识别为代理 IP，限流退化为全局单桶
+- [ ] `.env` 权限设为 `600`；它虽然只含端口与时区，但同目录可能追加其他本地配置
+
+### 依赖基线
+
+传递依赖通过 `pnpm-workspace.yaml` 的 `overrides` 钉到已修版本（`proxy-addr`、`body-parser`、`qs`、`engine.io`、`socket.io-parser`、`ws`、`form-data`、`lodash`、`postcss`、`picomatch` 等），`pnpm audit --prod` 仅剩 5 项，且无 critical。
+
+其中 **`protobufjs` 固定在 `8.0.2`（精确版本，不加 `^`）**，这是有意为之：
+
+- `8.0.1` / `8.0.2` 修掉了远程代码执行与代码生成 gadget 两类严重问题，是本项目协议解析路径的必需基线
+- `8.4` 起改变了 `toObject` 的默认值填充行为，`slot_index: 0`、`false`、`''` 这类显式零值字段会被丢弃。项目的协议层要求**逐字节复现官方抓包**（`tests/network-keepalive`、`farm-interaction-cleanup` 等 8 条断言直接用十六进制比对），升到 8.4+ 会直接破坏请求体一致性
+- 未修的剩余项（`Any` 无限展开 DoS、递归 JSON DoS、`.proto` 死循环）都发生在**解析不可信输入**时；本项目的 protobuf 输入来自游戏服务端与仓库内的 `.proto` 文件，不在攻击者可控范围内
 
 ### 端口与网络
 

@@ -12,9 +12,10 @@ interface AuthenticatedRequest extends Request {
 
 /**
  * 仅当 TCP 对端是可信代理时，才采信客户端提供的来源请求头。
- * 默认信任非回环的 RFC1918 私网地址（CLB / 反向代理的真实内网 IP）；
- * 回环直连与公网直连一律不采信客户端头，避免伪造 XFF 绕过登录限流。
- * 可通过 TRUSTED_PROXY_IPS（逗号分隔）覆盖为显式的代理 IP 白名单。
+ * 默认不信任任何来源（TRUSTED_PROXY_IPS 为空即关闭），X-Forwarded-For / X-Real-IP 一律忽略，
+ * 因此限流按真实 TCP 对端计数，无法靠伪造请求头换桶。
+ * 部署在反向代理 / CLB 之后时，必须显式配置 TRUSTED_PROXY_IPS（逗号分隔的代理 IP），
+ * 只把真正的那一跳填进去，不要填网段。
  */
 const TRUSTED_PROXY_IPS: string[] = String(process.env.TRUSTED_PROXY_IPS || '')
     .split(',').map(item => item.trim()).filter(Boolean);
@@ -23,23 +24,11 @@ function normalizeIp(value: unknown): string {
     return String(value == null ? '' : value).trim().replace(/^::ffff:/, '').toLowerCase();
 }
 
-function isLoopback(ip: string): boolean {
-    return ip === '::1' || ip === 'localhost' || ip.startsWith('127.');
-}
-
-function isProxyAddress(ip: string): boolean {
-    if (!ip || isLoopback(ip)) return false; // 回环直连不算代理
-    if (ip.startsWith('10.') || ip.startsWith('192.168.')) return true;
-    const match = /^172\.(\d+)\./.exec(ip);
-    if (match && Number(match[1]) >= 16 && Number(match[1]) <= 31) return true;
-    if (ip.startsWith('fc') || ip.startsWith('fd')) return true; // IPv6 ULA
-    return false;
-}
-
 function isTrustedProxy(ip: string): boolean {
     if (!ip) return false;
-    if (TRUSTED_PROXY_IPS.length) return TRUSTED_PROXY_IPS.includes(ip);
-    return isProxyAddress(ip);
+    // 没有显式白名单时不信任任何来源：宁可让限流把反代后的请求都算到代理 IP 上，
+    // 也不接受客户端自报的来源地址（伪造 XFF 可直接绕过登录失败锁定）。
+    return TRUSTED_PROXY_IPS.includes(ip);
 }
 
 function getClientIp(req: Request): string {

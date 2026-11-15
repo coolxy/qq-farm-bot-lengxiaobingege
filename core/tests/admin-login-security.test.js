@@ -37,6 +37,18 @@ function req(remoteAddress, headers = {}) {
     return { headers, socket: { remoteAddress } };
 }
 
+test('legacy unsalted sha256 hashes are rejected: only pbkdf2 salt:hash is accepted', () => {
+    const security = loadSecurity();
+    const crypto = require('node:crypto');
+    const legacy = crypto.createHash('sha256').update('secret123').digest('hex');
+    assert.equal(security.verifyPassword('secret123', legacy), false, '无盐旧哈希必须拒绝');
+    assert.equal(security.verifyPassword('secret123', ''), false, '空密码哈希必须拒绝');
+    assert.equal(security.verifyPassword('secret123', 'abc'), false, '格式非法必须拒绝');
+    const stored = security.hashPassword('secret123');
+    assert.equal(security.verifyPassword('secret123', stored), true);
+    assert.equal(security.verifyPassword('secret124', stored), false);
+});
+
 test('direct public clients cannot spoof cf-connecting-ip / x-real-ip / x-forwarded-for', () => {
     const { getClientIp } = loadMiddleware();
     const spoofed = {
@@ -50,21 +62,36 @@ test('direct public clients cannot spoof cf-connecting-ip / x-real-ip / x-forwar
     // 回环直连同样不得采信伪造头（否则本机即可任意拆分限流桶）
     assert.equal(getClientIp(req('127.0.0.1', spoofed)), '127.0.0.1');
     assert.equal(getClientIp(req('::1', spoofed)), '::1');
+    // 未显式配置 TRUSTED_PROXY_IPS 时不信任任何来源，私网对端同样不能借 XFF 换桶
+    assert.equal(getClientIp(req('10.0.0.4', spoofed)), '10.0.0.4');
+    assert.equal(getClientIp(req('192.168.1.9', spoofed)), '192.168.1.9');
 });
 
 test('trusted proxies resolve the rightmost non-proxy hop, ignoring forged left values', () => {
-    const { getClientIp } = loadMiddleware();
-    // 客户端伪造最左值，代理追加真实客户端 IP 到最右
-    assert.equal(getClientIp(req('10.0.0.4', {
-        'x-forwarded-for': '1.2.3.4, 203.0.113.77',
-    })), '203.0.113.77');
-    assert.equal(getClientIp(req('10.0.0.5', {
-        'x-forwarded-for': '203.0.113.88, 10.0.0.5',
-    })), '203.0.113.88');
-    // 纯私网链回退到最靠近代理的一跳
-    assert.equal(getClientIp(req('172.24.0.1', {
-        'x-forwarded-for': '10.0.0.9, 172.24.0.42',
-    })), '172.24.0.42');
+    // 代理必须是显式白名单：默认不再信任私网段，避免伪造 XFF 绕过登录锁定
+    const previous = process.env.TRUSTED_PROXY_IPS;
+    process.env.TRUSTED_PROXY_IPS = '10.0.0.4,10.0.0.5,172.24.0.1';
+    try {
+        const { getClientIp } = loadMiddleware();
+        // 客户端伪造最左值，代理追加真实客户端 IP 到最右
+        assert.equal(getClientIp(req('10.0.0.4', {
+            'x-forwarded-for': '1.2.3.4, 203.0.113.77',
+        })), '203.0.113.77');
+        assert.equal(getClientIp(req('10.0.0.5', {
+            'x-forwarded-for': '203.0.113.88, 10.0.0.5',
+        })), '203.0.113.88');
+        // 纯私网链回退到最靠近代理的一跳
+        assert.equal(getClientIp(req('172.24.0.1', {
+            'x-forwarded-for': '10.0.0.9, 172.24.0.42',
+        })), '172.24.0.42');
+        // 白名单之外的私网地址仍按直连处理
+        assert.equal(getClientIp(req('10.0.0.6', {
+            'x-forwarded-for': '1.2.3.4, 203.0.113.99',
+        })), '10.0.0.6');
+    } finally {
+        if (previous === undefined) delete process.env.TRUSTED_PROXY_IPS;
+        else process.env.TRUSTED_PROXY_IPS = previous;
+    }
 });
 
 test('failed-attempt lockout is scoped per IP: one source cannot lock out the admin', () => {
