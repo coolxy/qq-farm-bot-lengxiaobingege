@@ -107,9 +107,9 @@
 
 改代码、重启服务、`stop.sh` 都会主动断开连接。若不加区分，每次运维都会换来一条「农场已离线」。
 
-主进程收到 `SIGTERM`/`SIGINT`/`SIGHUP` 时置位 `runtimeStopping`，此后：新断线不挂起，已挂起的到期也不推。该标记只在本进程生命周期内有效，不做持久化。
+实际生效的是 worker 侧的判断：worker 主动停止（用户点停止、重登前的 `stopWorker`）不会进入提醒流程——`disconnect` 与 `kickout` 分支都先检查 `worker.stopping`。`stop.sh` 也是先停 worker 再退主进程，所以运维重启不会误报。
 
-同时，worker 主动停止（用户点停止、重登前的 `stopWorker`）不会进入提醒流程——`disconnect` 与 `kickout` 分支都先检查 `worker.stopping`。
+另有一组手动开关 `markRuntimeStopping` / `resetRuntimeStopping`，用于进程退出前显式抑制提醒（置位后新断线不挂起，已挂起的到期也不推，且只在本进程生命周期内有效）。注意 `SIGHUP` 不在抑制范围内：主进程已忽略该信号并继续运行，终端挂断不属于停机。
 
 ## 参数与测试
 
