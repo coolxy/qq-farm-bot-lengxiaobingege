@@ -126,7 +126,9 @@
 
 ```bash
 SLOW_OFFLINE_E2E=1 pnpm -C core test            # 真等 150 秒，约 3 分钟
-SLOW_OFFLINE_E2E=1 OFFLINE_E2E_MS=3000 pnpm -C core test   # 缩短窗口，逻辑等价
+SLOW_OFFLINE_E2E=1 OFFLINE_E2E_MS=3000 pnpm -C core test   # 缩短窗口，逻辑等价（约 6 秒）
 ```
 
 慢测覆盖 13 项：到点必推且只推一条、窗口内恢复不推、抖动从最后一次断线重算、终态立即推且晚到过程态不重推、停机标记抑制已挂起提醒、取消停机后恢复推送。
+
+> 该测试的时间轴全部按窗口比例推算（`W*0.2`、`W-BUF`、`W+BUF` 等），不写死秒数，因此缩短窗口后各阶段顺序仍然成立。若新增断言，请沿用比例式写法——历史上写死 `-1000`/`+4000` 的偏移曾导致 `OFFLINE_E2E_MS=3000` 必然失败。

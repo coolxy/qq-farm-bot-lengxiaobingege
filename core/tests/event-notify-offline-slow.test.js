@@ -14,10 +14,15 @@ const {
  * 常规 CI 不跑（单次约 190 秒），需要时：
  *   SLOW_OFFLINE_E2E=1 pnpm -C core test
  * 或临时缩短窗口（逻辑等价，只是等待变短）：
- *   SLOW_OFFLINE_E2E=1 OFFLINE_E2E_MS=3000 pnpm -C core test
+ *   SLOW_OFFLINE_E2E=1 OFFLINE_E2E_MS=3000 node --test tests/event-notify-offline-slow.test.js
+ *
+ * 注意：所有时间点均按窗口比例推算（不写死秒数），否则缩短窗口后各阶段的
+ * 先后顺序会被压平，断言失去意义（曾因此在本文件里留下「3000ms 跑不过」的假象）。
  */
 const SLOW = process.env.SLOW_OFFLINE_E2E === '1';
 const W = Number(process.env.OFFLINE_E2E_MS || 150000);
+// 阶段缓冲：随窗口等比缩放，同时给定时器噪声留最小余量
+const BUF = Math.max(Math.round(W * 0.02), 150);
 
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -49,6 +54,11 @@ function makeService(deferMs = W) {
 test('掉线兜底全矩阵（真时间窗口）', { skip: SLOW ? false : '慢测，设 SLOW_OFFLINE_E2E=1 开启' }, async () => {
     const t0 = Date.now();
     const elapsed = () => Date.now() - t0;
+    // 按绝对时刻对齐：避免「相对等待累加误差」在短窗口下把阶段顺序压平
+    const at = async (targetMs) => {
+        const rest = targetMs - elapsed();
+        if (rest > 0) await wait(rest);
+    };
 
     // A：过程态断线 → 满窗口必推一条
     // B：在 0.6W 恢复在线 → 到点不推
@@ -67,26 +77,26 @@ test('掉线兜底全矩阵（真时间窗口）', { skip: SLOW ? false : '慢�
     assert.equal(A.pushes.length, 0, '断线瞬间不应推送，必须等自动重登结果');
     assert.equal(D.pushes.length, 1, '终态必须立即推');
 
-    // t=1s：终态之后又收到一条过程态断线
-    await wait(1000);
+    // 0.02W：终态之后又收到一条过程态断线
+    await at(W * 0.02);
     await D.service.triggerEventNotify({ accountId: 'D1', accountName: 'D号', reason: 'disconnect:kickout' });
 
-    // t=0.2W：C 抖动
-    await wait(Math.round(W * 0.2) - 1000);
+    // 0.2W：C 抖动
+    await at(W * 0.2);
     await C.service.triggerEventNotify({ accountId: 'C1', accountName: 'C号', reason: 'disconnect:ws_error:connecting:400' });
 
-    // t=0.6W：B 恢复
-    await wait(Math.round(W * 0.4));
+    // 0.6W：B 恢复
+    await at(W * 0.6);
     B.service.noteAccountRecovered('B1', 'B号');
 
-    // t=W-2s：A 仍应挂着，C 已重算所以更不会推
-    await wait(Math.round(W * 0.4) - 2000);
-    assert.ok(elapsed() >= W - 3000, `应已接近窗口末尾，实际 ${elapsed()}ms`);
+    // W-2%：A 仍应挂着，C 已重算所以更不会推
+    await at(W - BUF);
+    assert.ok(elapsed() >= W - BUF - 100, `应已接近窗口末尾，实际 ${elapsed()}ms`);
     assert.equal(A.pushes.length, 0, '窗口未到期不应推送');
     assert.equal(C.pushes.length, 0, '抖动后应从最后一次断线重算，此时仍未到期');
 
-    // t=W+3s：A 到点推一条
-    await wait(5000);
+    // W+2%：A 到点推一条（此刻 C 距其重算点仍有 0.2W 余量，故未到期）
+    await at(W + BUF);
     assert.equal(A.pushes.length, 1, '窗口到期必须推且只推一条');
     assert.ok(A.pushes[0].at - t0 >= W, `推送时间应不早于 ${W}ms`);
     assert.match(A.pushes[0].content, new RegExp(`已等待\\s*${Math.round(W / 1000)}\\s*秒自动重登未成功`));
@@ -95,8 +105,8 @@ test('掉线兜底全矩阵（真时间窗口）', { skip: SLOW ? false : '慢�
     assert.equal(C.pushes.length, 0, 'C 还没到重算后的到期点');
     assert.equal(D.pushes.length, 1, '终态推送后晚到的过程态消息不得重复推送');
 
-    // t=1.2W：C 才到期
-    await wait(Math.round(W * 0.2) + 4000);
+    // 1.2W：C 才到期
+    await at(W * 1.2 + BUF);
     assert.equal(C.pushes.length, 1, 'C 从最后一次断线起满窗口后推一条');
 
     // 停机标记：断线不挂起 + 已挂起的到点不推
