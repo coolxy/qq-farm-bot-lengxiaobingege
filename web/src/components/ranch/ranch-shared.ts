@@ -1,8 +1,8 @@
 import type { ComputedRef, InjectionKey, Ref } from 'vue'
 import type { RanchQuote, RanchView } from '@/stores/ranch'
-import { useNow } from '@vueuse/core'
+import { useIntervalFn, useNow } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
-import { computed, inject, onBeforeUnmount, provide, ref, watch } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useAccountStore } from '@/stores/account'
 import { useRanchStore } from '@/stores/ranch'
 import { useToastStore } from '@/stores/toast'
@@ -89,16 +89,26 @@ export function useRanchActions(): RanchActions {
 }
 
 /** 面板挂载后按视图读取牧场数据，账号或参数变化时重新读取。 */
-export function useRanchLoader(view: RanchView, params: () => { shopId?: number, hostGid?: string } = () => ({})) {
+export function useRanchLoader(
+  view: RanchView,
+  params: () => { shopId?: number, hostGid?: string } = () => ({}),
+  options: { intervalMs?: number } = {},
+) {
   const ranch = useRanchStore()
   const { currentAccountId } = storeToRefs(useAccountStore())
+  const intervalMs = options.intervalMs ?? 60_000
 
-  async function refresh() {
+  async function apply(silent: boolean) {
     const id = String(currentAccountId.value || '')
     if (!id)
       return
     const { shopId, hostGid } = params()
-    await ranch.load(id, view, shopId, hostGid)
+    await ranch.load(id, view, shopId, hostGid, { silent })
+  }
+
+  /** 手动刷新（模板 @click="refresh" 会传 MouseEvent，这里不接参数以免被当成静默）。 */
+  function refresh() {
+    return apply(false)
   }
 
   watch([currentAccountId, () => JSON.stringify(params())], ([id]) => {
@@ -106,6 +116,19 @@ export function useRanchLoader(view: RanchView, params: () => { shopId?: number,
       void refresh()
     else ranch.reset()
   }, { immediate: true })
+
+  // 动物阶段与货架产出随时在变，停留页面时按农场同样的节奏静默刷新；
+  // 页面在后台、有写操作或确认框打开、刚读过 5 秒内都跳过，避免和用户操作抢连接。
+  const { pause, resume } = useIntervalFn(() => {
+    if (!currentAccountId.value || ranch.busy || ranch.loading || document.hidden)
+      return
+    if (Date.now() - ranch.receivedAt < 5_000)
+      return
+    void apply(true)
+  }, intervalMs, { immediate: false })
+
+  onMounted(resume)
+  onBeforeUnmount(pause)
 
   return { refresh }
 }

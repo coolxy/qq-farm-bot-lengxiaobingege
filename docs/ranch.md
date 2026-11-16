@@ -51,6 +51,17 @@
 非布尔键（`ranch_strategy` / `ranch_bag_fallback` / `ranch_check_minutes` / `ranch_coop_animal` / `ranch_shed_animal`）
 在 `normalizeAccountConfig` 里走 `normalizeRanchSetting` 校验，不会被当成布尔值。
 
+`ranch_dry_run` 是演练开关：开启后每轮巡查只调 `prepareAction` 报价并记 `result: 'dry'` 日志，不发任何写请求，
+用于新账号或版本更新后先验证「判定逻辑认为该做什么」，再决定是否真正执行。
+
+### 执行效率与让路
+
+- 一次手动操作的读请求：报价读 `AllCells + GetBag`，执行复用 20 秒内的快照（`transport` 的 `cacheGet`/`cacheSet`），
+  写请求发出即失效；只有 `harvest` / `produce` / `clean` 用回包 `ranches` 拼新快照，其余动作仍全量读一次。
+- 面板请求没有请求班次（`getAmbientRequestClass() === null`），会在入口 `markManualTurn()` 举手；
+  自动巡查的 `checkpoint()` 见到就让路（`RANCH_PATROL_YIELD`），5 秒冷却，避免用户点按钮等巡查跑完。
+- 读面板（`getState` / `resourceBalances`）走 `inScene(..., { fresh: true })`，不吃快照缓存。
+
 ## 五、已验证
 
 - `GET /api/ranch?view=animals` 返回牧场 Lv.9、金券/点券/金豆豆/松果、普通罐头 72.8h、有机罐头 0h、牧草 770、窝 Lv2 4/4（鹅 ×4）。

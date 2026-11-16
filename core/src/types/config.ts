@@ -73,6 +73,7 @@ export interface AutomationConfig {
   ranch_friend_mosquito: boolean;
   ranch_task: boolean;
   ranch_share: boolean;
+  ranch_dry_run: boolean;
   /** 牧场巡查间隔（分钟，1–60） */
   ranch_check_minutes: number;
   /** 养殖策略：level 按等级最高 / preferred 指定动物优先 / bag_priority 背包幼崽优先 */

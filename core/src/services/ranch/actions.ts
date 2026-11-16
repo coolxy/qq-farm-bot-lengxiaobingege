@@ -1,7 +1,7 @@
 export {};
 
-const { rpc, inScene } = require('./transport');
-const { loadRaw, snapshot, balance, taskList, catalog, market, canCatalog, resourceBalance } = require('./state');
+const { rpc, inScene, isManualRequest, markManualTurn } = require('./transport');
+const { loadRaw, loadBag, mergeRanches, snapshot, balance, taskList, catalog, market, canCatalog, resourceBalance } = require('./state');
 const { animalMap, cubMap, canMap, facilityMap, itemMap, error, positiveId, positiveCount, quantity, itemDto, sumItems, signature } = require('./model');
 const reservations = require('./operation-state');
 const { getServerTimeSec } = require('../../utils/utils');
@@ -16,6 +16,9 @@ const LABELS: Record<string, string> = {
     buyCan: '购买牧场罐头',
     release: '放生动物',
 };
+
+/** 回包自带最新栏舍（RanchDetail），可以不重拉 AllCells 的动作。 */
+const INCREMENTAL_ACTIONS = new Set(['harvest', 'produce', 'clean']);
 
 function selectedAnimals(raw: any, input: any, eligible: (animal: any) => boolean): any[] {
     const all = raw.cells.facilities.flatMap((facility: any) => facility.ranch?.animals || []);
@@ -226,6 +229,8 @@ async function planAction(action: string, input: any, raw: any): Promise<any> {
 }
 
 async function prepareAction(action: string, input: any = {}): Promise<any> {
+    // 面板请求没有环境班次：先举手，让正在跑的自动巡查在下一个检查点让路。
+    if (isManualRequest()) markManualTurn();
     if (action === 'steal') return require('./friends').prepareSteal(input);
     if (['stroke', 'putMosquito', 'cleanFriend'].includes(action)) return require('./friends').prepareInteraction(action, input);
     return inScene(async (cells: any) => {
@@ -240,6 +245,7 @@ function unknown(action: string, reason: string): never {
 }
 
 async function operate(action: string, input: any = {}): Promise<any> {
+    if (isManualRequest()) markManualTurn();
     if (['stroke', 'putMosquito', 'cleanFriend'].includes(action)) return require('./friends').interact(action, input);
     if (action === 'acknowledge') return inScene(async () => {
         reservations.forCurrentAccount().acknowledge(String(input.id));
@@ -340,7 +346,17 @@ async function operate(action: string, input: any = {}): Promise<any> {
                 }
             }
             let after: any = null;
-            try { after = await loadRaw(); } catch { /* Confirmed receipts remain useful if the view refresh fails. */ }
+            // 收获/催产/清理的回包自带最新栏舍，拼一下就够；拼不出来再退回全量读。
+            if (INCREMENTAL_ACTIONS.has(action) && Array.isArray(reply?.ranches) && reply.ranches.length) {
+                try {
+                    after = { cells: mergeRanches(before.cells, reply.ranches), bag: await loadBag() };
+                } catch {
+                    after = null;
+                }
+            }
+            if (!after) {
+                try { after = await loadRaw(undefined, { fresh: true }); } catch { /* Confirmed receipts remain useful if the view refresh fails. */ }
+            }
             if (plan.autoPlaceAnimalId) {
                 if (!after) unknown(action, '自动放养后的栏位状态未能读取');
                 const previous = new Set(before.cells.facilities.flatMap((f: any) => (f.ranch?.animals || []).map((animal: any) => `${quantity(f.instance_id)}:${animal.animal_inst_id}`)));
@@ -358,6 +374,8 @@ async function operate(action: string, input: any = {}): Promise<any> {
             const completed = reply.op_results?.length ?? plan.count;
             const notice = action === 'release' ? `${plan.label}完成${rewards.length ? `，获得 ${sumItems(rewards).map((item: any) => `${item.name} ×${item.count}`).join('、')}` : ''}`
                 : plan.resultKeys && completed < plan.count ? `已完成 ${completed} / ${plan.count} 项，其余状态已变化，请刷新核对` : undefined;
+            // 今日产出统计：只记账不估值，失败也不影响本次操作结果。
+            try { require('./stats').record(action, sumItems(rewards)); } catch { /* ignore */ }
             return { status: reply.alreadyClaimed ? 'skipped' : 'confirmed', snapshot: after ? snapshot(after) : null, refreshRequired: !after, costs: actualCosts, notice,
                 rewards: sumItems(rewards), completed: reply.op_results?.length ?? plan.count };
         });

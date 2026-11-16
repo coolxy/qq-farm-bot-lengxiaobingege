@@ -101,6 +101,7 @@ const DEFAULT_ACCOUNT_CONFIG: AccountConfig = {
         ranch_friend_mosquito: false,
         ranch_task: true,
         ranch_share: true,
+        ranch_dry_run: false,
         ranch_check_minutes: 5,
         ranch_strategy: 'level',
         ranch_bag_fallback: 'level',

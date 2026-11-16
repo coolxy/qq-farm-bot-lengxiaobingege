@@ -4,6 +4,7 @@ const network = require('../../utils/network');
 const { types } = require('../../utils/proto');
 const { runExclusiveAutomationTask } = require('../automation-lock');
 const { getAmbientSendContext, runWithSendContext } = require('./context');
+const { getAmbientRequestClass } = require('../../utils/request-context');
 const { logWarn } = require('../../utils/utils');
 const { error } = require('./model');
 
@@ -58,9 +59,83 @@ async function rpc(route: string, input: any = {}, writing = false): Promise<any
     const context = getAmbientSendContext();
     const reply = await network.sendMsgAsync(`gamepb.${service}`, method, body, {
         beforeSend: () => context?.check(`gamepb.${service}`, method) || null,
-        onSent: () => { if (writing) context?.onSent(`gamepb.${service}`, method); },
+        onSent: () => {
+            if (!writing) return;
+            // 写过之后本地快照一定过期，宁可下次多读一次也不要拿旧数据报价。
+            clearRawCache();
+            context?.onSent(`gamepb.${service}`, method);
+        },
     });
     return types[replyType || `${type}Reply`].decode(reply.body);
+}
+
+/**
+ * 短期快照：报价与执行是两个 HTTP 请求，中间会重复读 AllCells + GetBag。
+ * 这里按账号缓存最近一次全量读的结果，写请求发出即失效；读面板（getState）走 fresh 绕过缓存。
+ */
+const RAW_CACHE_TTL_MS = 20_000;
+let rawCache: { gid: number; at: number; cells: any; bag: any } | null = null;
+
+function currentGid(): number {
+    return Number(network.getUserState().gid) || 0;
+}
+
+function clearRawCache(): void {
+    rawCache = null;
+}
+
+function cacheGet(kind: 'cells' | 'bag'): any {
+    if (!rawCache || rawCache.gid !== currentGid() || Date.now() - rawCache.at > RAW_CACHE_TTL_MS) return null;
+    return rawCache[kind] || null;
+}
+
+function cacheSet(kind: 'cells' | 'bag', value: any): void {
+    const gid = currentGid();
+    if (!rawCache || rawCache.gid !== gid || Date.now() - rawCache.at > RAW_CACHE_TTL_MS) {
+        rawCache = { gid, at: Date.now(), cells: kind === 'cells' ? value : null, bag: kind === 'bag' ? value : null };
+        return;
+    }
+    rawCache[kind] = value;
+}
+
+/**
+ * 手动操作让路标记。
+ *
+ * 自动巡查整体占着 ranch.scene 队列（最长一个 5 秒切片），而面板点「一键收获」排在队尾，
+ * 用户要等到巡查跑完才有响应。这里用请求班次区分：HTTP 面板请求没有环境班次（前台），
+ * 自动巡查跑在 pasture 班次里。巡查的 checkpoint 看到有人在等就让路，5 秒内不重复让路。
+ */
+const MANUAL_WAIT_MS = 30_000;
+const MANUAL_YIELD_COOLDOWN_MS = 5_000;
+let manualAt = 0;
+let manualYieldAt = 0;
+
+function isManualRequest(): boolean {
+    return getAmbientRequestClass() === null;
+}
+
+function markManualTurn(): void {
+    manualAt = Date.now();
+}
+
+function isManualWaiting(): boolean {
+    if (!manualAt) return false;
+    if (Date.now() - manualAt > MANUAL_WAIT_MS) {
+        manualAt = 0;
+        return false;
+    }
+    return !(manualYieldAt && Date.now() - manualYieldAt < MANUAL_YIELD_COOLDOWN_MS);
+}
+
+function noteManualYield(): void {
+    manualYieldAt = Date.now();
+    manualAt = 0;
+}
+
+/** 当前场景与降级状态，供快照如实回传给前端。 */
+function sceneStatus(): { sceneId: number; fallback: boolean; retryAt: number } {
+    const sceneId = Number(network.getUserState().globalSceneId) || 0;
+    return { sceneId, fallback: sceneId !== 2 && Date.now() < sceneLockedUntil, retryAt: sceneLockedUntil || 0 };
 }
 
 function isUnlocked(): boolean {
@@ -98,7 +173,7 @@ function isSceneLocked(err: any): boolean {
  *   2) 场景 2 未解锁 → 不切场景，直接用 AllCells 读当前场景的牧场格子。
  * 写请求的字段与上游完全一致，是否被接受由服务端判定。
  */
-function inScene(run: (cells: any) => Promise<any>): Promise<any> {
+function inScene(run: (cells: any) => Promise<any>, options: { fresh?: boolean } = {}): Promise<any> {
     return runExclusiveAutomationTask('ranch.scene', async () => {
         if (!isUnlocked()) throw error('RANCH_LOCKED', '牧场尚未解锁，请先在游戏中完成开启条件');
         const user = network.getUserState();
@@ -108,6 +183,7 @@ function inScene(run: (cells: any) => Promise<any>): Promise<any> {
             probedGid = gid;
             sceneLockedUntil = 0;
             sceneFallbackLogged = false;
+            clearRawCache();
         }
         const previous = user.globalSceneId;
         const socket = network.getWs();
@@ -132,7 +208,9 @@ function inScene(run: (cells: any) => Promise<any>): Promise<any> {
                     }
                 }
             }
-            if (!cells) cells = await rpc('cells');
+            // 读面板要最新数据；报价/执行复用 20 秒内的快照，省掉一次 AllCells。
+            if (!cells) cells = (options.fresh ? null : cacheGet('cells')) || await rpc('cells');
+            cacheSet('cells', cells);
             result = await run(cells);
             return result;
         } finally {
@@ -150,4 +228,8 @@ function inScene(run: (cells: any) => Promise<any>): Promise<any> {
     });
 }
 
-module.exports = { rpc, inScene, isUnlocked };
+module.exports = {
+    rpc, inScene, isUnlocked, sceneStatus,
+    cacheGet, cacheSet, clearRawCache,
+    isManualRequest, markManualTurn, isManualWaiting, noteManualYield,
+};

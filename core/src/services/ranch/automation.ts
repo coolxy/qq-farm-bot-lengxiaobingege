@@ -3,7 +3,7 @@ export {};
 
 const { RANCH_SWITCH_KEYS } = require('../../config/ranch-automation');
 const { getAutomation } = require('../../models/store');
-const { inScene, isUnlocked } = require('./transport');
+const { inScene, isUnlocked, isManualWaiting, noteManualYield } = require('./transport');
 const { loadRaw, snapshot, inventory, catalog, balance } = require('./state');
 const { cubMap, quantity } = require('./model');
 const { prepareAction, operate } = require('./actions');
@@ -63,7 +63,14 @@ async function run(options: { farmDeadline?: () => number } = {}): Promise<void>
             let steps = 0;
             const shouldYield = () => Date.now() >= Math.min(startedAt + PATROL_SLICE_MS, options.farmDeadline?.() ?? Infinity);
             const checkpoint = () => {
-                if (steps > 0 && shouldYield()) throw Object.assign(new Error('牧场巡查让路'), { code: 'RANCH_PATROL_YIELD' });
+                if (steps <= 0) return;
+                // 面板上有人点了按钮：先让路，别让人等巡查跑完（5 秒内不重复让路）。
+                if (isManualWaiting()) {
+                    noteManualYield();
+                    log('牧场', '检测到手动操作，本轮巡查让路', { module: 'ranch', event: 'ranch_patrol_yield', result: 'defer' });
+                    throw Object.assign(new Error('牧场巡查让路'), { code: 'RANCH_PATROL_YIELD' });
+                }
+                if (shouldYield()) throw Object.assign(new Error('牧场巡查让路'), { code: 'RANCH_PATROL_YIELD' });
             };
             async function phase(name: string, work: () => Promise<any>): Promise<void> {
                 if (completedPhases.has(name)) return;
@@ -114,6 +121,15 @@ async function run(options: { farmDeadline?: () => number } = {}): Promise<void>
                         return false;
                     }
                     if (!isEnabled()) return false;
+                    // 演练模式：拿到报价即停，只记录“本来会做什么”，不产生任何写请求。
+                    if (auto.ranch_dry_run) {
+                        completedSteps.add(step);
+                        steps++;
+                        const spend = quote.costItems.map((cost: any) => `${cost.name}×${cost.count}`).join('、') || '无消耗';
+                        const gain = quote.rewards.map((item: any) => `${item.name}×${item.count}`).join('、') || '无产出';
+                        log('牧场', `[演练] ${quote.label}：消耗 ${spend}，产出 ${gain}`, { module: 'ranch', event: `ranch_${action}`, result: 'dry' });
+                        return false;
+                    }
                     checkpoint();
                     const parent = getAmbientSendContext();
                     const result = await runWithSendContext({

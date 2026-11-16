@@ -1,6 +1,6 @@
 export {};
 
-const { rpc, inScene, isUnlocked } = require('./transport');
+const { rpc, inScene, isUnlocked, cacheGet, cacheSet, sceneStatus } = require('./transport');
 const { animalMap, mutationMap, cubMap, canMap, facilityMap, itemMap, taskMap, itemDto, quantity, levelInfo, error } = require('./model');
 const { getServerTimeSec } = require('../../utils/utils');
 
@@ -73,17 +73,47 @@ function facilityDto(facility: any, level: number): any {
     };
 }
 
-async function loadRaw(cells?: any): Promise<any> {
-    const currentCells = cells || await rpc('cells');
+async function loadBag(): Promise<any> {
     const bag = await rpc('bag', { global_scene_id: 2 });
+    if (bag.global_scene_id !== 2) throw error('RANCH_RESPONSE_MISMATCH', '牧场背包场景不匹配');
+    cacheSet('bag', bag);
+    return bag;
+}
+
+async function loadRaw(cells?: any, options: { fresh?: boolean } = {}): Promise<any> {
+    const fresh = options.fresh === true;
+    const currentCells = cells || (fresh ? null : cacheGet('cells')) || await rpc('cells');
+    cacheSet('cells', currentCells);
+    const cachedBag = fresh ? null : cacheGet('bag');
+    const bag = cachedBag && cachedBag.global_scene_id === 2 ? cachedBag : await loadBag();
     if (bag.global_scene_id !== 2) throw error('RANCH_RESPONSE_MISMATCH', '牧场背包场景不匹配');
     return { cells: currentCells, bag };
 }
 
+/**
+ * 用写回包里的 RanchDetail 覆盖对应栏舍。
+ *
+ * HarvestRanch / TriggerProduce / CleanAllRanch 的回包本身就带最新栏舍（与 AllCells 的
+ * facility.ranch 是同一个 RanchDetail 消息），拿它拼出新快照，比再拉一遍 AllCells 省一条全量请求。
+ */
+function mergeRanches(cells: any, ranches: any[]): any {
+    const byId = new Map<string, any>((ranches || []).map((ranch: any) => [quantity(ranch.ranch_inst_id), ranch]));
+    if (!byId.size) return cells;
+    return {
+        ...cells,
+        facilities: cells.facilities.map((facility: any) => {
+            const updated = byId.get(quantity(facility.instance_id));
+            return updated && facility.ranch ? { ...facility, ranch: updated } : facility;
+        }),
+    };
+}
+
 function snapshot(raw: any): any {
     const info = levelInfo(Number(balance(raw.bag, 1102).total));
+    const scene = sceneStatus();
     return {
-        unlocked: true, sceneId: 2, serverTime: getServerTimeSec() * 1000, ...info,
+        unlocked: true, sceneId: scene.sceneId, sceneFallback: scene.fallback, sceneRetryAt: scene.retryAt,
+        serverTime: getServerTimeSec() * 1000, ...info,
         currencies: [1007, 1002, 1005, 1008, 7002].map(id => ({ ...itemDto({ id, count: balance(raw.bag, id).total }), locked: balance(raw.bag, id).locked })),
         buckets: [7003, 7004].map(id => ({ id, seconds: balance(raw.bag, id).total })),
         grass: balance(raw.bag, 7001).total,
@@ -192,9 +222,10 @@ async function getState(view = 'animals', shopId?: number, hostGid?: string): Pr
     if (!['animals', 'facilities', 'bag', 'shop', 'market', 'tasks', 'friends', 'illustrated', 'activities', 'cans'].includes(view)) throw error('INVALID_ARGUMENT', '未知牧场页面');
     if (!isUnlocked()) return { unlocked: false, sceneId: 2, reason: '牧场尚未解锁，请先在游戏中完成开启条件' };
     return inScene(async (cells: any) => {
-        const raw = await loadRaw(cells);
+        const raw = await loadRaw(cells, { fresh: true });
         const state = snapshot(raw);
         state.pendingOperations = require('./operation-state').forCurrentAccount().pending();
+        state.todayStats = require('./stats').today();
         if (view === 'bag') state.bag = inventory(raw);
         if (view === 'shop') state.shop = await catalog(raw, Number(shopId ?? 5));
         if (view === 'market') state.market = await market(raw);
@@ -216,7 +247,7 @@ async function getState(view = 'animals', shopId?: number, hostGid?: string): Pr
             else state.friends = (await require('../friend').getFriendsList()).map((friend: any) => ({ gid: String(friend.gid), name: friend.name, avatarUrl: friend.avatarUrl }));
         }
         return state;
-    });
+    }, { fresh: true });
 }
 
 function isRanchResource(id: number): boolean {
@@ -226,9 +257,9 @@ function isRanchResource(id: number): boolean {
 async function resourceBalances(keys: string[]): Promise<any[]> {
     if (!isUnlocked()) return keys.map(key => ({ resourceKey: key, name: itemDto({ id: key.slice(5), count: 0 }).name, source: 'ranch-bag', state: 'unavailable', total: null, locked: null, asOfMs: null, reason: '牧场尚未解锁' }));
     return inScene(async () => {
-        const raw = await loadRaw();
+        const raw = await loadRaw(undefined, { fresh: true });
         return keys.map(key => ({ ...balance(raw.bag, Number(key.slice(5))), name: itemDto({ id: key.slice(5), count: 0 }).name, source: 'ranch-bag', asOfMs: Date.now() }));
-    });
+    }, { fresh: true });
 }
 
-module.exports = { getState, loadRaw, snapshot, balance, bagItems, inventory, taskList, catalog, market, canCatalog, resourceBalance, isRanchResource, resourceBalances, animalDto };
+module.exports = { getState, loadRaw, loadBag, mergeRanches, snapshot, balance, bagItems, inventory, taskList, catalog, market, canCatalog, resourceBalance, isRanchResource, resourceBalances, animalDto };

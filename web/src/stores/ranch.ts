@@ -41,12 +41,14 @@ export const useRanchStore = defineStore('ranch', () => {
     notice.value = ''
   }
 
-  async function load(accountId: string, view: RanchView, shopId?: number, hostGid?: string) {
+  async function load(accountId: string, view: RanchView, shopId?: number, hostGid?: string, options: { silent?: boolean } = {}) {
     if (owner !== accountId)
       reset(accountId)
     const version = ++generation
     lastQuery = { accountId, view, shopId, hostGid }
-    loading.value = true
+    // 静默刷新（定时轮询）不动 loading，避免刷新按钮与面板骨架每秒闪一次。
+    if (!options.silent)
+      loading.value = true
     error.value = ''
     try {
       const response = await api.get('/api/ranch', { params: { view, shopId, hostGid }, headers: { 'x-account-id': accountId }, timeout: 45000, skipErrorToast: true } as any)
@@ -58,11 +60,12 @@ export const useRanchStore = defineStore('ranch', () => {
       }
     }
     catch (cause) {
-      if (current(accountId, version))
+      // 静默刷新失败保留上一次的数据，只在有内容时才提示，避免定时器反复弹错。
+      if (current(accountId, version) && (!options.silent || !state.value))
         error.value = getApiErrorMessage(cause, '牧场数据读取失败')
     }
     finally {
-      if (current(accountId, version))
+      if (current(accountId, version) && !options.silent)
         loading.value = false
     }
   }

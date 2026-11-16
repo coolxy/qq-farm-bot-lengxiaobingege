@@ -51,6 +51,7 @@ const ranchSwitches = [
   { key: 'ranch_feed_organic', label: '有机罐头喂养' },
   { key: 'ranch_task', label: '自动领取牧场任务奖励' },
   { key: 'ranch_share', label: '每日首次分享礼包' },
+  { key: 'ranch_dry_run', label: '演练模式（只报价不执行）' },
 ] as const
 const ranchFriendSwitches = [
   { key: 'ranch_friend_steal', label: '偷取好友产物' },

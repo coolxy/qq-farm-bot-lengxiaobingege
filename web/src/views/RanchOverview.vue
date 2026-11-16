@@ -2,7 +2,8 @@
 import { NButton } from 'naive-ui/es/button'
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import { BUCKETS, formatCount, formatDuration, formatHours, RANCH_IMAGE, useRanchClock, useRanchLoader, useRanchUnmountReset } from '@/components/ranch/ranch-shared'
+import { useRouter } from 'vue-router'
+import { BUCKETS, formatCount, formatDuration, formatHours, RANCH_IMAGE, useRanchActions, useRanchClock, useRanchLoader, useRanchUnmountReset } from '@/components/ranch/ranch-shared'
 import RanchGate from '@/components/ranch/RanchGate.vue'
 import RunLogCard from '@/components/RunLogCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -17,6 +18,8 @@ const { status, currentAccountConnected: isOnline } = storeToRefs(useStatusStore
 const { state, loading } = storeToRefs(useRanchStore())
 const { refresh } = useRanchLoader('animals')
 const { remainingSeconds } = useRanchClock()
+const { request, disabled: actionsDisabled } = useRanchActions()
+const router = useRouter()
 useRanchUnmountReset()
 
 const facilities = computed<any[]>(() => state.value?.facilities || [])
@@ -70,12 +73,52 @@ const stockTiles = computed(() => {
   ]
 })
 
+/** 待处理项点一下就直达：能一键处理的走报价弹窗，需要挑动物的跳到个人页。 */
 const todo = computed(() => [
-  { key: 'harvest', label: '可收获', icon: 'i-carbon-wheat text-amber-500', value: animals.value.filter(({ animal }) => animal.canHarvest).length + shelvesReady.value },
-  { key: 'produce', label: '可生产', icon: 'i-carbon-circle-dash text-green-500', value: animals.value.filter(({ animal }) => animal.canProduce).length },
-  { key: 'feed', label: '可喂养', icon: 'i-carbon-flash text-sky-500', value: animals.value.filter(({ animal }) => animal.canFeed).length },
-  { key: 'clean', label: '待清理', icon: 'i-carbon-clean text-violet-400', value: hazards.value },
+  {
+    key: 'harvest',
+    label: '可收获',
+    icon: 'i-carbon-wheat text-amber-500',
+    value: animals.value.filter(({ animal }) => animal.canHarvest).length + shelvesReady.value,
+    go: () => request('harvest', { all: true }),
+  },
+  {
+    key: 'produce',
+    label: '可生产',
+    icon: 'i-carbon-circle-dash text-green-500',
+    value: animals.value.filter(({ animal }) => animal.canProduce).length,
+    go: () => request('produce', { all: true }),
+  },
+  {
+    key: 'feed',
+    label: '可喂养',
+    icon: 'i-carbon-flash text-sky-500',
+    value: animals.value.filter(({ animal }) => animal.canFeed).length,
+    // 喂养要先选普通/有机罐头，交给个人页的动物卡片处理。
+    go: () => void router.push('/ranch/personal?tab=animals'),
+  },
+  {
+    key: 'clean',
+    label: '待清理',
+    icon: 'i-carbon-clean text-violet-400',
+    value: hazards.value,
+    go: () => request('clean'),
+  },
 ])
+
+/** 今日动作计数来自后端 ranch-stats，只统计次数与产出，不含估值。 */
+const todayStats = computed(() => {
+  const counts = state.value?.todayStats?.counts
+  if (!counts)
+    return null
+  const rows = [
+    { key: 'harvest', label: '收获', value: Number(counts.harvest || 0), unit: '次' },
+    { key: 'produce', label: '生产', value: Number(counts.produce || 0), unit: '次' },
+    { key: 'sell', label: '出售', value: Number(counts.sell || 0), unit: '次' },
+    { key: 'feed', label: '喂养', value: Number(counts.feed || 0), unit: '次' },
+  ].filter(row => row.value > 0)
+  return rows.length ? rows : null
+})
 
 function facilityMeter(f: any) {
   if (f.state === 2)
@@ -166,6 +209,11 @@ function facilityMeter(f: any) {
         </section>
       </div>
 
+      <div v-if="state.sceneFallback" class="ranch-alert" role="status">
+        <span class="i-carbon-information" aria-hidden="true" />
+        <span>该账号的牧场场景尚未解锁，数据在通用场景读取，部分写操作可能被服务端拒绝。</span>
+      </div>
+
       <div v-if="blocked" class="ranch-alert" role="status">
         <span class="i-carbon-warning-alt" aria-hidden="true" />
         <span>牧草不足，{{ blocked }} 只动物已暂停成长。</span>
@@ -175,8 +223,8 @@ function facilityMeter(f: any) {
       </div>
 
       <div class="flex flex-1 flex-col items-stretch gap-6 md:flex-row">
-        <!-- 运行日志按账号记录，与农场概览共用 -->
-        <RunLogCard />
+        <!-- 运行日志与农场概览共用组件，这里默认只看牧场模块 -->
+        <RunLogCard module="ranch" />
 
         <div class="min-w-0 flex flex-col gap-6 md:w-1/4">
           <!-- 待处理：对应农场的“今日统计” -->
@@ -190,13 +238,28 @@ function facilityMeter(f: any) {
               </BaseButton>
             </header>
             <div class="grid grid-cols-2 gap-2 2xl:gap-3">
-              <div v-for="item in todo" :key="item.key" class="ranch-todo" :class="{ 'is-zero': !item.value }">
+              <button
+                v-for="item in todo"
+                :key="item.key"
+                type="button"
+                class="ranch-todo"
+                :class="{ 'is-zero': !item.value }"
+                :disabled="!item.value || actionsDisabled"
+                :title="item.value ? `点击处理：${item.label}` : `暂无${item.label}`"
+                @click="item.go()"
+              >
                 <div class="flex items-center gap-2">
                   <span class="select-none text-base" :class="item.icon" />
                   <span class="text-xs text-gray-500">{{ item.label }}</span>
                 </div>
                 <b>{{ item.value }}</b>
-              </div>
+              </button>
+            </div>
+            <div v-if="todayStats" class="ranch-today">
+              <span class="text-xs text-gray-500">今日</span>
+              <span v-for="row in todayStats" :key="row.key" class="ranch-today__item">
+                {{ row.label }}<b>{{ row.value }}</b>{{ row.unit }}
+              </span>
             </div>
           </section>
 
@@ -264,12 +327,28 @@ function facilityMeter(f: any) {
 
 .ranch-todo {
   display: flex;
+  width: 100%;
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
+  border: 1px solid transparent;
   border-radius: 12px;
   background: var(--ui-surface-soft);
+  color: inherit;
+  font: inherit;
   font-variant-numeric: tabular-nums;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background-color 0.16s ease;
+}
+
+.ranch-todo:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--ui-primary) 32%, transparent);
+  background: color-mix(in srgb, var(--ui-primary-soft) 60%, var(--ui-surface-soft));
+}
+
+.ranch-todo:disabled {
+  cursor: default;
 }
 
 .ranch-todo b {
@@ -278,6 +357,25 @@ function facilityMeter(f: any) {
 
 .ranch-todo.is-zero {
   opacity: 0.6;
+}
+
+.ranch-today {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--ui-border);
+  color: var(--ui-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ranch-today__item b {
+  margin: 0 1px 0 3px;
+  color: var(--ui-ink);
+  font-weight: var(--fw-650);
 }
 
 .ranch-facilities {

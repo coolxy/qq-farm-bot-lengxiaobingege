@@ -3,12 +3,16 @@ import { useIntervalFn } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import api from '@/api'
+import ConfirmModal from '@/components/ConfirmModal.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import { useAccountStore } from '@/stores/account'
 import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
+
+// module 用于在功能页里默认只看本模块日志（如牧场概览传 ranch），不传则保持“所有模块”。
+const props = withDefaults(defineProps<{ module?: string }>(), { module: '' })
 
 const statusStore = useStatusStore()
 const toastStore = useToastStore()
@@ -17,7 +21,8 @@ const { currentAccountId } = storeToRefs(useAccountStore())
 const logContainer = ref<HTMLElement | null>(null)
 const autoScroll = ref(true)
 const clearingLogs = ref(false)
-const filter = reactive({ module: '', event: '', keyword: '', isWarn: '' })
+const confirmClear = ref(false)
+const filter = reactive({ module: props.module, event: '', keyword: '', isWarn: '' })
 
 const allLogs = computed(() => {
   return [...(statusLogs.value || [])]
@@ -98,6 +103,30 @@ const events = [
   { label: '访问好友', value: 'visit_friend' },
   { label: '牧场任务', value: 'ranch_task_claim' },
   { label: '牧场分享礼包', value: 'ranch_daily_share' },
+  // 牧场事件名由后端 `ranch_${action}` 生成，取值来自 services/ranch/contract.ts 的 ACTIONS。
+  { label: '牧场收获', value: 'ranch_harvest' },
+  { label: '牧场生产', value: 'ranch_produce' },
+  { label: '牧场清理', value: 'ranch_clean' },
+  { label: '出售产物', value: 'ranch_sell' },
+  { label: '购买牧场商品', value: 'ranch_buy' },
+  { label: '放养幼崽', value: 'ranch_place' },
+  { label: '补充牧草', value: 'ranch_addGrass' },
+  { label: '添加罐头', value: 'ranch_useCan' },
+  { label: '喂养动物', value: 'ranch_feed' },
+  { label: '牧场设施升级', value: 'ranch_upgrade' },
+  { label: '完成设施升级', value: 'ranch_completeUpgrade' },
+  { label: '领取牧场任务', value: 'ranch_claimTasks' },
+  { label: '领取图鉴奖励', value: 'ranch_claimIllustrated' },
+  { label: '领取分享礼包', value: 'ranch_claimDailyShare' },
+  { label: '集市兑换', value: 'ranch_exchange' },
+  { label: '购买牧场罐头', value: 'ranch_buyCan' },
+  { label: '放生动物', value: 'ranch_release' },
+  { label: '完成牧场引导', value: 'ranch_reportEntry' },
+  { label: '偷取好友产物', value: 'ranch_steal' },
+  { label: '抚摸动物', value: 'ranch_stroke' },
+  { label: '好友牧场放蚊', value: 'ranch_putMosquito' },
+  { label: '帮好友清理', value: 'ranch_cleanFriend' },
+  { label: '离开好友牧场失败', value: 'ranch_friend_leave' },
 ]
 
 const eventLabelMap: Record<string, string> = Object.fromEntries(
@@ -140,6 +169,14 @@ function onLogFilterChange() {
   loadLogs(true)
 }
 
+// 功能页（如牧场概览）传入 module 时，切换页面也能同步过滤条件。
+watch(() => props.module, (value) => {
+  if (value === filter.module)
+    return
+  filter.module = value
+  onLogFilterChange()
+})
+
 function onLogSearchTrigger() {
   loadLogs(true)
 }
@@ -163,6 +200,7 @@ function onLogScroll(e: Event) {
 }
 
 async function clearLogs() {
+  confirmClear.value = false
   if (!currentAccountId.value)
     return
   clearingLogs.value = true
@@ -243,6 +281,7 @@ useIntervalFn(loadLogs, 10000)
           <BaseSelect
             v-model="filter.event"
             :options="events"
+            filterable
             @change="onLogFilterChange"
           />
 
@@ -277,7 +316,7 @@ useIntervalFn(loadLogs, 10000)
               title="清空日志"
               aria-label="清空日志"
               :loading="clearingLogs"
-              @click="clearLogs"
+              @click="confirmClear = true"
             >
               <template #icon>
                 <span class="i-carbon-trash-can" />
@@ -311,6 +350,16 @@ useIntervalFn(loadLogs, 10000)
         </div>
       </div>
     </div>
+
+    <ConfirmModal
+      :show="confirmClear"
+      title="清空运行日志"
+      message="将删除该账号全部模块的历史日志（不只是当前筛选结果），实时日志不受影响。"
+      confirm-text="清空"
+      :loading="clearingLogs"
+      @confirm="clearLogs"
+      @cancel="confirmClear = false"
+    />
   </div>
 </template>
 

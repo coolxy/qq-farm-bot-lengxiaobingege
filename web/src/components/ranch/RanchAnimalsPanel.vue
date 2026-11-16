@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { NButton } from 'naive-ui/es/button'
 import { storeToRefs } from 'pinia'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { BUCKETS, formatCount, formatDuration, formatHours, RANCH_IMAGE, useRanchActions, useRanchClock, useRanchLoader } from '@/components/ranch/ranch-shared'
 import RanchAnimalCard from '@/components/ranch/RanchAnimalCard.vue'
 import RanchGate from '@/components/ranch/RanchGate.vue'
@@ -14,19 +14,39 @@ const { disabled, request } = useRanchActions()
 const { remainingSeconds } = useRanchClock()
 
 const pens = computed<any[]>(() => (state.value?.facilities || []).filter((f: any) => f.ranch))
-const animals = computed(() => pens.value.flatMap(f => (f.ranch.animals || []).map((animal: any) => ({ animal, pen: f.name }))))
+const animals = computed(() => pens.value.flatMap(f => (f.ranch.animals || []).map((animal: any) => ({ animal, pen: f.name, hazards: f.ranch.hazards?.length || 0 }))))
 const capacity = computed(() => pens.value.reduce((sum, f) => sum + (Number(f.ranch.capacity) || 0), 0))
 const shelves = computed(() => pens.value.flatMap(f => f.ranch.shelves.filter((s: any) => s.canCollect).map((s: any) => ({ ...s, pen: f.name, key: `${f.id}:${s.slot}` }))))
 const hazards = computed(() => pens.value.reduce((sum, f) => sum + (f.ranch.hazards?.length || 0), 0))
+
+/** 动物多时按状态筛一批出来处理；默认不排序，保持槽位稳定，避免筛完位置乱跳。 */
+type AnimalFilter = 'all' | 'harvest' | 'produce' | 'blocked' | 'clean'
+const filterKey = ref<AnimalFilter>('all')
+const visible = computed(() => {
+  if (filterKey.value === 'all')
+    return animals.value
+  return animals.value.filter(({ animal, hazards: penHazards }) => {
+    if (filterKey.value === 'harvest')
+      return animal.canHarvest
+    if (filterKey.value === 'produce')
+      return animal.canProduce
+    if (filterKey.value === 'blocked')
+      return animal.grassBlocked
+    return (penHazards || 0) > 0
+  })
+})
+function toggleFilter(key: AnimalFilter) {
+  filterKey.value = filterKey.value === key ? 'all' : key
+}
 
 const canProduce = computed(() => animals.value.some(({ animal }) => animal.canProduce))
 const canHarvest = computed(() => animals.value.some(({ animal }) => animal.canHarvest) || shelves.value.length > 0)
 
 const summary = computed(() => [
-  { key: 'harvest', label: '可收获', icon: 'i-carbon-wheat text-amber-600 dark:text-amber-400', value: animals.value.filter(({ animal }) => animal.canHarvest).length },
-  { key: 'produce', label: '可生产', icon: 'i-carbon-circle-dash text-green-600 dark:text-green-400', value: animals.value.filter(({ animal }) => animal.canProduce).length },
-  { key: 'blocked', label: '缺草', icon: 'i-carbon-warning-alt text-amber-600 dark:text-amber-400', value: animals.value.filter(({ animal }) => animal.grassBlocked).length },
-  { key: 'clean', label: '待清理', icon: 'i-carbon-clean text-violet-500 dark:text-violet-300', value: hazards.value },
+  { key: 'harvest' as const, label: '可收获', icon: 'i-carbon-wheat text-amber-600 dark:text-amber-400', value: animals.value.filter(({ animal }) => animal.canHarvest).length },
+  { key: 'produce' as const, label: '可生产', icon: 'i-carbon-circle-dash text-green-600 dark:text-green-400', value: animals.value.filter(({ animal }) => animal.canProduce).length },
+  { key: 'blocked' as const, label: '缺草', icon: 'i-carbon-warning-alt text-amber-600 dark:text-amber-400', value: animals.value.filter(({ animal }) => animal.grassBlocked).length },
+  { key: 'clean' as const, label: '待清理', icon: 'i-carbon-clean text-violet-500 dark:text-violet-300', value: hazards.value },
 ])
 const stock = computed(() => [
   { key: 'grass', label: '牧草', image: RANCH_IMAGE(7001), value: formatCount(state.value?.grass ?? 0) },
@@ -72,9 +92,25 @@ function target(animal: any) {
 
         <div class="ranch-summary">
           <div class="ranch-summary__states">
-            <span v-for="item in summary" :key="item.key" class="ranch-state" :class="{ 'is-zero': !item.value }">
+            <button
+              type="button"
+              class="ranch-state"
+              :class="{ 'is-active': filterKey === 'all' }"
+              @click="filterKey = 'all'"
+            >
+              全部<b>{{ animals.length }}</b>
+            </button>
+            <button
+              v-for="item in summary"
+              :key="item.key"
+              type="button"
+              class="ranch-state"
+              :class="{ 'is-zero': !item.value, 'is-active': filterKey === item.key }"
+              :disabled="!item.value"
+              @click="toggleFilter(item.key)"
+            >
               <span :class="item.icon" aria-hidden="true" />{{ item.label }}<b>{{ item.value }}</b>
-            </span>
+            </button>
           </div>
           <div class="ranch-summary__stock">
             <span v-for="item in stock" :key="item.key" :title="item.label">
@@ -92,9 +128,17 @@ function target(animal: any) {
               去牧场商店
             </BaseButton>
           </div>
+          <div v-else-if="!visible.length" class="ranch-empty">
+            <span class="i-carbon-filter" aria-hidden="true" />
+            <strong>没有符合筛选条件的动物</strong>
+            <p>换个筛选条件，或点「全部」查看所有动物。</p>
+            <BaseButton variant="secondary" size="sm" @click="filterKey = 'all'">
+              查看全部
+            </BaseButton>
+          </div>
           <div v-else class="ranch-grid">
             <RanchAnimalCard
-              v-for="{ animal, pen } in animals"
+              v-for="{ animal, pen } in visible"
               :key="`${animal.ranchId}:${animal.id}`"
               :animal="animal"
               :pen="pen"
@@ -176,10 +220,30 @@ function target(animal: any) {
   align-items: center;
   gap: 5px;
   padding: 3px 10px 3px 8px;
+  border: 1px solid transparent;
   border-radius: 999px;
   color: var(--ui-muted);
   background: var(--ui-surface-soft);
+  font: inherit;
   font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color 0.16s ease, color 0.16s ease, background-color 0.16s ease;
+}
+
+.ranch-state:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--ui-primary) 34%, transparent);
+  color: var(--ui-primary);
+}
+
+.ranch-state.is-active {
+  border-color: transparent;
+  background: var(--ui-primary-soft);
+  color: var(--ui-primary);
+  font-weight: var(--fw-600);
+}
+
+.ranch-state:disabled {
+  cursor: default;
 }
 
 .ranch-state b {
