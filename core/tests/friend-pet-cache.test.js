@@ -178,10 +178,11 @@ test('好友列表的宠物 DTO 区分护主犬、其他狗、无狗与未确认
     recordFriendDog(7002, 90001);
     recordFriendDog(7003, 0);
 
-    assert.deepEqual(buildFriendPetView(7001), {
-        petState: 'protect',
-        pet: { id: '90021', name: '护主犬', image: '/game-config/seed_images_named/seed_images/90021.png' },
-    });
+    const protect = buildFriendPetView(7001);
+    assert.equal(protect.petState, 'protect');
+    assert.equal(protect.pet.id, '90021');
+    assert.equal(protect.pet.name, '护主犬');
+    assert.match(protect.pet.image, /^\/game-config\/seed_images_named\/seed_images\/90021\.png/);
     assert.equal(buildFriendPetView(7002).petState, 'other');
     assert.equal(buildFriendPetView(7002).pet.name, '田园犬');
     assert.deepEqual(buildFriendPetView(7003), { petState: 'none', pet: null });

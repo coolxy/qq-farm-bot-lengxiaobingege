@@ -475,7 +475,16 @@ function getItemImageById(itemId: number): string {
         imageId = iconImageIds.get(getItemImageKey(item, 'icon_res'))
             || assetImageIds.get(getItemImageKey(item, 'asset_name')) || 0;
     }
-    return imageId ? `/game-config/seed_images_named/seed_images/${imageId}.png` : '';
+    if (!imageId) return '';
+    // 带基于文件 mtime 的版本号：图片资源更新后 URL 随之变化，避免浏览器缓存旧图。
+    const relative = `/game-config/seed_images_named/seed_images/${imageId}.png`;
+    try {
+        const file = path.join(getResourcePath('gameConfig'), 'seed_images_named', 'seed_images', `${imageId}.png`);
+        const mtime = fs.statSync(file).mtimeMs;
+        return `${relative}?v=${Math.trunc(mtime).toString(36)}`;
+    } catch {
+        return relative;
+    }
 }
 
 function loadShopGoodsConfig(): void {
