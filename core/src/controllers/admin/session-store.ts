@@ -259,9 +259,14 @@ class AdminSessionStore {
         return removed;
     }
 
+    /** 无条件落盘一次（启动迁移用） */
+    markDirtyAndPersist(): void {
+        this.dirty = true;
+        this.persist(true);
+    }
+
     /** 写盘：force=false 时遵守节流窗口 */
-    persist(force: boolean): void {
-        if (!this.dirty) return;
+    persist(force: boolean): void {        if (!this.dirty) return;
         const now = Date.now();
         if (!force && now - this.lastPersistAt < PERSIST_THROTTLE_MS) return;
         this.lastPersistAt = now;
@@ -279,7 +284,11 @@ class AdminSessionStore {
 }
 
 function createSessionStore(): AdminSessionStore {
-    return new AdminSessionStore(loadSessions());
+    const store = new AdminSessionStore(loadSessions());
+    // 启动即落盘一次：把旧版 {tokens:[...]} 就地转成带生命周期的结构，
+    // 顺便清掉已过期的记录，避免磁盘上长期留着无法判龄的裸令牌。
+    store.markDirtyAndPersist();
+    return store;
 }
 
 module.exports = {
