@@ -39,7 +39,7 @@ export const menuRoutes: MenuItem[] = [
     path: 'activity',
     name: 'activity-center',
     label: '活动',
-    icon: 'i-carbon-events',
+    icon: 'i-carbon-gift',
     component: () => import('@/views/ActivityCenter.vue'),
   },
   {
@@ -53,7 +53,7 @@ export const menuRoutes: MenuItem[] = [
     path: 'ranch',
     name: 'ranch',
     label: '牧场',
-    icon: 'i-carbon-pet-image-o',
+    icon: 'i-fas-horse',
     component: () => import('@/views/Ranch.vue'),
     meta: { ranchSection: 'overview' },
   },

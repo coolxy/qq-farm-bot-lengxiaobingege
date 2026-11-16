@@ -17,8 +17,13 @@ export {};
 /** 牧场活动界面标识前缀（Muge = 牧歌）。 */
 const RANCH_UID_PREFIXES = ['Muge'];
 
-/** 已确认的牧场活动 id：2026111700 牧歌初启，2026111707 以薯换福（牧歌初启内嵌兑换）。 */
-const RANCH_ACTIVITY_IDS = new Set(['2026111700', '2026111707']);
+/**
+ * 已确认的牧场活动 id 前缀：20261117 是牧歌初启主题日。
+ * ActivityList 树只给主活动（00/07）挂了 uid，子活动（02/08 等）没有 uid，
+ * 因此按前缀整段归类，避免子活动漏进农场活动中心。
+ * 全局的「故友重逢」是 2026111800（11-18），不会被此前缀误伤。
+ */
+const RANCH_ACTIVITY_ID_PREFIXES = ['20261117'];
 
 export type ActivityScope = 'ranch' | 'global';
 
@@ -32,7 +37,8 @@ function isRanchByUid(uid: string): boolean {
 export function activityScope(window: ActivityWindow): ActivityScope {
     if (!window) return 'global';
     if (isRanchByUid(window.uid || '')) return 'ranch';
-    if (RANCH_ACTIVITY_IDS.has(String(window.id || '').trim())) return 'ranch';
+    const id = String(window.id || '').trim();
+    if (RANCH_ACTIVITY_ID_PREFIXES.some(prefix => id.startsWith(prefix))) return 'ranch';
     return 'global';
 }
 
@@ -40,4 +46,12 @@ export function isRanchActivity(window: ActivityWindow): boolean {
     return activityScope(window) === 'ranch';
 }
 
-module.exports = { activityScope, isRanchActivity, RANCH_ACTIVITY_IDS };
+/**
+ * 农场活动中心只展示全局/农场活动：牧场专属活动（牧歌初启等）只在牧场页出现。
+ * 未识别的活动一律视为全局，避免误删农场活动。
+ */
+export function isGlobalActivity(window: ActivityWindow): boolean {
+    return activityScope(window) !== 'ranch';
+}
+
+module.exports = { activityScope, isRanchActivity, isGlobalActivity, RANCH_ACTIVITY_ID_PREFIXES };

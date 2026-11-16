@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { decodeActivityWindows, decodeActivityExtra } = require('../dist/services/activity-windows');
-const { activityScope, isRanchActivity } = require('../dist/config/activity-scene');
+const { activityScope, isRanchActivity, isGlobalActivity } = require('../dist/config/activity-scene');
 
 /**
  * 牧场活动页此前直接展示全局 ActivityList，把「奶茶热销中」「故友重逢」这类农场活动
@@ -60,4 +60,34 @@ test('activityScope 按 uid 前缀与已确认 id 区分牧场活动', () => {
     assert.equal(activityScope({ id: '2026111800', beginTime: 0, endTime: 0 }), 'global');
     assert.equal(isRanchActivity({ id: '2026111700', beginTime: 0, endTime: 0, uid: 'MugeMainUI' }), true);
     assert.equal(isRanchActivity({ id: '2026092200', beginTime: 0, endTime: 0 }), false);
+});
+
+test('isGlobalActivity 反向过滤牧场活动，农场活动中心据此不串台', () => {
+    // 牧场专属活动被排除（含没有 uid 的子活动 id）
+    assert.equal(isGlobalActivity({ id: '2026111700', beginTime: 0, endTime: 0, uid: 'MugeMainUI' }), false);
+    assert.equal(isGlobalActivity({ id: '2026111707', beginTime: 0, endTime: 0 }), false);
+    assert.equal(isGlobalActivity({ id: '2026111702', beginTime: 0, endTime: 0 }), false);
+    assert.equal(isGlobalActivity({ id: '2026111708', beginTime: 0, endTime: 0 }), false);
+    // 农场/全局活动保留；18 日的故友重逢不能被 17 日前缀误伤
+    assert.equal(isGlobalActivity({ id: '2026110100', beginTime: 0, endTime: 0, uid: 'MilkTeaActivity' }), true);
+    assert.equal(isGlobalActivity({ id: '2026111800', beginTime: 0, endTime: 0 }), true);
+    // 未识别、无 id 的兜底项按全局处理，避免误删
+    assert.equal(isGlobalActivity({ beginTime: 0, endTime: 0 }), true);
+});
+
+test('buildActivityDirectory 不把牧场活动混进农场活动目录', () => {
+    const { buildActivityDirectory } = require('../dist/services/activity-center');
+    const windows = [
+        { id: '2026111700', name: '牧歌初启', beginTime: 1794880800, endTime: 1796054399, uid: 'MugeMainUI' },
+        { id: '2026111702', name: '牧歌初启-子活动', beginTime: 0, endTime: 0 },
+        { id: '2026111707', name: '以薯换福', beginTime: 0, endTime: 0 },
+        { id: '2026111708', name: '以薯换福-子活动', beginTime: 0, endTime: 0 },
+        { id: '2026110100', name: '奶茶热销中', beginTime: 1792029600, endTime: 1794844799, uid: 'MilkTeaActivity' },
+        { id: '2026111800', name: '故友重逢', beginTime: 0, endTime: 0 },
+    ];
+    const names = buildActivityDirectory(windows, null, null, null, null).map((g) => g.name);
+    assert.ok(names.includes('奶茶热销中'), '农场活动应保留');
+    assert.ok(names.includes('故友重逢'), '18 日的全局活动应保留');
+    assert.ok(!names.some(n => n.startsWith('牧歌初启')), '牧场活动不应出现在农场目录');
+    assert.ok(!names.some(n => n.startsWith('以薯换福')), '牧场活动不应出现在农场目录');
 });

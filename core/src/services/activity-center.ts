@@ -281,8 +281,12 @@ async function settleRequest(operation: () => Promise<any>): Promise<SettledEntr
 
 function buildActivityDirectory(windows: any[], season: any, shop: any, solarTerms: any, constellation: any) {
     const gameplayBindings = buildActivityGameplayBindings({ season, shop, solarTerms, constellation });
+    // 农场活动中心只展示全站/农场活动；牧场专属活动（Muge* / 已确认牧场 id）只在牧场页出现。
+    // 未识别的活动 isGlobalActivity 返回 true，不会被误删。
+    const { isGlobalActivity } = require('../config/activity-scene');
+    const farmWindows = windows.filter((window: any) => isGlobalActivity(window));
     const groups: any[] = [];
-    for (const window of windows) {
+    for (const window of farmWindows) {
         const id = String(window?.id || '').trim();
         if (!id) continue;
         const shareInstance = shareRewardInstances.find(entry => entry.activityId === id);

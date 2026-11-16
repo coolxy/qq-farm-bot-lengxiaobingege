@@ -88,17 +88,19 @@
 | 信号 | 来源 | 说明 |
 | --- | --- | --- |
 | `extra.uid` 前缀 `Muge` | `ActivityContent.extra`（UTF-8 JSON） | 牧场活动主界面 `MugeMainUI`，从「牧歌初启」的 `GetGroup` 原文确认 |
-| 活动 id 白名单 | `core/src/config/activity-scene.ts` | `2026111700 牧歌初启`、`2026111707 以薯换福`；ActivityList 的 `activities` 树没有它们的节点，拿不到 uid 时用 id 兜底 |
+| 活动 id 前缀 `20261117` | `core/src/config/activity-scene.ts` | 牧歌初启主题日；ActivityList 的 `activities` 树只给主活动（00/07）挂 uid，子活动（02/03/04/05/08）拿不到 uid，用 id 前缀整段兜底。全局的「故友重逢」是 `2026111800`（11-18），不会被误伤 |
 
 相关代码：
 
 - `services/activity-windows.ts`：`decodeActivityExtra` 解析 `uid` 与 `tips.txt`（说明文本），并把二者挂到时间窗口上；
   `getActivityGroupExtra(groupId)` 按分组补取内容（缓存 10 分钟），因为牧场活动在 `ActivityList` 里通常没有进度节点。
-- `config/activity-scene.ts`：`activityScope()` / `isRanchActivity()`，未识别的活动一律按全局处理，不混进牧场页。
+- `config/activity-scene.ts`：`activityScope()` / `isRanchActivity()` / `isGlobalActivity()`，未识别的活动一律按全局处理，不混进牧场页。
 - `services/ranch/state.ts` 的 `ranchActivities()`：只留牧场活动，去掉已结束的，进行中在前、即将开始在后。
-- 农场活动中心仍展示全量，两边分工是「全站」与「牧场专属」。
+- `services/activity-center.ts` 的 `buildActivityDirectory()`：用 `isGlobalActivity()` 反向过滤，农场活动中心只显示全站/农场活动，不再串进牧歌初启、以薯换福。
 
-新增牧场活动时：如果界面标识沿用 `Muge` 前缀，无需改代码；换了标识就把前缀或活动 id 补进 `activity-scene.ts`。
+新增牧场活动时：如果界面标识沿用 `Muge` 前缀、或活动 id 落在已登记的牧场日期段，无需改代码；否则把前缀补进 `activity-scene.ts`。
+
+界面图标（2026-11-16）：牧场入口（侧栏/底栏/页头/设置页）由无效的 `i-carbon-cattle` 换成 `i-fas-horse` 骏马；农场活动中心图标由 `i-carbon-events`（双人）换成 `i-carbon-gift`（礼物）。Carbon 集里没有 cattle，全项目 123 个 carbon + 8 个 fas 图标已全量校验有效。
 
 ## 八、界面结构
 

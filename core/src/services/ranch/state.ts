@@ -220,7 +220,7 @@ async function canCatalog(raw: any, slotType = 6): Promise<any> {
 
 /**
  * 牧场活动：ActivityList 是全局列表，这里按 extra.uid / 已确认活动 id 只留牧场场景的活动。
- * 农场活动中心仍然展示全量，两者的分工是「全站」与「牧场专属」，不再重复。
+ * 农场活动中心用 isGlobalActivity 反向过滤，只留全站/农场活动，两边互不串台。
  */
 async function ranchActivities(): Promise<any[]> {
     const nowSec = getServerTimeSec();
