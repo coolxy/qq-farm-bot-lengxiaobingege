@@ -2,7 +2,7 @@
 import { menuRoutes } from '@/router/menu'
 
 // 与侧栏使用同一份名称和图标，只在底栏放最常用的六项。
-const MOBILE_ITEMS: Array<[string, string?]> = [['dashboard'], ['personal'], ['activity-center'], ['game-mall', '商城'], ['ranch'], ['Settings']]
+const MOBILE_ITEMS: Array<[string, string?]> = [['dashboard'], ['personal'], ['ranch'], ['activity-center'], ['game-mall', '商城'], ['Settings']]
 const items = MOBILE_ITEMS.flatMap(([name, shortLabel]) => {
   const route = menuRoutes.find(item => item.name === name)
   return route ? [{ path: `/${route.path}`, label: shortLabel || route.label, icon: route.icon }] : []
