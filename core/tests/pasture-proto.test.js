@@ -126,6 +126,53 @@ test('decodes cub shop goods and encodes ShopProfiles request', async () => {
     assert.equal(Buffer.from(reqBytes).toString('hex'), '0802');
 });
 
+// 2026-11-16 16:57 第五段抓包：请求格式勘误 + 新 RPC。
+// HarvestRanch 请求实包 12001801（f2 空消息），旧写法塞 ranch_inst_id 会触发「网络繁忙」。
+const HARVEST_REQ_HEX = '12001801';
+// GetRanchOpTimes 请求实包 0a00（f1 空消息）。
+const OP_TIMES_REQ_HEX = '0a00';
+// RanchInfo.f8 extras：真实首帧快照末尾 2a020864(grass) 3001(husbandry) 420408031802(extras)。
+// 这里去掉动物列表，仅保留头部 + grass + husbandry + extras。
+const RANCH_EXTRAS_HEX = '08914e100418042a0208643001420408031802';
+
+test('encodes HarvestRanch / GetRanchOpTimes requests exactly like the live client', async () => {
+    await proto.ensureProtoLoaded();
+    const harvest = proto.types.HarvestRanchRequest.encode(
+        proto.types.HarvestRanchRequest.create({ unknown_2: Buffer.alloc(0), harvest_type: 1 })).finish();
+    assert.equal(Buffer.from(harvest).toString('hex'), HARVEST_REQ_HEX);
+    const opTimes = proto.types.GetRanchOpTimesRequest.encode(
+        proto.types.GetRanchOpTimesRequest.create({ unknown_1: Buffer.alloc(0) })).finish();
+    assert.equal(Buffer.from(opTimes).toString('hex'), OP_TIMES_REQ_HEX);
+});
+
+test('decodes RanchInfo.f8 extras and CleanAllRanch request from live frames', async () => {
+    await proto.ensureProtoLoaded();
+    const ranch = proto.types.RanchInfo.decode(Buffer.from(RANCH_EXTRAS_HEX, 'hex'));
+    assert.equal(Number(ranch.ranch_inst_id), 10001);
+    assert.equal(ranch.extras.unknown_1, 3);
+    assert.equal(ranch.extras.unknown_3, 2);
+    const cleanReq = proto.types.CleanAllRanchRequest.encode(
+        proto.types.CleanAllRanchRequest.create({ unknown_2: Buffer.alloc(0) })).finish();
+    assert.equal(Buffer.from(cleanReq).toString('hex'), '1200');
+});
+
+// RotationShopInfo 请求 0807（shop_id=7 仓鼠驿站）
+const ROTATION_INFO_REQ_HEX = '0807';
+// RotationBuyGoods 请求 08b80210011880aee7d7062001（goods_id=312, num=1, day=1794758400）
+const ROTATION_BUY_REQ_HEX = '08b80210011880aee7d7062001';
+
+test('encodes rotation shop requests from live frames', async () => {
+    await proto.ensureProtoLoaded();
+    const infoReq = proto.types.RotationShopInfoRequest.encode(
+        proto.types.RotationShopInfoRequest.create({ shop_id: 7 })).finish();
+    assert.equal(Buffer.from(infoReq).toString('hex'), ROTATION_INFO_REQ_HEX);
+    const buyReq = proto.types.RotationBuyGoodsRequest.encode(
+        proto.types.RotationBuyGoodsRequest.create({
+            goods_id: 312, num: 1, rotation_day_sec: 1794758400, unknown_4: 1,
+        })).finish();
+    assert.equal(Buffer.from(buyReq).toString('hex'), ROTATION_BUY_REQ_HEX);
+});
+
 test('every牧场 API 请求/回包类型都在运行时注册表中', async () => {
     await proto.ensureProtoLoaded();
     const apiSource = fs.readFileSync(path.join(__dirname, '../src/services/pasture/api.ts'), 'utf8');

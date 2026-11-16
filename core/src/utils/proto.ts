@@ -87,6 +87,7 @@ async function loadProto(): Promise<void> {
 
     // 牧场（内测，2026-11-16 抓包实测）
     types.RanchInfo = root.lookupType('gamepb.animalpb.RanchInfo');
+    types.RanchExtras = root.lookupType('gamepb.animalpb.RanchExtras');
     types.AnimalInst = root.lookupType('gamepb.animalpb.AnimalInst');
     types.GetRanchDetailRequest = root.lookupType('gamepb.animalpb.GetRanchDetailRequest');
     types.GetRanchDetailReply = root.lookupType('gamepb.animalpb.GetRanchDetailReply');
@@ -103,6 +104,8 @@ async function loadProto(): Promise<void> {
     types.AnimalRef = root.lookupType('gamepb.animalpb.AnimalRef');
     types.PutHazardRequest = root.lookupType('gamepb.animalpb.PutHazardRequest');
     types.PutHazardReply = root.lookupType('gamepb.animalpb.PutHazardReply');
+    types.CleanAllRanchRequest = root.lookupType('gamepb.animalpb.CleanAllRanchRequest');
+    types.CleanAllRanchReply = root.lookupType('gamepb.animalpb.CleanAllRanchReply');
     types.Grass = root.lookupType('gamepb.animalpb.Grass');
     types.Shelf = root.lookupType('gamepb.animalpb.Shelf');
     types.ShelfLot = root.lookupType('gamepb.animalpb.ShelfLot');
@@ -186,6 +189,8 @@ async function loadProto(): Promise<void> {
     types.BuyGoodsReply = root.lookupType('gamepb.shoppb.BuyGoodsReply');
     types.RotationBuyGoodsRequest = root.lookupType('gamepb.shoppb.RotationBuyGoodsRequest');
     types.RotationBuyGoodsReply = root.lookupType('gamepb.shoppb.RotationBuyGoodsReply');
+    types.RotationShopInfoRequest = root.lookupType('gamepb.shoppb.RotationShopInfoRequest');
+    types.RotationShopInfoReply = root.lookupType('gamepb.shoppb.RotationShopInfoReply');
     types.GetMonthCardInfosRequest = root.lookupType('gamepb.mallpb.GetMonthCardInfosRequest');
     types.GetMonthCardInfosReply = root.lookupType('gamepb.mallpb.GetMonthCardInfosReply');
     types.ClaimMonthCardRewardRequest = root.lookupType('gamepb.mallpb.ClaimMonthCardRewardRequest');

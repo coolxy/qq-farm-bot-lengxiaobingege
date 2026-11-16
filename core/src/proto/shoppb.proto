@@ -107,6 +107,41 @@ message RotationBuyGoodsRequest {
 
 message RotationBuyGoodsReply {}
 
+// --- 轮换商店信息（2026-11-16 16:57 实包）---
+// 请求 0807（shop_id=7「仓鼠驿站」，松果货币）；RotationBuyGoods 的 f3 用回包 f3 的周期起始日。
+message RotationShopInfoRequest {
+    int64 shop_id = 1;             // 实测 7
+}
+
+// 轮换商店商品：实测 f1=分类ID、f2=、f3=goods_id、f5=item_id、f6=价格、f10=限购、
+// f12=解锁条件(文案)、f13=商品小类。字段语义未完全确认的以 unknown_ 命名。
+message RotationGoods {
+    int64 category_id = 1;         // 实测 1/2
+    int64 unknown_2 = 2;           // 实测 1
+    int64 goods_id = 3;            // 实测 80011/80012
+    int64 unknown_4 = 4;           // 实测 1
+    int64 item_id = 5;             // 实测 7002/1008
+    int64 price = 6;               // 实测 3/12/750
+    int64 unknown_10 = 10;
+    bytes unlock_cond = 12;        // 实测 {f1:"最低等级", f2:"5"}
+    int64 sub_type = 13;           // 实测 101/102
+}
+
+message RotationCategory {
+    int64 id = 1;                  // 实测 1「便便特惠」/2「农场精选」
+    string name = 2;
+    int64 unknown_3 = 3;           // 实测 10/20
+}
+
+message RotationShopInfoReply {
+    int32 unknown_1 = 1;           // 实测 1
+    int32 unknown_2 = 2;           // 实测 1
+    int64 rotation_day_sec = 3;    // 实测 1794758400 = 2026-11-17 00:00
+    int32 unknown_4 = 4;           // 实测 1
+    repeated RotationCategory categories = 5;
+    repeated RotationGoods goods = 6;
+}
+
 // --- 商品解锁推送 ---
 message GoodsUnlockNotify {
     repeated GoodsInfo goods_list = 1;

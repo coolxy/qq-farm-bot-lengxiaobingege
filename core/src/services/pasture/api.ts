@@ -46,9 +46,10 @@ async function getRanchDetail(gid?: number | string): Promise<any> {
     return { ranch, ownerGid: selfGid };
 }
 
-/** 操作配额表（op_id → 上限/已用/剩余） */
+/** 操作配额表（op_id → 上限/已用/剩余）。实包请求 0a00（f1 空消息）。 */
 async function getRanchOpTimes(): Promise<any> {
-    const reply = await call('GetRanchOpTimesRequest', {}, RANCH_SERVICE, 'GetRanchOpTimes', 'GetRanchOpTimesReply');
+    const reply = await call('GetRanchOpTimesRequest', { unknown_1: Buffer.alloc(0) },
+        RANCH_SERVICE, 'GetRanchOpTimes', 'GetRanchOpTimesReply');
     return reply && reply.quotas ? reply.quotas : [];
 }
 
@@ -61,10 +62,14 @@ async function feedAnimal(ranchInstId: number | string, feedType: number = 1): P
     return reply && reply.ranch;
 }
 
-/** 收获产物（回包 RanchInfo + shelves），harvest_type 实测=1 */
+/**
+ * 收获产物（回包 RanchInfo + shelves），harvest_type 实测=1。
+ * 2026-11-16 16:57 实包勘误：请求 f2 是空消息(1200)，不是 RanchRef{ranch_inst_id}。
+ * 旧写法 120308914e1801 多次被服务器回「网络繁忙」；正确写法是 12001801。
+ * ranchInstId 仅为兼容旧调用保留，不参与编码——收获目标由当前登录态决定。
+ */
 async function harvestRanch(ranchInstId?: number | string, harvestType: number = 1): Promise<any> {
-    const ranch = ranchInstId != null ? { ranch_inst_id: toLong(ranchInstId) } : {};
-    const reply = await call('HarvestRanchRequest', { ranch, harvest_type: harvestType },
+    const reply = await call('HarvestRanchRequest', { unknown_2: Buffer.alloc(0), harvest_type: harvestType },
         ANIMAL_SERVICE, 'HarvestRanch', 'HarvestRanchReply');
     return reply;
 }
@@ -184,6 +189,27 @@ async function leaveHomestead(hostGid: number | string): Promise<any> {
     return call('LeaveRequest', { host_gid: toLong(hostGid) }, VISIT_SERVICE, 'LeaveHomestead');
 }
 
+/** 一键清理牧场（实包 1200，回包最新 RanchInfo） */
+async function cleanAllRanch(): Promise<any> {
+    const reply = await call('CleanAllRanchRequest', { unknown_2: Buffer.alloc(0) },
+        RANCH_SERVICE, 'CleanAllRanch', 'CleanAllRanchReply');
+    return reply && reply.ranch;
+}
+
+/** 轮换商店信息（实包 shop_id=7「仓鼠驿站」，松果货币） */
+async function getRotationShopInfo(shopId: number = 7): Promise<any> {
+    return call('RotationShopInfoRequest', { shop_id: toLong(shopId) },
+        SHOP_SERVICE, 'RotationShopInfo', 'RotationShopInfoReply');
+}
+
+/** 轮换商店购买：f3 用 getRotationShopInfo 回包的 rotation_day_sec */
+async function rotationBuyGoods(goodsId: number, num: number, rotationDaySec: number): Promise<any> {
+    return call('RotationBuyGoodsRequest', {
+        goods_id: toLong(goodsId), num: toLong(num),
+        rotation_day_sec: toLong(rotationDaySec), unknown_4: 1,
+    }, SHOP_SERVICE, 'RotationBuyGoods', 'RotationBuyGoodsReply');
+}
+
 /** 牧草机详情（容量/库存） */
 async function getFacilityDetail(instId: number | string = 10002): Promise<any> {
     const reply = await call('GetFacilityDetailRequest', { inst_id: toLong(instId) },
@@ -209,4 +235,7 @@ module.exports = {
     enterHomestead,
     leaveHomestead,
     getFacilityDetail,
+    cleanAllRanch,
+    getRotationShopInfo,
+    rotationBuyGoods,
 };

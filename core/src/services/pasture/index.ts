@@ -100,6 +100,32 @@ async function operatePasture(action: string, input: any = {}): Promise<any> {
             const res = await api.harvestRanch(input.ranchInstId, 1);
             return { ok: true, ranch: res && res.ranch };
         }
+        case 'cleanAll': {
+            const ranch = await api.cleanAllRanch();
+            return { ok: true, ranch };
+        }
+        case 'rotationShopInfo': {
+            const info = await api.getRotationShopInfo(Number(input.shopId) || 7);
+            return {
+                ok: true,
+                rotationDaySec: info ? Number(info.rotation_day_sec) : 0,
+                categories: ((info && info.categories) || []).map((c: any) => ({
+                    id: Number(c.id), name: c.name,
+                })),
+                goods: ((info && info.goods) || []).map((g: any) => ({
+                    goodsId: Number(g.goods_id),
+                    itemId: Number(g.item_id),
+                    price: Number(g.price),
+                    categoryId: Number(g.category_id),
+                    subType: Number(g.sub_type),
+                })),
+            };
+        }
+        case 'rotationBuy': {
+            const res = await api.rotationBuyGoods(
+                Number(input.goodsId) || 0, Number(input.num) || 1, Number(input.rotationDaySec) || 0);
+            return { ok: true, result: res };
+        }
         case 'triggerProduce': {
             const res = await api.triggerProduce();
             return { ok: true, ranch: res && res.ranch };

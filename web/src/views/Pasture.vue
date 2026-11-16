@@ -230,6 +230,9 @@ onMounted(() => {
         <NButton size="small" :loading="operating === 'putHazard'" :disabled="!isConnected" @click="run('putHazard', { opId: 11003 })">
           清灾害
         </NButton>
+        <NButton size="small" :loading="operating === 'cleanAll'" :disabled="!isConnected" @click="run('cleanAll')">
+          一键清理
+        </NButton>
         <NButton size="small" type="primary" :loading="operating === 'check'" :disabled="!isConnected" @click="run('check')">
           立即自动执行
         </NButton>

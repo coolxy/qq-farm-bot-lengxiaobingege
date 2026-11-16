@@ -81,11 +81,18 @@ message Shelf {
 // 牧场主体（GetRanchDetail / FeedAnimal / HarvestRanch 回包 f1）
 message RanchInfo {
     int64 ranch_inst_id = 1;     // 实测 10001
-    int32 capacity = 2;          // 实测 3
-    int32 animal_count = 3;      // 实测 3
+    int32 capacity = 2;          // 实测 3/4
+    int32 animal_count = 3;      // 实测 3/4
     repeated AnimalInst animals = 4;
     Grass grass = 5;
     int32 husbandry_type = 6;    // 实测 1
+    RanchExtras extras = 8;      // 实测 08031802，仅登录快照出现，语义未确认
+}
+
+// RanchInfo.f8 实测子消息：{f1:3, f3:2}，仅 PlayerLogin 后的首帧快照出现。
+message RanchExtras {
+    int32 unknown_1 = 1;         // 实测 3
+    int32 unknown_3 = 3;         // 实测 2
 }
 
 // 操作配额（RanchService.GetRanchOpTimes 回包 f1）
@@ -119,8 +126,11 @@ message FeedAnimalReply {
     RanchInfo ranch = 1;
 }
 
+// 2026-11-16 16:57 实包勘误：HarvestRanch 请求 f2 是「空消息」(1200)，不填 ranch_inst_id。
+// 旧实现把 ranch_inst_id 塞进 f2 发出 (120308914e1801)，服务器多次回「网络繁忙」。
+// 正确请求 = 12001801：f2 空 bytes、f3=1。收获目标由当前登录态决定。
 message HarvestRanchRequest {
-    RanchRef ranch = 2;          // 实测为空消息
+    bytes unknown_2 = 2;         // 实测空消息，不要填 ranch_inst_id
     int32 harvest_type = 3;      // 实测 1
 }
 
@@ -139,7 +149,9 @@ message TriggerProduceReply {
     repeated Shelf shelves = 3;
 }
 
+// 2026-11-16 16:57 实包：请求 0a00（f1 空消息）。空 body 在部分网关会被判参数错误。
 message GetRanchOpTimesRequest {
+    bytes unknown_1 = 1;         // 实测空消息
 }
 
 message GetRanchOpTimesReply {
@@ -193,6 +205,17 @@ message PutHazardReply {
     HazardReward reward = 4;
 }
 
+// 一键清理牧场（RanchService.CleanAllRanch，2026-11-16 16:57 实包）。
+// 请求 1200（f2 空消息，与 GetRanchDetail 一致）；回包 f1 是清理后的最新 RanchInfo。
+// 抓包中买了 4 只幼崽后调用，回包动物 stage/状态不变，extras(f8) 被清空。
+message CleanAllRanchRequest {
+    bytes unknown_2 = 2;           // 实测空消息
+}
+
+message CleanAllRanchReply {
+    RanchInfo ranch = 1;
+}
+
 service AnimalService {
     rpc GetRanchDetail(GetRanchDetailRequest) returns (GetRanchDetailReply);
     rpc FeedAnimal(FeedAnimalRequest) returns (FeedAnimalReply);
@@ -204,4 +227,5 @@ service AnimalService {
 service RanchService {
     rpc GetRanchOpTimes(GetRanchOpTimesRequest) returns (GetRanchOpTimesReply);
     rpc PutHazard(PutHazardRequest) returns (PutHazardReply);
+    rpc CleanAllRanch(CleanAllRanchRequest) returns (CleanAllRanchReply);
 }
