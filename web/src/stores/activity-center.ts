@@ -638,6 +638,14 @@ function normalizeActivityDirectory(value: unknown): ActivityDirectoryItemDto[] 
     const activityIds = Array.isArray(rawActivityIds)
       ? rawActivityIds.map(value => text(value)).filter(Boolean)
       : []
+    // 服务端按活动下发的说明文本（ActivityContent.extra.tips.txt）与活动类型。
+    // 之前这两个字段在这里被丢掉，目录页拿不到说明，只能对所有无专门玩法的活动
+    // 显示「暂未支持详情」，等于把服务端已经给到的说明白扔了。
+    const rawRules = first(entry.rules, entry.ruleList, entry.rule_list)
+    const rules = Array.isArray(rawRules)
+      ? rawRules.map(value => text(value)).filter(Boolean)
+      : []
+    const type = finiteNumber(first(entry.type, entry.activityType, entry.activity_type))
     return {
       id,
       activityIds: activityIds.length > 0 ? activityIds : [id].filter(Boolean),
@@ -645,6 +653,8 @@ function normalizeActivityDirectory(value: unknown): ActivityDirectoryItemDto[] 
       startTime: toMilliseconds(first(entry.startTime, entry.start_time, entry.beginTime, entry.begin_time)),
       endTime: toMilliseconds(first(entry.endTime, entry.end_time)),
       instanceId: text(entry.instanceId, entry.instance_id) || null,
+      type,
+      rules,
       gameplayKey: gameplayKey === 'milk' || normalizedDetailTarget === 'milk'
         ? 'milk' as const
         : gameplayKey === 'happy' || normalizedDetailTarget === 'happy'
