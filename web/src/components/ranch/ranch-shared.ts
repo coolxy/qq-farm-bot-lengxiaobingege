@@ -181,6 +181,16 @@ export function formatCount(value: unknown) {
   }
 }
 
+/** 资产数额沿用农场概览的缩写口径（万/亿/兆），与农场资产单位保持一致。 */
+export function formatAssetAmount(value: unknown) {
+  const n = Math.trunc(Number(value) || 0)
+  if (!Number.isFinite(n) || n <= 0) return '0'
+  if (n < 10000) return String(n)
+  if (n < 100000000) return `${(n / 10000).toFixed(2)}万`
+  if (n < 1000000000000) return `${(n / 100000000).toFixed(2)}亿`
+  return `${(n / 1000000000000).toFixed(2)}兆`
+}
+
 export function useRanchUnmountReset() {
   const ranch = useRanchStore()
   onBeforeUnmount(() => ranch.reset())

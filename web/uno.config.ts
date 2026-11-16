@@ -54,6 +54,8 @@ export default defineConfig({
       collections: {
         'carbon': () => import('@iconify-json/carbon/icons.json').then(i => i.default),
         'fas': () => import('@iconify-json/fa-solid/icons.json').then(i => i.default),
+        // 线性骏马：tabler 描边风格与底栏其余 Carbon 图标一致，替换原实心 fas-horse。
+        'tabler': () => import('@iconify-json/tabler/icons.json').then(i => i.default),
         'svg-spinners': () => import('@iconify-json/svg-spinners/icons.json').then(i => i.default),
       },
     }),

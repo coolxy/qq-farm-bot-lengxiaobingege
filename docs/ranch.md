@@ -99,9 +99,13 @@
 - `services/ranch/state.ts` 的 `ranchActivities()`：只留牧场活动，去掉已结束的，进行中在前、即将开始在后。
 - `services/activity-center.ts` 的 `buildActivityDirectory()`：用 `isGlobalActivity()` 反向过滤，农场活动中心只显示全站/农场活动，不再串进牧歌初启、以薯换福。
 
-新增牧场活动时：如果界面标识沿用 `Muge` 前缀、或活动 id 落在已登记的牧场日期段，无需改代码；否则把前缀补进 `activity-scene.ts`。
+新增牧场活动时：如果界面标识沿用 `Muge` 前缀、或活动 id 落在已登记的牧场日期段，无需改代码；否则把前缀补进 `config/ranch-activity-scope.json`（uid 前缀 / id 前缀 / 精确 id / 排除 id 四类，改完可调 `reloadRanchActivityScope()` 热更新）。
 
-界面图标（2026-11-16）：牧场入口（侧栏/底栏/页头/设置页）由无效的 `i-carbon-cattle` 换成 `i-fas-horse` 骏马；农场活动中心图标由 `i-carbon-events`（双人）换成 `i-carbon-gift`（礼物）。Carbon 集里没有 cattle，全项目 123 个 carbon + 8 个 fas 图标已全量校验有效。
+界面图标（2026-11-16）：牧场入口（侧栏/底栏/页头/设置页）用 `i-tabler-horse` 线性骏马，与底栏其余 Carbon 线性图标风格统一（原 `i-fas-horse` 实心骏马笔画过粗、风格不一致）；农场活动中心图标为 `i-carbon-gift`（礼物）。Carbon 集没有动物图标，tabler 的描边骏马是保留马造型又能与 Carbon 协调的最佳选择。uno.config.ts 已注册 tabler 图标集。
+
+资产单位：牧场概览的资产磁贴沿用农场 `formatAssetAmount` 口径（万/亿/兆缩写），与农场资产单位一致；`formatCount`（BigInt 千分位）仍用于经验、产物数量等精确字段。
+
+松果图标：松果（item id=1008）此前因图片目录缺 `1008.png` 在商城余额栏显示占位图；已从云端松果图标取形、按本游戏货币图标的卡通描边风格补上 `1008.png`（100×100 RGBA），`getItemImageById(1008)` 现可正确返回图片。
 
 ## 八、界面结构
 

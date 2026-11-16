@@ -367,7 +367,7 @@ onMounted(async () => {
         <section class="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
           <div class="mb-3 flex items-center gap-3">
             <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-              <span class="i-fas-horse text-xl" />
+              <span class="i-tabler-horse text-xl" />
             </div>
             <div>
               <h4 class="text-base text-gray-900 font-bold dark:text-gray-100">

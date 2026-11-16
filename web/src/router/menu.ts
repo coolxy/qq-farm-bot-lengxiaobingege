@@ -53,7 +53,7 @@ export const menuRoutes: MenuItem[] = [
     path: 'ranch',
     name: 'ranch',
     label: '牧场',
-    icon: 'i-fas-horse',
+    icon: 'i-tabler-horse',
     component: () => import('@/views/Ranch.vue'),
     meta: { ranchSection: 'overview' },
   },
