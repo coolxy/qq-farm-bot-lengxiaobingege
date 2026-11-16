@@ -29,6 +29,90 @@ const passwordForm = ref({
   confirm: '',
 })
 
+// ── 两步验证（TOTP） ──────────────────────────────────────
+const totpEnabled = ref(false)
+const totpLoading = ref(false)
+const totpSetupMode = ref(false)
+const totpSecret = ref('')
+const totpQrDataUrl = ref('')
+const totpCodeInput = ref('')
+const totpActivating = ref(false)
+const totpDisablePassword = ref('')
+const totpDisabling = ref(false)
+
+async function loadTotpStatus() {
+  const res = await userStore.getTotpStatus()
+  if (res.ok && res.data)
+    totpEnabled.value = res.data.enabled
+}
+
+async function handleTotpSetup() {
+  totpLoading.value = true
+  try {
+    const res = await userStore.beginTotpSetup()
+    if (res.ok && res.data) {
+      totpSecret.value = res.data.secret
+      totpSetupMode.value = true
+      totpCodeInput.value = ''
+      const QRCode = (await import('qrcode')).default
+      totpQrDataUrl.value = await QRCode.toDataURL(res.data.otpauthUrl, { width: 200, margin: 1 })
+    }
+    else {
+      showAlert(`绑定失败: ${res.error || '未知错误'}`, 'danger')
+    }
+  }
+  finally {
+    totpLoading.value = false
+  }
+}
+
+async function handleTotpActivate() {
+  if (!/^\d{6}$/.test(totpCodeInput.value)) {
+    showAlert('请输入 6 位数字验证码', 'danger')
+    return
+  }
+  totpActivating.value = true
+  try {
+    const res = await userStore.activateTotp(totpCodeInput.value)
+    if (res.ok) {
+      totpEnabled.value = true
+      totpSetupMode.value = false
+      totpSecret.value = ''
+      totpQrDataUrl.value = ''
+      totpCodeInput.value = ''
+      showAlert(res.message || '两步验证已启用', 'primary')
+    }
+    else {
+      showAlert(`激活失败: ${res.error || '未知错误'}`, 'danger')
+    }
+  }
+  finally {
+    totpActivating.value = false
+  }
+}
+
+async function handleTotpDisable() {
+  if (!totpDisablePassword.value) {
+    showAlert('请输入当前密码以关闭两步验证', 'danger')
+    return
+  }
+  totpDisabling.value = true
+  try {
+    const res = await userStore.disableTotp(totpDisablePassword.value)
+    if (res.ok) {
+      totpEnabled.value = false
+      totpDisablePassword.value = ''
+      showAlert(res.message || '两步验证已关闭', 'primary')
+    }
+    else {
+      showAlert(`关闭失败: ${res.error || '未知错误'}`, 'danger')
+    }
+  }
+  finally {
+    totpDisabling.value = false
+  }
+}
+
 const channelOptions = [
   { label: 'Webhook(自定义接口)', value: 'webhook' },
   { label: 'Qmsg 酱', value: 'qmsg' },
@@ -389,6 +473,7 @@ onMounted(() => {
   syncLocalEventNotify()
   loadSystemConfig()
   loadDevicePresets()
+  loadTotpStatus()
 })
 </script>
 
@@ -622,6 +707,97 @@ onMounted(() => {
             >
               修改管理员密码
             </BaseButton>
+          </div>
+        </section>
+
+        <section class="farm-card rounded-lg p-4">
+          <div class="mb-4 flex items-start gap-3">
+            <div class="h-9 w-9 flex shrink-0 items-center justify-center rounded-lg bg-purple-50 text-purple-600 dark:bg-purple-900/25 dark:text-purple-400">
+              <span class="i-carbon-smartphone text-xl" />
+            </div>
+            <div>
+              <h4 class="text-base text-gray-900 font-bold dark:text-gray-100">
+                两步验证 (TOTP)
+              </h4>
+              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                启用后登录除密码外还需输入验证器 App 上的 6 位动态码，防止密码泄露后面板被盗用。
+              </p>
+            </div>
+            <span
+              class="ml-auto shrink-0 rounded-full px-2 py-0.5 text-xs font-medium"
+              :class="totpEnabled
+                ? 'bg-green-50 text-green-600 dark:bg-green-900/25 dark:text-green-400'
+                : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'"
+            >
+              {{ totpEnabled ? '已启用' : '未启用' }}
+            </span>
+          </div>
+
+          <!-- 未启用：入口 / 绑定流程 -->
+          <div v-if="!totpEnabled" class="space-y-3">
+            <div v-if="!totpSetupMode">
+              <BaseButton
+                variant="secondary"
+                size="sm"
+                :loading="totpLoading"
+                @click="handleTotpSetup"
+              >
+                <span class="inline-flex items-center gap-1.5">
+                  <span class="i-carbon-qr-code" />
+                  用验证器 App 绑定
+                </span>
+              </BaseButton>
+            </div>
+            <div v-else class="space-y-3">
+              <div class="flex flex-col items-center gap-2 border border-gray-200 rounded-lg bg-gray-50/70 p-3 dark:border-gray-700 dark:bg-gray-900/30">
+                <img
+                  v-if="totpQrDataUrl"
+                  :src="totpQrDataUrl"
+                  alt="TOTP 绑定二维码"
+                  class="h-48 w-48 rounded"
+                >
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  用 Google Authenticator 等验证器 App 扫码；无法扫码可手动输入密钥：
+                </p>
+                <code class="break-all text-center text-xs text-gray-700 dark:text-gray-300">{{ totpSecret }}</code>
+              </div>
+              <div class="flex items-end gap-2">
+                <BaseInput
+                  v-model="totpCodeInput"
+                  label="验证码"
+                  type="text"
+                  inputmode="numeric"
+                  maxlength="6"
+                  placeholder="扫码后输入 App 显示的 6 位数字"
+                  class="flex-1"
+                />
+                <BaseButton variant="primary" size="sm" :loading="totpActivating" @click="handleTotpActivate">
+                  确认开启
+                </BaseButton>
+                <BaseButton variant="text" size="sm" @click="totpSetupMode = false">
+                  取消
+                </BaseButton>
+              </div>
+            </div>
+          </div>
+
+          <!-- 已启用：关闭入口 -->
+          <div v-else class="space-y-3">
+            <p class="text-xs text-gray-500 leading-relaxed dark:text-gray-400">
+              关闭后登录仅需密码。为防会话被盗后静默关闭，需要验证当前管理员密码。
+            </p>
+            <div class="flex items-end gap-2">
+              <BaseInput
+                v-model="totpDisablePassword"
+                label="当前密码"
+                type="password"
+                placeholder="输入当前密码"
+                class="flex-1"
+              />
+              <BaseButton variant="danger" size="sm" :loading="totpDisabling" @click="handleTotpDisable">
+                关闭两步验证
+              </BaseButton>
+            </div>
           </div>
         </section>
 

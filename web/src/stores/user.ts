@@ -13,7 +13,7 @@ export interface AdminInfo {
 export interface LoginResult {
   ok: boolean
   error?: string
-  errorType?: 'rate_limit' | 'locked' | 'invalid_credentials'
+  errorType?: 'rate_limit' | 'locked' | 'invalid_credentials' | 'totp_required' | 'invalid_totp'
   remainingMs?: number
   data?: {
     token: string
@@ -30,9 +30,9 @@ export const useUserStore = defineStore('user', () => {
   const username = computed(() => userInfo.value?.username || '')
   const avatar = computed(() => userInfo.value?.avatar || '')
 
-  async function login(username: string, password: string): Promise<LoginResult> {
+  async function login(username: string, password: string, totpCode?: string): Promise<LoginResult> {
     try {
-      const res = await api.post('/api/login', { username, password })
+      const res = await api.post('/api/login', { username, password, totpCode: totpCode || undefined })
       if (res.data.ok) {
         token.value = res.data.data.token
         userInfo.value = {
@@ -78,6 +78,46 @@ export const useUserStore = defineStore('user', () => {
     return res.data
   }
 
+  async function getTotpStatus(): Promise<{ ok: boolean, data?: { enabled: boolean } }> {
+    try {
+      const res = await api.get('/api/user/totp/status')
+      return res.data
+    }
+    catch {
+      return { ok: false }
+    }
+  }
+
+  async function beginTotpSetup(): Promise<{ ok: boolean, error?: string, data?: { secret: string, otpauthUrl: string } }> {
+    try {
+      const res = await api.post('/api/user/totp/setup')
+      return res.data
+    }
+    catch (e: any) {
+      return { ok: false, error: e.response?.data?.error || '生成绑定密钥失败' }
+    }
+  }
+
+  async function activateTotp(code: string): Promise<{ ok: boolean, error?: string, message?: string }> {
+    try {
+      const res = await api.post('/api/user/totp/activate', { code })
+      return res.data
+    }
+    catch (e: any) {
+      return { ok: false, error: e.response?.data?.error || '激活失败' }
+    }
+  }
+
+  async function disableTotp(password: string): Promise<{ ok: boolean, error?: string, message?: string }> {
+    try {
+      const res = await api.post('/api/user/totp/disable', { password })
+      return res.data
+    }
+    catch (e: any) {
+      return { ok: false, error: e.response?.data?.error || '关闭失败' }
+    }
+  }
+
   return {
     token,
     userInfo,
@@ -88,5 +128,9 @@ export const useUserStore = defineStore('user', () => {
     logout,
     fetchUserInfo,
     changePassword,
+    getTotpStatus,
+    beginTotpSetup,
+    activateTotp,
+    disableTotp,
   }
 })
