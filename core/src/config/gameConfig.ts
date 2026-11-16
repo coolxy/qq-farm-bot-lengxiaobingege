@@ -146,6 +146,9 @@ const seedToPlant = new Map<number, PlantItem>();
 const fruitToPlant = new Map<number, PlantItem>();
 let itemInfoConfig: ItemInfo[] | null = null;
 const itemInfoMap = new Map<number, ItemInfo>();
+// 商店商品配置（牧场补栏/升级要用商品的解锁条件与售价，移植自上游 ranch 模块）。
+// 与其它配置一致走 runtime-paths 读取，避免 dist 目录下找不到 json。
+const shopGoodsMap = new Map<number, any>();
 const seedItemMap = new Map<number, ItemInfo>();
 const itemImageIds = new Set<number>();
 const iconImageIds = new Map<string, number>();
@@ -475,6 +478,23 @@ function getItemImageById(itemId: number): string {
     return imageId ? `/game-config/seed_images_named/seed_images/${imageId}.png` : '';
 }
 
+function loadShopGoodsConfig(): void {
+    try {
+        const file = path.join(getResourcePath('gameConfig'), 'Goods.json');
+        if (!fs.existsSync(file)) return;
+        const rows = JSON.parse(fs.readFileSync(file, 'utf8'));
+        shopGoodsMap.clear();
+        for (const goods of rows) shopGoodsMap.set(Number(goods.id), goods);
+        console.warn(`[配置] 已加载商店商品配置 (${shopGoodsMap.size} 项)`);
+    } catch (e: any) {
+        console.warn('[配置] 加载 Goods.json 失败:', e.message);
+    }
+}
+
+function getShopGoodsById(goodsId: number): any {
+    return shopGoodsMap.get(Number(goodsId));
+}
+
 function getItemById(itemId: number): ItemInfo | undefined {
     return itemInfoMap.get(Number(itemId) || 0);
 }
@@ -722,6 +742,7 @@ function getMutantDisplayPlantId(plantId: number | string, mutantIds: Array<numb
 
 // 启动时加载配置
 loadConfigs();
+loadShopGoodsConfig();
 
 module.exports = {
     loadConfigs,
@@ -744,6 +765,7 @@ module.exports = {
     getPlantByFruitId,
     getItemById,
     getItemImageById,
+    getShopGoodsById,
     getSeedPrice,
     getFruitPrice,
     parseSells,

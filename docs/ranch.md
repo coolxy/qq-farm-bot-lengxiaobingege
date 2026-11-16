@@ -16,7 +16,7 @@
 | --- | --- |
 | proto | 上游 `animalpb` / `homesteadpb` / `ranchpb` 合并成新包 `gamepb.ranchv2`（`core/src/proto/ranchv2.proto`，139 条消息），在 `utils/proto.ts` 以 `Ranch<名字>` 注册，与本地既有 proto 完全隔离 |
 | 服务 | `core/src/services/ranch/`（13 个文件）原样搬入，仅补 `any` 类型标注 |
-| 配置 | `core/src/gameConfig/ranch/*.json`（10 份，约 1.1MB）、`core/src/config/ranch-automation.ts` |
+| 配置 | `core/src/gameConfig/ranch/*.json`（10 份，约 1.1MB）、`core/src/gameConfig/Goods.json`（商店商品，牧场补栏/升级要读）、`core/src/config/ranch-automation.ts`；`config/gameConfig.ts` 补 `getShopGoodsById`（运行时按 runtime-paths 加载，不走静态 import） |
 | 网络 | 新增 `utils/network/scene.ts`：`loginGameScene` / `invalidateGameScene` / `applyShareInfos` / `getDailyShareInfo`；`S.user` 增加 `globalSceneId`、`unlockedSceneIds`；`sendMsgAsync` 支持 `beforeSend` / `onSent` 钩子 |
 | 调度 | `worker/schedules.ts` 的牧场 tick 改为唤醒 `ranch/automation.run()`，间隔由 `ranch_check_minutes` 决定；开关变化时 `ranchAutomation.resetSchedule()` |
 | 接口 | `GET /api/ranch?view=`、`POST /api/ranch/:action/quote`、`POST /api/ranch/:action`、`GET /api/ranch/automation-options` |
