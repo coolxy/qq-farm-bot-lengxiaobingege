@@ -1,4 +1,6 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 
 const proto = require('../dist/utils/proto');
@@ -102,4 +104,17 @@ test('decodes StrokeAnimal / PutHazard / BuyGoods / EnterHomestead from live fra
     assert.equal(Number(basic.gid), 1215360471);
     assert.equal(basic.name, '婷児꧔');
     assert.equal(Number(basic.level), 151);
+});
+
+test('every牧场 API 请求/回包类型都在运行时注册表中', async () => {
+    await proto.ensureProtoLoaded();
+    const apiSource = fs.readFileSync(path.join(__dirname, '../src/services/pasture/api.ts'), 'utf8');
+    const names = new Set();
+    for (const match of apiSource.matchAll(/call\(\s*['"]([\w.]+)['"]/g)) names.add(match[1]);
+    // 直接按名字调用的请求也要覆盖（call 里写成变量时上面的正则抓不到）
+    for (const name of ['GetRanchDetailRequest', 'GetRanchOpTimesRequest', 'FeedAnimalRequest', 'HarvestRanchRequest', 'AddFeedRequest', 'EnterRequest', 'LeaveRequest', 'GetFacilityDetailRequest']) {
+        names.add(name);
+    }
+    const missing = [...names].filter(name => typeof proto.types[name]?.encode !== 'function');
+    assert.deepEqual(missing, [], `未注册类型: ${missing.join(', ')}`);
 });

@@ -84,7 +84,12 @@ onMounted(refresh)
     <div v-if="loading && !data" class="py-16 text-center text-gray-500">
       <NSpin size="large" />
     </div>
-    <EmptyState v-else-if="!data" title="暂无牧场数据" description="请确认账号已连接且已加入牧场内测" />
+    <EmptyState
+      v-else-if="!data"
+      :title="error ? '牧场数据读取失败' : '暂无牧场数据'"
+      :description="error || '请确认账号已连接且已加入牧场内测'"
+      :tone="error ? 'error' : 'default'"
+    />
     <div v-else class="space-y-4">
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div class="border border-gray-200 rounded-lg p-3 dark:border-gray-700">

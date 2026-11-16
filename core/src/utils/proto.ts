@@ -88,9 +88,13 @@ async function loadProto(): Promise<void> {
     // 牧场（内测，2026-11-16 抓包实测）
     types.RanchInfo = root.lookupType('gamepb.animalpb.RanchInfo');
     types.AnimalInst = root.lookupType('gamepb.animalpb.AnimalInst');
+    types.GetRanchDetailRequest = root.lookupType('gamepb.animalpb.GetRanchDetailRequest');
     types.GetRanchDetailReply = root.lookupType('gamepb.animalpb.GetRanchDetailReply');
+    types.FeedAnimalRequest = root.lookupType('gamepb.animalpb.FeedAnimalRequest');
     types.FeedAnimalReply = root.lookupType('gamepb.animalpb.FeedAnimalReply');
+    types.HarvestRanchRequest = root.lookupType('gamepb.animalpb.HarvestRanchRequest');
     types.HarvestRanchReply = root.lookupType('gamepb.animalpb.HarvestRanchReply');
+    types.GetRanchOpTimesRequest = root.lookupType('gamepb.animalpb.GetRanchOpTimesRequest');
     types.GetRanchOpTimesReply = root.lookupType('gamepb.animalpb.GetRanchOpTimesReply');
     types.TriggerProduceRequest = root.lookupType('gamepb.animalpb.TriggerProduceRequest');
     types.TriggerProduceReply = root.lookupType('gamepb.animalpb.TriggerProduceReply');
@@ -104,6 +108,9 @@ async function loadProto(): Promise<void> {
     types.ShelfLot = root.lookupType('gamepb.animalpb.ShelfLot');
     types.OpQuota = root.lookupType('gamepb.animalpb.OpQuota');
     types.FacilityDetail = root.lookupType('gamepb.homesteadpb.FacilityDetail');
+    types.GetFacilityDetailRequest = root.lookupType('gamepb.homesteadpb.GetFacilityDetailRequest');
+    types.GetFacilityDetailReply = root.lookupType('gamepb.homesteadpb.GetFacilityDetailReply');
+    types.AddFeedRequest = root.lookupType('gamepb.homesteadpb.AddFeedRequest');
     types.AddFeedReply = root.lookupType('gamepb.homesteadpb.AddFeedReply');
 
     // 用户
@@ -241,6 +248,9 @@ async function loadProto(): Promise<void> {
     types.VisitLeaveRequest = root.lookupType('gamepb.visitpb.LeaveRequest');
     types.VisitLeaveReply = root.lookupType('gamepb.visitpb.LeaveReply');
     types.VisitEnterHomesteadReply = root.lookupType('gamepb.visitpb.EnterHomesteadReply');
+    // 牧场 API 按服务语义取名，这里保留与访问模块一致的别名。
+    types.EnterRequest = types.VisitEnterRequest;
+    types.LeaveRequest = types.VisitLeaveRequest;
     types.UserBasicInfo = root.lookupType('gamepb.userpb.BasicInfo');
 
     // 任务
