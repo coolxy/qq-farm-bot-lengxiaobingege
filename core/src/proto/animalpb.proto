@@ -1,0 +1,147 @@
+syntax = "proto3";
+
+package gamepb.animalpb;
+
+// ============ 牧场（内测，2026-11-16 抓包实测）============
+// 数据来源：微信端牧场真实 WS 帧（tools/extract-har-frames.js 拆帧 +
+// decode-latest-protocols.js 解密解码）。字段号全部来自线上回包，字段名与
+// mcboot 分包静态分析（Otherworldy/qq-farm，同日）交叉验证一致。
+// 带 unknown_ 前缀的字段表示线上出现过但语义未确认，禁止按猜测的语义使用。
+
+// 牧草库存（RanchInfo.f5 / FacilityDetail.f21）
+message Grass {
+    int64 amount = 1;        // 当前牧草数（实测 99/100）
+    int64 unknown_2 = 2;     // 实测 54，语义未确认
+    int64 empty_at_ms = 4;   // 耗尽墙钟；实测 u64max 表示不会耗尽
+    int32 unknown_7 = 7;     // 实测 1
+    int32 unknown_8 = 8;     // 实测 3
+}
+
+// 售价期望（AnimalInst.f22/f24、ShelfLot.f100.f4）
+message ExpectedSell {
+    int64 item_id = 1;       // 实测 1007（金币）
+    int64 num = 2;           // 实测 2160 / 1620
+}
+
+// 动物变异（AnimalInst.f30；本次抓包仅出现 f8）
+message AnimalMutation {
+    int32 mutation_type = 1;
+    int32 source = 2;
+    int32 weight_display_x10 = 3;
+    int32 scale_bp = 4;
+    int32 weight_final_x10 = 5;
+    int32 tier = 6;
+    int64 became_at_ms = 7;
+    int32 strokable = 8;     // 实测 1
+    repeated int64 stroked_gids = 9;
+}
+
+// 单只动物（GetRanchDetail / FeedAnimal / HarvestRanch 回包）
+message AnimalInst {
+    int64 ranch_inst_id = 1;             // 实测 10001
+    int32 slot_index = 2;                // 实测 1/2/3
+    int64 animal_inst_id = 3;            // 实测 4/5/6
+    int64 animal_id = 4;                 // 实测 60002
+    int32 stage = 5;                     // 随时间推进，实测 2→5
+    int32 produce_count = 6;             // 收获后实测 2
+    int64 grow_ready_at_ms = 10;         // 成长就绪墙钟
+    int64 infant_ready_at_ms = 14;       // 幼崽期结束墙钟
+    int32 can_feed = 18;                 // 实测 1=可喂
+    int32 limited_can_used = 19;         // 实测 1
+    int32 can_donate = 20;               // 实测 1
+    int64 expected_harvest_exp = 21;     // 实测 360
+    ExpectedSell expected_harvest_sells = 22;
+    int64 expected_produce_exp = 23;     // 实测 180
+    ExpectedSell expected_produce_sells = 24;
+    int64 mature_ready_at_ms = 25;       // 成年墙钟
+    AnimalMutation mutation = 30;
+}
+
+// 货架上的产物批（Shelf.f10）
+message ShelfLot {
+    int64 item_id = 1;       // 实测 2060002（动物产物）/ 1102
+    int64 num = 2;           // 实测 1 / 360
+    ShelfLotExtra extra = 100;  // 字段号 100，线上实测存在
+}
+
+message ShelfLotExtra {
+    ExpectedSell sell = 4;   // 实测 {1007, 2160}
+}
+
+// 货架（HarvestRanch 回包 f5）。
+// 注意：mcboot 静态分析稿给的是 {slot, lots, total_remain, can_collect, can_steal}，
+// 1.17.0.3 实包是 {ranch, slot, animal, lots}，以实包为准，不要照抄旧稿。
+message Shelf {
+    int64 ranch_inst_id = 1;     // 实测 10001
+    int32 slot_index = 2;        // 实测 1
+    int64 animal_inst_id = 3;    // 实测 4/5/6
+    repeated ShelfLot lots = 10;
+}
+
+// 牧场主体（GetRanchDetail / FeedAnimal / HarvestRanch 回包 f1）
+message RanchInfo {
+    int64 ranch_inst_id = 1;     // 实测 10001
+    int32 capacity = 2;          // 实测 3
+    int32 animal_count = 3;      // 实测 3
+    repeated AnimalInst animals = 4;
+    Grass grass = 5;
+    int32 husbandry_type = 6;    // 实测 1
+}
+
+// 操作配额（RanchService.GetRanchOpTimes 回包 f1）
+message OpQuota {
+    int64 op_id = 1;             // 实测 11003/11008/11009
+    int32 times_limit = 2;       // 实测 100/20/10
+    int32 used_times = 3;
+    int32 remaining_times = 4;   // 实测与上限相同
+}
+
+// ============ 请求 / 回包 ============
+
+message RanchRef {
+    int64 ranch_inst_id = 1;     // 实测 10001
+}
+
+message GetRanchDetailRequest {
+    bytes unknown_2 = 2;         // 实测发出空消息，语义未确认
+}
+
+message GetRanchDetailReply {
+    RanchInfo ranch = 1;
+}
+
+message FeedAnimalRequest {
+    RanchRef ranch = 1;          // 实测 {10001}
+    int32 feed_type = 2;         // 实测 1
+}
+
+message FeedAnimalReply {
+    RanchInfo ranch = 1;
+}
+
+message HarvestRanchRequest {
+    RanchRef ranch = 2;          // 实测为空消息
+    int32 harvest_type = 3;      // 实测 1
+}
+
+message HarvestRanchReply {
+    RanchInfo ranch = 1;
+    repeated Shelf shelves = 5;
+}
+
+message GetRanchOpTimesRequest {
+}
+
+message GetRanchOpTimesReply {
+    repeated OpQuota quotas = 1;
+}
+
+service AnimalService {
+    rpc GetRanchDetail(GetRanchDetailRequest) returns (GetRanchDetailReply);
+    rpc FeedAnimal(FeedAnimalRequest) returns (FeedAnimalReply);
+    rpc HarvestRanch(HarvestRanchRequest) returns (HarvestRanchReply);
+}
+
+service RanchService {
+    rpc GetRanchOpTimes(GetRanchOpTimesRequest) returns (GetRanchOpTimesReply);
+}

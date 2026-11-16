@@ -86,10 +86,18 @@ async function main() {
         const entries = (har && har.log && har.log.entries) || [];
         const frames = [];
         for (const entry of entries) {
-            const messages = entry._webSocketMessages;
-            if (!Array.isArray(messages) || messages.length === 0) continue;
             const url = (entry.request && entry.request.url) || '';
-            for (const message of messages) frames.push({ url, message });
+            for (const message of entry._webSocketMessages || []) {
+                /* Reqable：{flow, timestamp, payload:{type, buffer(base64)}}，flow 0=客户端发出 */
+                if (message && message.payload && typeof message.payload.buffer === 'string') {
+                    frames.push({ url, message: { type: message.flow === 0 ? 'send' : 'receive', data: message.payload.buffer, binary: true, opcode: 2 } });
+                    continue;
+                }
+                /* Chrome：{type, time, opcode, data} */
+                if (message && typeof message.data === 'string') {
+                    frames.push({ url, message });
+                }
+            }
         }
         return { entries: entries.length, frames };
     }

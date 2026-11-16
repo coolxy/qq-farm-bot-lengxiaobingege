@@ -66,6 +66,8 @@ async function loadProto(): Promise<void> {
         getResourcePath('proto', 'mutantpb.proto'),
         getResourcePath('proto', 'miscpb.proto'),
         getResourcePath('proto', 'achievepb.proto'),
+        getResourcePath('proto', 'animalpb.proto'),
+        getResourcePath('proto', 'homesteadpb.proto'),
     ], { keepCase: true });
 
     // 网关
@@ -82,6 +84,20 @@ async function loadProto(): Promise<void> {
     types.PlayerLoginReply = root.lookupType('gamepb.userpb.PlayerLoginReply');
     types.PlayerSceneLoginRequest = root.lookupType('gamepb.globalscenepb.PlayerSceneLoginRequest');
     types.PlayerSceneLoginReply = root.lookupType('gamepb.globalscenepb.PlayerSceneLoginReply');
+
+    // 牧场（内测，2026-11-16 抓包实测）
+    types.RanchInfo = root.lookupType('gamepb.animalpb.RanchInfo');
+    types.AnimalInst = root.lookupType('gamepb.animalpb.AnimalInst');
+    types.GetRanchDetailReply = root.lookupType('gamepb.animalpb.GetRanchDetailReply');
+    types.FeedAnimalReply = root.lookupType('gamepb.animalpb.FeedAnimalReply');
+    types.HarvestRanchReply = root.lookupType('gamepb.animalpb.HarvestRanchReply');
+    types.GetRanchOpTimesReply = root.lookupType('gamepb.animalpb.GetRanchOpTimesReply');
+    types.Grass = root.lookupType('gamepb.animalpb.Grass');
+    types.Shelf = root.lookupType('gamepb.animalpb.Shelf');
+    types.ShelfLot = root.lookupType('gamepb.animalpb.ShelfLot');
+    types.OpQuota = root.lookupType('gamepb.animalpb.OpQuota');
+    types.FacilityDetail = root.lookupType('gamepb.homesteadpb.FacilityDetail');
+    types.AddFeedReply = root.lookupType('gamepb.homesteadpb.AddFeedReply');
 
     // 用户
     types.LoginRequest = root.lookupType('gamepb.userpb.LoginRequest');

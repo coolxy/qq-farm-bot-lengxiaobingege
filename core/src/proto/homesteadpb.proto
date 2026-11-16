@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package gamepb.homesteadpb;
+
+import "animalpb.proto";
+
+// ============ 牧场建筑（内测，2026-11-16 抓包实测）============
+// 字段号来自线上回包，语义未确认的字段以 unknown_ 命名，禁止按猜测使用。
+
+// 建筑详情（GetFacilityDetail 回包 f1，实测牧草机 inst_id=10002）
+message FacilityDetail {
+    int64 inst_id = 1;                    // 实测 10002
+    string name = 2;                      // 实测「牧草机」
+    int64 config_id = 4;                  // 实测 7001001
+    int32 level = 5;                      // 实测 8
+    gamepb.animalpb.ExpectedSell store = 6;  // 实测 {1007, 6000}，疑似货币与容量
+    int32 unknown_7 = 7;                  // 实测 1
+    int64 config_id_2 = 8;                // 实测 7001001
+    int32 unknown_9 = 9;                  // 实测 10
+    int32 unknown_10 = 10;                // 实测 7
+    int32 unknown_12 = 12;                // 实测 2
+    int32 unknown_13 = 13;                // 实测 2
+    int32 unknown_14 = 14;                // 实测 100
+    gamepb.animalpb.Grass grass = 21;     // 牧草库存
+}
+
+message GetBuildingListRequest {
+}
+
+// 实测回包为空（账号尚无建筑数据）
+message GetBuildingListReply {
+}
+
+message GetFacilityDetailRequest {
+    int64 inst_id = 1;                    // 实测 10002
+}
+
+message GetFacilityDetailReply {
+    FacilityDetail facility = 1;
+}
+
+message AddFeedRequest {
+    int64 inst_id = 1;                    // 实测 10002（牧草机）
+    int32 count = 2;                      // 实测 1
+}
+
+message AddFeedReply {
+    gamepb.animalpb.Grass grass = 1;
+}
+
+// 设施变更推送（notify；外层 EventMessage.message_type =
+// gamepb.homesteadpb.FacilitiesNotify，内层字段未抓到，先占位）
+message FacilitiesNotify {
+}
+
+service HomesteadService {
+    rpc GetBuildingList(GetBuildingListRequest) returns (GetBuildingListReply);
+    rpc GetFacilityDetail(GetFacilityDetailRequest) returns (GetFacilityDetailReply);
+}
+
+service FeedMachineService {
+    rpc AddFeed(AddFeedRequest) returns (AddFeedReply);
+}
