@@ -22,9 +22,9 @@ const RanchMallPanel = defineAsyncComponent(() => import('@/components/ranch/Ran
 const RanchFriendsPanel = defineAsyncComponent(() => import('@/components/ranch/RanchFriendsPanel.vue'))
 const RanchActivityPanel = defineAsyncComponent(() => import('@/components/ranch/RanchActivityPanel.vue'))
 
-// 与农场对应页面使用同样的分区：个人（牧场/设施/背包/任务）、图鉴、商城等。
+// 牧场自有分区命名（不与农场撞名）：牧家（动物/设施/背包/任务）、图鉴、商城等。
 const SECTIONS: Record<Section, Tab[]> = {
-  overview: [{ key: 'overview', label: '概览', icon: 'i-carbon-dashboard', panel: RanchOverview }],
+  overview: [{ key: 'overview', label: '牧野', icon: 'i-carbon-dashboard', panel: RanchOverview }],
   personal: [
     { key: 'animals', label: '我的牧场', icon: 'i-carbon-pet-image-o', panel: RanchAnimalsPanel },
     { key: 'facilities', label: '牧场设施', icon: 'i-carbon-building', panel: RanchFacilitiesPanel },
@@ -46,8 +46,8 @@ const SECTIONS: Record<Section, Tab[]> = {
 
 /** 顶部分区切换：侧边栏只放一个「牧场」入口，农牧场各分区在这里切。 */
 const SECTION_NAV: Array<{ key: Section, label: string, icon: string, name: string }> = [
-  { key: 'overview', label: '概览', icon: 'i-carbon-dashboard', name: 'ranch' },
-  { key: 'personal', label: '个人', icon: 'i-carbon-sprout', name: 'ranch-personal' },
+  { key: 'overview', label: '牧野', icon: 'i-carbon-dashboard', name: 'ranch' },
+  { key: 'personal', label: '牧家', icon: 'i-carbon-sprout', name: 'ranch-personal' },
   { key: 'illustrated', label: '图鉴', icon: 'i-carbon-book', name: 'ranch-illustrated' },
   { key: 'activity', label: '活动', icon: 'i-carbon-gift', name: 'ranch-activity' },
   { key: 'friends', label: '好友', icon: 'i-carbon-user-multiple', name: 'ranch-friends' },
@@ -241,7 +241,7 @@ function selectTab(key: string) {
   display: none;
 }
 
-/* 与农场个人页一致：面板纵向排列，工具栏在桌面端吸在导航下方。 */
+/* 面板纵向排列，工具栏在桌面端吸在导航下方。 */
 :deep(.personal-panel) {
   display: flex;
   min-width: 0;

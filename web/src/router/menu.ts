@@ -92,7 +92,7 @@ export const menuRoutes: MenuItem[] = [
  * 面板内容由 Ranch.vue 根据 meta.ranchSection 决定。
  */
 export const ranchSectionRoutes: MenuItem[] = [
-  { path: 'ranch/personal', name: 'ranch-personal', label: '牧场 · 个人', icon: 'i-carbon-sprout', component: () => import('@/views/Ranch.vue'), meta: { ranchSection: 'personal' }, hidden: true },
+  { path: 'ranch/personal', name: 'ranch-personal', label: '牧场 · 牧家', icon: 'i-carbon-sprout', component: () => import('@/views/Ranch.vue'), meta: { ranchSection: 'personal' }, hidden: true },
   { path: 'ranch/illustrated', name: 'ranch-illustrated', label: '牧场 · 图鉴', icon: 'i-carbon-book', component: () => import('@/views/Ranch.vue'), meta: { ranchSection: 'illustrated' }, hidden: true },
   { path: 'ranch/game-mall', name: 'ranch-game-mall', label: '牧场 · 商城', icon: 'i-carbon-shopping-cart', component: () => import('@/views/Ranch.vue'), meta: { ranchSection: 'mall' }, hidden: true },
   { path: 'ranch/friends', name: 'ranch-friends', label: '牧场 · 好友', icon: 'i-carbon-user-multiple', component: () => import('@/views/Ranch.vue'), meta: { ranchSection: 'friends' }, hidden: true },

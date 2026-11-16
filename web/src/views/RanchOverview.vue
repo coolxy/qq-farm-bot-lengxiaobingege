@@ -81,7 +81,7 @@ const stockTiles = computed(() => {
   ]
 })
 
-/** 待处理项点一下就直达：能一键处理的走报价弹窗，需要挑动物的跳到个人页。 */
+/** 待处理项点一下就直达：能一键处理的走报价弹窗，需要挑动物的跳到牧家页。 */
 const todo = computed(() => [
   {
     key: 'harvest',
@@ -102,7 +102,7 @@ const todo = computed(() => [
     label: '可喂养',
     icon: 'i-carbon-flash text-sky-500',
     value: animals.value.filter(({ animal }) => animal.canFeed).length,
-    // 喂养要先选普通/有机罐头，交给个人页的动物卡片处理。
+    // 喂养要先选普通/有机罐头，交给牧家页的动物卡片处理。
     go: () => void router.push('/ranch/personal?tab=animals'),
   },
   {
@@ -140,7 +140,7 @@ function facilityMeter(f: any) {
   return { text: `容量 ${f.capacity}`, percent: 0 }
 }
 
-/** 动物卡片只做状态摘要，点开再去个人页处理，避免概览里堆一排按钮。 */
+/** 动物卡片只做状态摘要，点开再去牧家页处理，避免牧野里堆一排按钮。 */
 function animalState(animal: any) {
   if (animal.canHarvest)
     return { text: '可收获', tone: 'ripe' }
