@@ -253,6 +253,7 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
                 const friendGid = toNum(friend.gid);
                 const friendName = String(friend.name || friend.nick || friendGid);
                 let entered = false;
+                let rateLimited = false;
                 try {
                     await api.enterHomestead(friendGid, 2);
                     entered = true;
@@ -277,12 +278,15 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
                 } catch (e: any) {
                     const message = String(e && e.message ? e.message : e);
                     actionCooldownUntil['访问好友牧场'] = Date.now() + 5 * 60 * 1000;
+                    rateLimited = /网络繁忙|限流/.test(message);
                     logWarn('牧场', `访问好友 ${friendGid} 失败: ${message}`, { module: 'pasture' });
                 } finally {
                     if (entered) {
                         try { await api.leaveHomestead(friendGid); } catch { /* 离开失败忽略 */ }
                     }
                 }
+                // 已判定被限流就中断整轮好友访问，避免连续对多个好友撞同一堵墙。
+                if (rateLimited) break;
                 await sleep(800);
             }
         }
