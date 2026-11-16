@@ -144,27 +144,12 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
             });
         }
 
-        // 2. 一键催产（空请求）→ 若又成熟则再收一次；回包带最新状态
-        if (auto.pasture_harvest) {
-            await safeStep('一键催产', async () => {
-                const res = await api.triggerProduce();
-                if (res && res.ranch) {
-                    ranch = res.ranch;
-                    const after = analyzeRanch(ranch, Date.now());
-                    if (after.harvestable.length > 0) {
-                        const harvested = await api.harvestRanch(toNum(ranch.ranch_inst_id), 1);
-                        if (harvested && harvested.ranch) {
-                            ranch = harvested.ranch;
-                            actions.push(`催产后收获 ${after.harvestable.length} 只`);
-                            recordOperation('牧场收获', after.harvestable.length);
-                            await sleep(400);
-                        }
-                    }
-                }
-            });
-        }
+        // 一键催产保留为面板手动操作：自动化里它会在无动物可生产时返回 1045232，
+        // 白增一次请求且容易触发网关限流，因此不再每轮自动调用。
 
-        // 3. 缺草即补：先加免费牧草机，仍低则把背包里的罐头换成牧草。
+        await sleep(700);
+
+        // 3. 缺草即补：先加免费牧草机。
         if (auto.pasture_grass && isGrassLow(ranch, GRASS_LOW_THRESHOLD, Date.now())) {
             await safeStep('牧草机加草', async () => {
                 const machine = await api.getFacilityDetail(FEED_MACHINE_INST_ID);
@@ -180,7 +165,9 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
             });
         }
 
-        // 4. 可喂即喂（每轮只喂一只）：优先罐头桶，其次牧草，最后才消耗罐头道具补桶。
+        await sleep(700);
+
+        // 4. 可喂即喂（每轮只喂一只）：优先有机罐头桶，其次普通罐头桶，最后才消耗罐头道具补桶。
         if (auto.pasture_feed) {
             await safeStep('喂养动物', async () => {
                 const feedState = analyzeRanch(ranch, Date.now());
@@ -220,6 +207,8 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
             });
         }
 
+        await sleep(700);
+
         // 5. 清灾害（有配额时尝试一次；服务端无灾害时回包 result≠1，静默跳过）
         if (auto.pasture_hazard && hazardRemaining > 0) {
             await safeStep('清理灾害', async () => {
@@ -249,6 +238,8 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
                 }
             });
         }
+
+        await sleep(700);
 
         // 7. 访问好友家园并互动（10 分钟一轮，最多 3 位，进/出成对）
         if (auto.pasture_friend_visit && Date.now() >= nextFriendVisitAt
@@ -292,6 +283,7 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
                         try { await api.leaveHomestead(friendGid); } catch { /* 离开失败忽略 */ }
                     }
                 }
+                await sleep(800);
             }
         }
 

@@ -344,7 +344,7 @@ const settings = defineModel<AutomationSettingsFormModel>({ required: true })
               <BaseSwitch
                 v-model="settings.automation.pasture_harvest"
                 class="automation-setting-item"
-                label="收获产物 / 催产"
+                label="收获产物（催产为手动）"
                 :disabled="!settings.automation.pasture"
               />
             </div>
