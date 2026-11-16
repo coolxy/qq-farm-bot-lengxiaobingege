@@ -211,8 +211,15 @@ async function operatePasture(action: string, input: any = {}): Promise<any> {
             return { ok: true, grass };
         }
         case 'stroke': {
-            const ranch = await api.strokeAnimal(input.ownerGid, input.ranchInstId, input.animalInstId);
-            return { ok: true, ranch };
+            try {
+                const ranch = await api.strokeAnimal(input.ownerGid, input.ranchInstId, input.animalInstId);
+                return { ok: true, ranch };
+            } catch (e: any) {
+                const message = String(e && e.message ? e.message : e);
+                // 服务端拒绝（1000020/1045207）：抓包里抚摸全部发生在好友家园，自己的动物通常不可抚摸。
+                if (/1000020|1045207/.test(message)) throw new Error('该动物当前不可抚摸（服务端拒绝，抚摸一般在好友牧场里进行）');
+                throw e;
+            }
         }
         case 'putHazard': {
             // 没有灾害时 PutHazard 会回 1000020「请求参数错误」（线上实测），
@@ -261,6 +268,7 @@ async function operatePasture(action: string, input: any = {}): Promise<any> {
                 entered = true;
                 const detail = await api.getRanchDetail(hostGid);
                 const friendRanch = detail && detail.ranch;
+                if (!friendRanch) throw new Error('未能读取到好友牧场数据：对方可能没有开通家园，或进入家园场景失败');
                 const detailView = friendRanch ? analysis.analyzeRanch(friendRanch, Date.now()) : null;
                 const interaction: string[] = [];
                 if (input.interact && friendRanch) {
