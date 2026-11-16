@@ -110,7 +110,10 @@ message RanchRef {
 }
 
 message GetRanchDetailRequest {
-    bytes unknown_2 = 2;         // 实测发出空消息，语义未确认
+    // 2026-11-16 抓包解密实测：访问好友牧场时 f1 = 好友 gid（08 + gid），f2 空消息；
+    // 看自己牧场时只发 f2 空消息（1200）。旧实现从不带 f1，导致好友牧场一直读回自己的数据。
+    int64 unknown_1 = 1;         // 目标牧场主人 gid（自己牧场留空/0）
+    bytes unknown_2 = 2;         // 实测空消息
 }
 
 message GetRanchDetailReply {

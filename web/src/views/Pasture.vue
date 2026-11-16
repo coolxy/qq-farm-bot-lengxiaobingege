@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { useIntervalFn } from '@vueuse/core'
 import { NButton } from 'naive-ui/es/button'
 import { NInputNumber } from 'naive-ui/es/input-number'
 import { NSpin } from 'naive-ui/es/spin'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref, watch } from 'vue'
+import api from '@/api'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { useAccountStore } from '@/stores/account'
@@ -46,6 +48,73 @@ const rotationGoods = ref<any[]>([])
 const rotationCategories = ref<any[]>([])
 const rotationLoaded = ref(false)
 const rotationDaySec = ref(0)
+
+// 牧场日志：只取 module=pasture 的日志，跟「看板 · 运行日志」全量日志分开，
+// 这样牧场相关的收获/喂养/补草/抚摸/清灾害/好友互动都能在一个地方看全。
+const pastureLogs = ref<any[]>([])
+const pastureLogLoading = ref(false)
+const pastureLogKeyword = ref('')
+const grassCapacity = computed(() => Number(data.value?.grassCapacity) || 100)
+const notes = computed<string[]>(() => (data.value && Array.isArray(data.value.notes)) ? data.value.notes : [])
+const machineFull = computed(() => {
+  const f = facility.value
+  return !!f && Number(f.capacity) > 0 && Number(f.grass) >= Number(f.capacity)
+})
+
+const filteredLogs = computed(() => {
+  const keyword = pastureLogKeyword.value.trim()
+  const list = [...pastureLogs.value]
+  const filtered = keyword
+    ? list.filter((log: any) => String(log.msg || '').includes(keyword) || String(log.tag || '').includes(keyword))
+    : list
+  return filtered
+    .sort((a: any, b: any) => Number(b.ts || 0) - Number(a.ts || 0))
+    .slice(0, 120)
+})
+
+function logLevel(log: any): string {
+  const result = String(log?.meta?.result || '')
+  if (result === 'error' || log?.tag === '错误')
+    return 'error'
+  if (result === 'skip' || log?.isWarn || log?.tag === '警告')
+    return 'warn'
+  if (result === 'ok')
+    return 'success'
+  return 'info'
+}
+
+function formatLogTime(log: any): string {
+  const ts = Number(log?.ts) || Date.parse(String(log?.time || '')) || 0
+  if (!ts) return '—'
+  return new Date(ts).toLocaleTimeString('zh-CN', { hour12: false })
+}
+
+async function fetchPastureLogs() {
+  const accountId = currentAccountId.value
+  if (!accountId)
+    return
+  pastureLogLoading.value = true
+  try {
+    const { data: body } = await api.get('/api/logs', {
+      headers: { 'x-account-id': accountId },
+      params: { limit: 200, module: 'pasture' },
+      skipErrorToast: true,
+    } as any)
+    if (body?.ok)
+      pastureLogs.value = Array.isArray(body.data) ? body.data : []
+  }
+  catch {
+    // 日志读取失败不影响牧场主面板
+  }
+  finally {
+    pastureLogLoading.value = false
+  }
+}
+
+useIntervalFn(() => {
+  if (currentAccountId.value)
+    void fetchPastureLogs()
+}, 10_000)
 
 function currencyLabel(currencyId: number): string {
   return ({ 1002: '点券', 1004: '金券', 1007: '金券' } as any)[currencyId] || `货币${currencyId}`
@@ -113,6 +182,7 @@ function refresh() {
   if (!currentAccountId.value)
     return
   void pastureStore.fetch(currentAccountId.value)
+  void fetchPastureLogs()
 }
 
 async function run(action: string, input: any = {}) {
@@ -122,6 +192,7 @@ async function run(action: string, input: any = {}) {
   }
   const base = { ranchInstId: data.value?.ranchInstId, ownerGid: data.value?.ownerGid }
   const ok = await pastureStore.operate(currentAccountId.value, action, { ...base, ...input })
+  void fetchPastureLogs()
   if (ok) {
     toast.success('操作成功')
     return
@@ -181,6 +252,7 @@ watch(currentAccountId, (id) => {
   }
   else {
     pastureStore.reset()
+    pastureLogs.value = []
   }
 })
 
@@ -231,7 +303,7 @@ onMounted(() => {
             牧草
           </div>
           <div class="mt-1 text-xl text-gray-900 font-bold dark:text-gray-100">
-            {{ grass }}
+            {{ grass }}<span class="text-xs text-gray-400">/{{ grassCapacity }}</span>
           </div>
         </div>
         <div class="border border-gray-200 rounded-lg p-3 dark:border-gray-700">
@@ -250,7 +322,7 @@ onMounted(() => {
             {{ facility ? `Lv.${facility.level}` : '—' }}
           </div>
           <div v-if="facility" class="mt-0.5 text-[10px] text-gray-400 dark:text-gray-500">
-            草量 {{ facility.grass }}
+            草量 {{ facility.grass }}/{{ facility.capacity }}{{ machineFull ? ' · 已满' : '' }}
           </div>
         </div>
         <div class="border border-gray-200 rounded-lg p-3 dark:border-gray-700">
@@ -295,11 +367,8 @@ onMounted(() => {
         <NButton size="small" :loading="operating === 'addFeed'" :disabled="!isConnected" @click="run('addFeed', { instId: facility?.instId || 10002, count: 1 })">
           牧草机加草
         </NButton>
-        <NButton size="small" :loading="operating === 'putHazard'" :disabled="!isConnected" @click="run('putHazard', { opId: 11003 })">
-          清灾害
-        </NButton>
         <NButton size="small" :loading="operating === 'cleanAll'" :disabled="!isConnected" @click="run('cleanAll')">
-          一键清理
+          一键清理（蚊子/便便）
         </NButton>
         <NButton size="small" type="primary" :loading="operating === 'check'" :disabled="!isConnected" @click="run('check')">
           立即自动执行
@@ -427,11 +496,11 @@ onMounted(() => {
         </template>
       </section>
 
-      <section v-if="lastActions.length">
+      <section v-if="lastActions.length || notes.length">
         <h4 class="mb-2 text-sm text-gray-800 font-bold dark:text-gray-200">
           自动化最近动作
         </h4>
-        <div class="flex flex-wrap gap-2">
+        <div v-if="lastActions.length" class="flex flex-wrap gap-2">
           <span
             v-for="(action, index) in lastActions"
             :key="`${index}-${action}`"
@@ -439,6 +508,15 @@ onMounted(() => {
           >
             {{ action }}
           </span>
+        </div>
+        <div v-if="notes.length" class="mt-2 space-y-1">
+          <div
+            v-for="(note, index) in notes"
+            :key="`note-${index}`"
+            class="rounded bg-amber-50 px-2 py-1 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+          >
+            {{ note }}
+          </div>
         </div>
       </section>
 
@@ -481,7 +559,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-if="quotas.length">
+      <section>
         <h4 class="mb-2 text-sm text-gray-800 font-bold dark:text-gray-200">
           每日配额
         </h4>
@@ -493,6 +571,50 @@ onMounted(() => {
           >
             {{ quotaLabel(q.opId) }}：剩余 {{ q.remaining }} / {{ q.limit }}
           </span>
+        </div>
+      </section>
+
+      <!-- 牧场日志：只显示牧场模块的日志，不再和农场/好友日志混在一起 -->
+      <section class="border border-gray-200 rounded-lg p-3 dark:border-gray-700">
+        <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h4 class="text-sm text-gray-800 font-bold dark:text-gray-200">
+            牧场日志
+            <span class="ml-1 text-[10px] text-gray-400 font-normal">收获 · 喂养 · 补草 · 抚摸 · 清理 · 好友互动</span>
+          </h4>
+          <div class="flex items-center gap-2">
+            <input
+              v-model="pastureLogKeyword"
+              placeholder="关键词"
+              class="border border-gray-200 rounded px-2 py-1 text-xs outline-none dark:border-gray-600 dark:bg-gray-800"
+            >
+            <NButton size="tiny" :loading="pastureLogLoading" @click="fetchPastureLogs">
+              刷新
+            </NButton>
+          </div>
+        </div>
+        <div v-if="filteredLogs.length === 0" class="border border-gray-300 rounded-lg border-dashed p-4 text-center text-xs text-gray-500 dark:border-gray-600">
+          暂无牧场日志（自动化每 30~45 秒检查一次，开启「设置 → 自动控制 → 牧场」后开始记录）
+        </div>
+        <div v-else class="max-h-80 space-y-1 overflow-y-auto pr-1">
+          <div
+            v-for="(log, index) in filteredLogs"
+            :key="`${log.ts}-${index}`"
+            class="flex items-start gap-2 border-b border-gray-100 pb-1 text-xs last:border-0 dark:border-gray-700/60"
+          >
+            <span class="shrink-0 text-gray-400">{{ formatLogTime(log) }}</span>
+            <span
+              class="shrink-0 rounded px-1 text-[10px]"
+              :class="{
+                'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300': logLevel(log) === 'error',
+                'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300': logLevel(log) === 'warn',
+                'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300': logLevel(log) === 'success',
+                'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-300': logLevel(log) === 'info',
+              }"
+            >
+              {{ log.tag || '牧场' }}
+            </span>
+            <span class="break-all text-gray-700 dark:text-gray-300">{{ log.msg }}</span>
+          </div>
         </div>
       </section>
 

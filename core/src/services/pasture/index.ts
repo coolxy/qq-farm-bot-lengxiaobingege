@@ -71,6 +71,7 @@ async function getPastureSnapshot(): Promise<any> {
             name: facility.name,
             level: Number(facility.config_id_2) % 1000,
             grass: Number(facility.grass && facility.grass.amount),
+            capacity: Number(facility.unknown_14) || Number(facility.grass && facility.grass.amount) || 100,
         } : null,
         nest: nest ? {
             instId: Number(nest.inst_id),
@@ -130,8 +131,12 @@ async function getPastureSnapshot(): Promise<any> {
         }),
         cannedCount,
         bucketSeconds,
+        // 牧草上限实测 100（RanchInfo.f5.amount 与牧草机 f14 一致），前端按容量显示进度。
+        grassCapacity: (facility && Number(facility.unknown_14)) || Math.max(100, analyzed.grass),
         lastCheckAt: lastState.lastCheckAt,
         lastActions: lastState.lastActions,
+        // 本轮“为什么没动作”的原因，例如罐头桶耗尽、牧草机已满、没有可收产物。
+        notes: lastState.lastNotes,
         constants: {
             cannedItemId: analysis.CANNED_ITEM_ID,
             grassPerCan: analysis.CANNED_TO_GRASS,
@@ -210,8 +215,10 @@ async function operatePasture(action: string, input: any = {}): Promise<any> {
             return { ok: true, ranch };
         }
         case 'putHazard': {
-            const res = await api.putHazard(input.ranchInstId, input.ownerGid, input.opId || 11003);
-            return { ok: true, result: res };
+            // 没有灾害时 PutHazard 会回 1000020「请求参数错误」（线上实测），
+            // 一键清理接口 CleanAllRanch 的语义等价且能直接得到「没有需要清理的」业务提示。
+            const ranch = await api.cleanAllRanch();
+            return { ok: true, ranch };
         }
         case 'buyCub': {
             const num = Math.max(1, Number(input.num) || 1);

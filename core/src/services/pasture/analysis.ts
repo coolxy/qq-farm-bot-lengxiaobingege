@@ -27,6 +27,7 @@ function num(v: any): number {
 }
 
 interface AnimalView {
+    ranch_inst_id: number;
     slot_index: number;
     animal_inst_id: string;
     animal_id: string;
@@ -69,6 +70,7 @@ function analyzeRanch(ranch: any, now: number = Date.now()): {
         const limitedCanUsed = num(a.limited_can_used) === 1;
         const canStroke = !!(a.mutation && num(a.mutation.strokable) === 1);
         const view: AnimalView = {
+            ranch_inst_id: num(a.ranch_inst_id),
             slot_index: num(a.slot_index),
             animal_inst_id: String(num(a.animal_inst_id)),
             animal_id: String(num(a.animal_id)),
@@ -105,11 +107,17 @@ function analyzeRanch(ranch: any, now: number = Date.now()): {
     };
 }
 
-/** 牧草是否偏低（低于阈值，或耗尽时间已在不久之后） */
-function isGrassLow(ranch: any, threshold: number, now: number = Date.now()): boolean {
+/**
+ * 牧草是否偏低。
+ * 实包勘误（2026-11-16 线上）：牧场牧草上限就是 100，旧实现用 3000 做阈值会每轮都判定“缺草”，
+ * 于是不停发 AddFeed，被服务器回「牧草机已满」。现在按容量比例判断，并保留耗尽时间作为兜底。
+ */
+function isGrassLow(ranch: any, capacity: number = 100, now: number = Date.now()): boolean {
     const emptyAt = ranch && ranch.grass ? num(ranch.grass.empty_at_ms) : 0;
     if (emptyAt > 0 && emptyAt < 9007199254740992 && emptyAt - now < 30 * 60 * 1000) return true;
-    return num(ranch && ranch.grass && ranch.grass.amount) < threshold;
+    const amount = num(ranch && ranch.grass && ranch.grass.amount);
+    const max = Math.max(1, num(capacity) || 100);
+    return amount <= max * 0.2;
 }
 
 /** 需要几个罐头才能把牧草补到目标值 */

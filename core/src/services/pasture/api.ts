@@ -35,15 +35,22 @@ async function call(Req: any, req: any, service: string, method: string, Reply?:
     return ReplyType ? ReplyType.decode(replyBody) : { ok: true };
 }
 
-/** 拉牧场详情（ranch + animals + grass）。这是自动化的数据源。 */
+/**
+ * 拉牧场详情（ranch + animals + grass）。这是自动化的数据源。
+ * 访问好友牧场时 f1 必须是好友 gid（抓包解密实测 08<gid>1200），
+ * 旧实现不带 f1，无论进没进好友家园都只会读回自己的牧场。
+ */
 async function getRanchDetail(gid?: number | string): Promise<any> {
     const state = getUserState();
-    const selfGid = toNum(gid || (state && state.gid) || 0);
-    const reply = await call('GetRanchDetailRequest', { unknown_2: Buffer.alloc(0) },
+    const selfGid = toNum((state && state.gid) || 0);
+    const targetGid = toNum(gid) || 0;
+    const req: any = { unknown_2: Buffer.alloc(0) };
+    if (targetGid > 0 && targetGid !== selfGid) req.unknown_1 = toLong(targetGid);
+    const reply = await call('GetRanchDetailRequest', req,
         ANIMAL_SERVICE, 'GetRanchDetail', 'GetRanchDetailReply');
     const ranch = reply && reply.ranch;
-    if (!ranch) return { ranch: null, ownerGid: selfGid };
-    return { ranch, ownerGid: selfGid };
+    if (!ranch) return { ranch: null, ownerGid: targetGid || selfGid };
+    return { ranch, ownerGid: targetGid || selfGid };
 }
 
 /** 操作配额表（op_id → 上限/已用/剩余）。实包请求 0a00（f1 空消息）。 */
@@ -79,12 +86,16 @@ async function triggerProduce(): Promise<any> {
     return call('TriggerProduceRequest', {}, ANIMAL_SERVICE, 'TriggerProduce', 'TriggerProduceReply');
 }
 
-/** 抚摸动物（回包最新 RanchInfo） */
+/**
+ * 抚摸动物（回包最新 RanchInfo）。
+ * 2026-11-16 线上实测勘误：必须发到 gamepb.animalpb.RanchService.StrokeAnimal。
+ * 发到 AnimalService 会一直回 1020002「网络繁忙，请稍候再试。」（方法不存在时的兜底错误）。
+ */
 async function strokeAnimal(ownerGid: number | string, ranchInstId: number | string, animalInstId: number | string): Promise<any> {
     const reply = await call('StrokeAnimalRequest', {
         owner_gid: toLong(ownerGid),
         animal: { ranch_inst_id: toLong(ranchInstId), animal_inst_id: toLong(animalInstId) },
-    }, ANIMAL_SERVICE, 'StrokeAnimal', 'StrokeAnimalReply');
+    }, RANCH_SERVICE, 'StrokeAnimal', 'StrokeAnimalReply');
     return reply && reply.ranch;
 }
 

@@ -35,12 +35,14 @@ test('isGrassLow triggers on low amount or near-depletion clock', () => {
     const now = Date.now();
     const Long = require('long');
     const low = (n) => Long.fromNumber(n, true);
-    assert.equal(analysis.isGrassLow({ grass: { amount: low(100) } }, 3000, now), true);
-    assert.equal(analysis.isGrassLow({ grass: { amount: low(5000) } }, 3000, now), false);
+    // 线上实测：牧场牧草上限就是 100，阈值按容量比例（20%）判定，不能再用 3000。
+    assert.equal(analysis.isGrassLow({ grass: { amount: low(100) } }, 100, now), false);
+    assert.equal(analysis.isGrassLow({ grass: { amount: low(15) } }, 100, now), true);
+    assert.equal(analysis.isGrassLow({ grass: { amount: low(0) } }, 100, now), true);
     // 耗尽时间 10 分钟后（empty_at_ms 是毫秒墙钟）
-    assert.equal(analysis.isGrassLow({ grass: { amount: low(5000), empty_at_ms: low(now + 600000) } }, 3000, now), true);
+    assert.equal(analysis.isGrassLow({ grass: { amount: low(100), empty_at_ms: low(now + 600000) } }, 100, now), true);
     // u64max 表示不会耗尽
-    assert.equal(analysis.isGrassLow({ grass: { amount: low(5000), empty_at_ms: Long.MAX_UNSIGNED_VALUE } }, 3000, now), false);
+    assert.equal(analysis.isGrassLow({ grass: { amount: low(100), empty_at_ms: Long.MAX_UNSIGNED_VALUE } }, 100, now), false);
 });
 
 test('cansToTarget converts grass deficit to canned count', () => {
