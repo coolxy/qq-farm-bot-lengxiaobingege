@@ -33,6 +33,7 @@ test('decodes AnimalInst with growth clocks and expected sells', async () => {
     assert.equal(Number(animal.expected_harvest_sells.num), 2160);
     assert.equal(Number(animal.expected_produce_sells.num), 1620);
     assert.equal(animal.can_feed, 1);
+    assert.equal(animal.limited_can_used, 1); // 普通罐头桶一生一次，已用过则只能走有机桶
     assert.ok(Number(animal.grow_ready_at_ms) > 0);
 });
 

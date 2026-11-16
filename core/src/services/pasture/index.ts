@@ -32,7 +32,7 @@ async function getPastureSnapshot(): Promise<any> {
     } catch { /* 背包失败不影响主快照 */ }
 
     const analyzed = ranch ? analysis.analyzeRanch(ranch, Date.now()) : {
-        animals: [], harvestable: [], feedable: [], strokable: [],
+        animals: [], harvestable: [], feedable: [], organicFeedable: [], normalFeedable: [], strokable: [],
         grass: 0, grassEmptyAt: 0, capacity: 0, animalCount: 0,
     };
     const lastState = scheduler.getLastState();

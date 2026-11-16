@@ -37,6 +37,7 @@ let lastCheckAt = 0;
 let lastActions: string[] = [];
 let nextFriendVisitAt = 0;
 let lastBucketSeconds = 0;
+const actionCooldownUntil: Record<string, number> = {};
 
 function randomIntervalMs(): number {
     return TICK_MIN_MS + Math.floor(Math.random() * (TICK_MAX_MS - TICK_MIN_MS + 1));
@@ -69,10 +70,17 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
 
     // 单个动作失败不应该让后续动作全部停摆（例如金币不足、好友离线）。
     const safeStep = async (label: string, fn: () => Promise<any>): Promise<any> => {
+        const now = Date.now();
+        if ((actionCooldownUntil[label] || 0) > now) return null;
         try {
             return await fn();
         } catch (e: any) {
-            logWarn('牧场', `${label}失败: ${e && e.message ? e.message : e}`, { module: 'pasture' });
+            const message = String(e && e.message ? e.message : e);
+            // 服务端「网络繁忙/请求参数错误」多为短期限流或无可执行内容，
+            // 给该动作单独冷却，避免每 30~45 秒重复撞同一堵墙。
+            const cooldown = /网络繁忙|请求参数错误/.test(message) ? 5 * 60 * 1000 : 60 * 1000;
+            actionCooldownUntil[label] = now + cooldown;
+            logWarn('牧场', `${label}失败: ${message}`, { module: 'pasture' });
             return null;
         }
     };
@@ -177,12 +185,18 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
             await safeStep('喂养动物', async () => {
                 const feedState = analyzeRanch(ranch, Date.now());
                 if (feedState.feedable.length === 0) return;
-                let feedType = 2;
+                let feedType = 1;
+                let target: any = null;
                 if (lastBucketSeconds > 0) {
-                    feedType = 1;
+                    target = feedState.organicFeedable[0];
                 }
-                else if (feedState.grass <= 0) {
-                    // 两种免费口粮都没有，才把背包罐头转成有机罐头桶时长。
+                else if (feedState.normalFeedable.length > 0) {
+                    // 普通罐头桶每只动物一生只能用一次，只能喂还没用过的。
+                    feedType = 2;
+                    target = feedState.normalFeedable[0];
+                }
+                else {
+                    // 两种桶都不可用，才把背包罐头转成有机罐头桶时长。
                     const cans = (await api.getBagItemCount(CANNED_ITEM_ID)) || 0;
                     if (cans <= 0) return;
                     const used = Math.min(cans, Math.max(1, Math.ceil(3600 / CANNED_TO_BUCKET_SECONDS)));
@@ -192,10 +206,10 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
                     lastBucketSeconds += gained;
                     actions.push(`补充罐头桶 ${gained} 秒（${used} 个罐头）`);
                     recordOperation('牧场补充罐头', used);
-                    feedType = 1;
+                    target = feedState.organicFeedable[0];
                     await sleep(400);
                 }
-                const target = feedState.feedable[0];
+                if (!target) return;
                 const updated = await api.feedAnimal(toNum(ranch.ranch_inst_id), feedType);
                 if (updated) {
                     ranch = updated;
@@ -237,7 +251,8 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
         }
 
         // 7. 访问好友家园并互动（10 分钟一轮，最多 3 位，进/出成对）
-        if (auto.pasture_friend_visit && Date.now() >= nextFriendVisitAt) {
+        if (auto.pasture_friend_visit && Date.now() >= nextFriendVisitAt
+            && (actionCooldownUntil['访问好友牧场'] || 0) <= Date.now()) {
             nextFriendVisitAt = Date.now() + FRIEND_VISIT_COOLDOWN_MS;
             const friends = (await safeStep('读取好友列表', () => getFriendsList(false, 'low'))) || [];
             const candidates = friends
@@ -269,7 +284,9 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
                         }
                     }
                 } catch (e: any) {
-                    logWarn('牧场', `访问好友 ${friendGid} 失败: ${e && e.message ? e.message : e}`, { module: 'pasture' });
+                    const message = String(e && e.message ? e.message : e);
+                    actionCooldownUntil['访问好友牧场'] = Date.now() + 5 * 60 * 1000;
+                    logWarn('牧场', `访问好友 ${friendGid} 失败: ${message}`, { module: 'pasture' });
                 } finally {
                     if (entered) {
                         try { await api.leaveHomestead(friendGid); } catch { /* 离开失败忽略 */ }

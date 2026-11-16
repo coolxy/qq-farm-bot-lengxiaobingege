@@ -32,8 +32,9 @@ interface AnimalView {
     animal_id: string;
     stage: number;
     canHarvest: boolean;
-    canFeed: boolean;
-    canStroke: boolean;
+  canFeed: boolean;
+  limitedCanUsed: boolean;
+  canStroke: boolean;
     growReadyAt: number;
     matureReadyAt: number;
     produceCount: number;
@@ -45,6 +46,8 @@ function analyzeRanch(ranch: any, now: number = Date.now()): {
     animals: AnimalView[];
     harvestable: any[];
     feedable: any[];
+    organicFeedable: any[];
+    normalFeedable: any[];
     strokable: any[];
     grass: number;
     grassEmptyAt: number;
@@ -55,19 +58,22 @@ function analyzeRanch(ranch: any, now: number = Date.now()): {
     const animals: AnimalView[] = [];
     const harvestable: any[] = [];
     const feedable: any[] = [];
+    const organicFeedable: any[] = [];
+    const normalFeedable: any[] = [];
     const strokable: any[] = [];
 
     for (const a of source) {
         const growReadyAt = num(a.grow_ready_at_ms);
         const canHarvest = growReadyAt > 0 && growReadyAt <= now;
         const canFeed = num(a.can_feed) === 1;
+        const limitedCanUsed = num(a.limited_can_used) === 1;
         const canStroke = !!(a.mutation && num(a.mutation.strokable) === 1);
         const view: AnimalView = {
             slot_index: num(a.slot_index),
             animal_inst_id: String(num(a.animal_inst_id)),
             animal_id: String(num(a.animal_id)),
             stage: num(a.stage),
-            canHarvest, canFeed, canStroke,
+            canHarvest, canFeed, limitedCanUsed, canStroke,
             growReadyAt,
             matureReadyAt: num(a.mature_ready_at_ms),
             produceCount: num(a.produce_count),
@@ -75,7 +81,11 @@ function analyzeRanch(ranch: any, now: number = Date.now()): {
         };
         animals.push(view);
         if (canHarvest) harvestable.push(a);
-        if (canFeed) feedable.push(a);
+        if (canFeed) {
+            feedable.push(a);
+            organicFeedable.push(a);
+            if (!limitedCanUsed) normalFeedable.push(a);
+        }
         if (canStroke) strokable.push(a);
     }
 
@@ -85,6 +95,8 @@ function analyzeRanch(ranch: any, now: number = Date.now()): {
         animals,
         harvestable,
         feedable,
+        organicFeedable,
+        normalFeedable,
         strokable,
         grass,
         grassEmptyAt,
