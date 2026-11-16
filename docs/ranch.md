@@ -76,3 +76,39 @@
 - 动物全部处于生产期且 `canHarvest=false` → 收获/催产返回「没有可收取的产物」。
 - 牧草机 100/100 已满 → 补草被拒（`RANCH_GRASS_CAPACITY`）。
 - 棚（facility id=3）尚未建造，`state=2`，升级按钮不可用。
+
+## 七、牧场活动为什么要单独归类
+
+`ActivityList` 是**全局**列表：`ActivityListRequest` 是空消息，协议里没有场景字段，服务端也不按当前场景过滤。
+移植时的实现给请求塞了 `game_scene_id: 2`，但该字段在 proto 里不存在，protobufjs 的 `fromObject` 直接丢弃，
+于是牧场页拿到的就是农场同一份数据 —— 页面上出现「奶茶热销中」「故友重逢」，真正的牧场活动反而看不到。
+
+现在按活动自己的界面标识归类：
+
+| 信号 | 来源 | 说明 |
+| --- | --- | --- |
+| `extra.uid` 前缀 `Muge` | `ActivityContent.extra`（UTF-8 JSON） | 牧场活动主界面 `MugeMainUI`，从「牧歌初启」的 `GetGroup` 原文确认 |
+| 活动 id 白名单 | `core/src/config/activity-scene.ts` | `2026111700 牧歌初启`、`2026111707 以薯换福`；ActivityList 的 `activities` 树没有它们的节点，拿不到 uid 时用 id 兜底 |
+
+相关代码：
+
+- `services/activity-windows.ts`：`decodeActivityExtra` 解析 `uid` 与 `tips.txt`（说明文本），并把二者挂到时间窗口上；
+  `getActivityGroupExtra(groupId)` 按分组补取内容（缓存 10 分钟），因为牧场活动在 `ActivityList` 里通常没有进度节点。
+- `config/activity-scene.ts`：`activityScope()` / `isRanchActivity()`，未识别的活动一律按全局处理，不混进牧场页。
+- `services/ranch/state.ts` 的 `ranchActivities()`：只留牧场活动，去掉已结束的，进行中在前、即将开始在后。
+- 农场活动中心仍展示全量，两边分工是「全站」与「牧场专属」。
+
+新增牧场活动时：如果界面标识沿用 `Muge` 前缀，无需改代码；换了标识就把前缀或活动 id 补进 `activity-scene.ts`。
+
+## 八、界面结构
+
+- 牧场页只有一个侧边栏入口，分区导航（概览 / 个人 / 图鉴 / 活动 / 好友 / 商城）在内容区顶部吸顶，
+  子页签紧跟在分区右侧（不再把子页签 teleport 到页头，避免两行相似的导航抢层级）。
+- 概览：身份与经验 → 资产 / 库存 → 牧场动物速览（只显示状态，操作去个人页）→ 待处理与今日统计 → 牧场设施 → 运行日志。
+  日志固定在页面最后、卡内滚动，不再像农场概览那样占据主体。
+- 活动：每日分享礼包（`share_id 102`，与农场分享独立）+ 牧场活动卡（阶段、倒计时、活动说明折叠）。
+- 好友：紧凑卡片网格，展开后跨整行显示牧场详情与偷取入口。
+
+运行日志卡支持 `module` 属性（牧场传 `ranch`）。注意实时推送的日志快照也要受该开关约束，
+否则 WS 一连上就会把筛选结果覆盖成全量日志（`stores/status.ts` 的 `handleRealtimeLogsSnapshot`）。
+

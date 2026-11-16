@@ -26,9 +26,17 @@ const facilities = computed<any[]>(() => state.value?.facilities || [])
 const pens = computed(() => facilities.value.filter(f => f.ranch))
 const animals = computed(() => pens.value.flatMap(f => (f.ranch.animals || []).map((animal: any) => ({ animal, pen: f.name }))))
 const capacity = computed(() => pens.value.reduce((sum, f) => sum + (Number(f.ranch.capacity) || 0), 0))
-const shelvesReady = computed(() => pens.value.reduce((sum, f) => sum + f.ranch.shelves.filter((s: any) => s.canCollect).length, 0))
+const shelves = computed(() => pens.value.flatMap(f => f.ranch.shelves.filter((s: any) => s.canCollect).map((s: any) => ({ ...s, pen: f.name, key: `${f.id}:${s.slot}` }))))
+const shelvesReady = computed(() => shelves.value.length)
 const hazards = computed(() => pens.value.reduce((sum, f) => sum + (f.ranch.hazards?.length || 0), 0))
 const blocked = computed(() => animals.value.filter(({ animal }) => animal.grassBlocked).length)
+
+/** 概览只铺一屏能看完的量，其余交给「我的牧场」。 */
+const PREVIEW_LIMIT = 8
+const animalPreview = computed(() => animals.value.slice(0, PREVIEW_LIMIT))
+const hiddenAnimals = computed(() => Math.max(0, animals.value.length - PREVIEW_LIMIT))
+const canHarvest = computed(() => animals.value.some(({ animal }) => animal.canHarvest) || shelvesReady.value > 0)
+const canProduce = computed(() => animals.value.some(({ animal }) => animal.canProduce))
 
 const displayName = computed(() => {
   const account = currentAccount.value
@@ -131,6 +139,24 @@ function facilityMeter(f: any) {
     return { text: `牧草 ${f.feed.count} / ${f.capacity}`, percent: f.capacity ? f.feed.count / f.capacity * 100 : 0 }
   return { text: `容量 ${f.capacity}`, percent: 0 }
 }
+
+/** 动物卡片只做状态摘要，点开再去个人页处理，避免概览里堆一排按钮。 */
+function animalState(animal: any) {
+  if (animal.canHarvest)
+    return { text: '可收获', tone: 'ripe' }
+  if (animal.canProduce)
+    return { text: '可生产', tone: 'produce' }
+  if (animal.grassBlocked)
+    return { text: '缺牧草', tone: 'blocked' }
+  if (animal.canFeed)
+    return { text: '可喂养', tone: 'feed' }
+  const seconds = animal.nextAtMs ? remainingSeconds(animal.nextAtMs) : 0
+  return { text: seconds > 0 ? formatDuration(seconds) : animal.stageName || '成长中', tone: 'idle' }
+}
+
+function openAnimals() {
+  void router.push('/ranch/personal?tab=animals')
+}
 </script>
 
 <template>
@@ -222,22 +248,86 @@ function facilityMeter(f: any) {
         </BaseButton>
       </div>
 
-      <div class="flex flex-1 flex-col items-stretch gap-6 md:flex-row">
-        <!-- 运行日志与农场概览共用组件，这里默认只看牧场模块 -->
-        <RunLogCard module="ranch" />
+      <div class="ov-board">
+        <!-- 动物速览：概览只看状态，操作去个人页 -->
+        <section class="ov-card ov-herd">
+          <header class="ranch-card-head">
+            <h3 class="ov-herd__title">
+              <span class="i-carbon-pet-image-o" aria-hidden="true" />牧场动物
+              <small>{{ animals.length }} / {{ capacity }}</small>
+            </h3>
+            <div class="ov-herd__actions">
+              <BaseButton v-if="hazards" variant="text" size="sm" :disabled="actionsDisabled" @click="request('clean')">
+                清理 ({{ hazards }})
+              </BaseButton>
+              <BaseButton variant="secondary" size="sm" :disabled="actionsDisabled || !canProduce" @click="request('produce', { all: true })">
+                一键生产
+              </BaseButton>
+              <BaseButton variant="primary" size="sm" :disabled="actionsDisabled || !canHarvest" @click="request('harvest', { all: true })">
+                一键收获
+              </BaseButton>
+              <BaseButton variant="text" size="sm" @click="openAnimals">
+                全部动物<span class="i-carbon-chevron-right" aria-hidden="true" />
+              </BaseButton>
+            </div>
+          </header>
 
-        <div class="min-w-0 flex flex-col gap-6 md:w-1/4">
+          <div v-if="animalPreview.length" class="ov-herd__grid">
+            <button
+              v-for="{ animal, pen } in animalPreview"
+              :key="`${animal.ranchId}:${animal.id}`"
+              type="button"
+              class="ov-animal"
+              :class="`is-${animalState(animal).tone}`"
+              :title="`${animal.name} · ${pen} · ${animalState(animal).text}`"
+              @click="openAnimals"
+            >
+              <span class="ov-animal__media">
+                <img v-if="animal.image" :src="animal.image" alt="" loading="lazy">
+                <span v-else class="i-carbon-pet-image-o" aria-hidden="true" />
+              </span>
+              <span class="ov-animal__name">{{ animal.name }}</span>
+              <span class="ov-animal__state">{{ animalState(animal).text }}</span>
+            </button>
+            <button v-if="hiddenAnimals" type="button" class="ov-animal ov-animal--more" @click="openAnimals">
+              <span class="ov-animal__more">+{{ hiddenAnimals }}</span>
+              <span class="ov-animal__name">还有 {{ hiddenAnimals }} 只</span>
+            </button>
+          </div>
+
+          <div v-else class="ov-herd__empty">
+            <span class="i-carbon-pet-image-o" aria-hidden="true" />
+            <div>
+              <strong>还没有饲养动物</strong>
+              <p>去牧场商店买幼崽，到背包里放养到窝或棚。</p>
+            </div>
+            <BaseButton variant="secondary" size="sm" to="/ranch/game-mall">
+              去牧场商店
+            </BaseButton>
+          </div>
+
+          <div v-if="shelves.length" class="ov-shelves">
+            <span class="ov-shelves__label"><span class="i-carbon-box" aria-hidden="true" />待收产物</span>
+            <span v-for="shelf in shelves" :key="shelf.key" class="ov-shelves__item">
+              <template v-for="product in shelf.products" :key="product.id">
+                <img :src="product.image" alt="">{{ product.name }}<b>×{{ formatCount(product.count) }}</b>
+              </template>
+            </span>
+          </div>
+        </section>
+
+        <div class="ov-side">
           <!-- 待处理：对应农场的“今日统计” -->
-          <section class="farm-card rounded-2xl p-5">
+          <section class="ov-card ov-todo-card">
             <header class="ranch-card-head">
-              <h3 class="flex items-center gap-2 text-lg font-display font-medium">
-                <span class="i-carbon-task" /> <span>待处理</span>
+              <h3 class="ov-side__title">
+                <span class="i-carbon-task" aria-hidden="true" />待处理
               </h3>
               <BaseButton variant="text" size="sm" to="/ranch/personal">
                 管理动物<span class="i-carbon-chevron-right" aria-hidden="true" />
               </BaseButton>
             </header>
-            <div class="grid grid-cols-2 gap-2 2xl:gap-3">
+            <div class="ov-todo">
               <button
                 v-for="item in todo"
                 :key="item.key"
@@ -248,10 +338,7 @@ function facilityMeter(f: any) {
                 :title="item.value ? `点击处理：${item.label}` : `暂无${item.label}`"
                 @click="item.go()"
               >
-                <div class="flex items-center gap-2">
-                  <span class="select-none text-base" :class="item.icon" />
-                  <span class="text-xs text-gray-500">{{ item.label }}</span>
-                </div>
+                <span class="ranch-todo__label"><span class="select-none" :class="item.icon" aria-hidden="true" />{{ item.label }}</span>
                 <b>{{ item.value }}</b>
               </button>
             </div>
@@ -261,12 +348,15 @@ function facilityMeter(f: any) {
                 {{ row.label }}<b>{{ row.value }}</b>{{ row.unit }}
               </span>
             </div>
+            <p v-else class="ranch-today ranch-today--empty">
+              今日暂无操作记录
+            </p>
           </section>
 
           <!-- 设施 -->
-          <section class="farm-card rounded-2xl p-5">
-            <h3 class="mb-4 flex items-center gap-2 text-lg font-display font-medium">
-              <span class="i-carbon-building" /> <span>牧场设施</span>
+          <section class="ov-card ov-facility-card">
+            <h3 class="ov-side__title mb-3">
+              <span class="i-carbon-building" aria-hidden="true" />牧场设施
             </h3>
             <div class="ranch-facilities">
               <div v-for="f in facilities" :key="f.id" class="ranch-facility" :class="{ 'is-pending': f.state === 2 }">
@@ -281,6 +371,11 @@ function facilityMeter(f: any) {
             </div>
           </section>
         </div>
+      </div>
+
+      <!-- 运行日志按账号记录，与农场概览共用组件，这里默认只看牧场模块 -->
+      <div class="ov-log">
+        <RunLogCard module="ranch" />
       </div>
     </RanchGate>
   </div>
@@ -313,16 +408,261 @@ function facilityMeter(f: any) {
   font-size: 13px;
 }
 
-.ranch-alert > :last-child {
+/* 只有带操作按钮时（元素 1 图标、2 文案、3 按钮）把按钮推到右侧，单条文案保持左对齐 */
+.ranch-alert > :nth-child(3) {
   margin-left: auto;
 }
 
 .ranch-card-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+/* 主体：左边动物，右边待处理与设施。.ov-side 只做分组，用 contents 让两张卡直接进网格 */
+.ov-board {
+  display: grid;
+  align-items: stretch;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 768px) {
+  .ov-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ov-herd {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1280px) {
+  .ov-board {
+    grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .ov-herd {
+    grid-column: auto;
+  }
+}
+
+.ov-side {
+  display: contents;
+}
+
+.ov-herd__title,
+.ov-side__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--ui-ink);
+  font-size: 15px;
+  font-weight: var(--fw-650);
+}
+
+.ov-herd__title > span:first-child,
+.ov-side__title > span:first-child {
+  color: var(--ui-primary);
+}
+
+.ov-herd__title small {
+  color: var(--ui-subtle);
+  font-size: 12px;
+  font-weight: var(--fw-500);
+  font-variant-numeric: tabular-nums;
+}
+
+.ov-herd__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+
+.ov-herd__grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+}
+
+.ov-animal {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 6px 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-surface-soft);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.16s ease, transform 0.16s ease, background-color 0.16s ease;
+}
+
+.ov-animal:hover {
+  border-color: color-mix(in srgb, var(--ui-primary) 34%, var(--ui-border));
+  background: var(--ui-surface);
+  transform: translateY(-1px);
+}
+
+.ov-animal__media {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+}
+
+.ov-animal__media img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.ov-animal__media > span {
+  color: var(--ui-subtle);
+  font-size: 20px;
+}
+
+.ov-animal__name {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ui-ink);
+  font-size: 12px;
+  font-weight: var(--fw-600);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ov-animal__state {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ui-subtle);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.ov-animal.is-ripe {
+  border-color: color-mix(in srgb, var(--ui-primary) 46%, var(--ui-border));
+}
+
+.ov-animal.is-ripe .ov-animal__state {
+  color: var(--ui-primary);
+  font-weight: var(--fw-650);
+}
+
+.ov-animal.is-produce .ov-animal__state {
+  color: var(--ui-primary);
+}
+
+.ov-animal.is-blocked {
+  border-color: color-mix(in srgb, var(--ui-warning) 45%, var(--ui-border));
+}
+
+.ov-animal.is-blocked .ov-animal__state {
+  color: var(--ui-warning);
+  font-weight: var(--fw-650);
+}
+
+.ov-animal--more {
+  justify-content: center;
+  border-style: dashed;
+  background: transparent;
+}
+
+.ov-animal__more {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  color: var(--ui-muted);
+  font-size: 15px;
+  font-weight: var(--fw-650);
+}
+
+.ov-herd__empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 16px;
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-muted);
+}
+
+.ov-herd__empty > span {
+  color: var(--ui-subtle);
+  font-size: 26px;
+}
+
+.ov-herd__empty strong {
+  display: block;
+  color: var(--ui-ink);
+  font-size: 14px;
+}
+
+.ov-herd__empty p {
+  margin: 2px 0 0;
+  font-size: 12px;
+}
+
+.ov-herd__empty > :last-child {
+  margin-left: auto;
+}
+
+.ov-shelves {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--ui-border);
+  font-size: 12px;
+}
+
+.ov-shelves__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ui-muted);
+  font-weight: var(--fw-600);
+}
+
+.ov-shelves__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 2px;
+  border-radius: 999px;
+  background: var(--ui-surface-soft);
+  color: var(--ui-muted);
+}
+
+.ov-shelves__item img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.ov-shelves__item b {
+  color: var(--ui-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.ov-todo {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .ranch-todo {
@@ -330,6 +670,7 @@ function facilityMeter(f: any) {
   width: 100%;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 8px 12px;
   border: 1px solid transparent;
   border-radius: 12px;
@@ -351,6 +692,18 @@ function facilityMeter(f: any) {
   cursor: default;
 }
 
+.ranch-todo__label {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  color: var(--ui-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ranch-todo b {
   font-size: 15px;
 }
@@ -370,6 +723,12 @@ function facilityMeter(f: any) {
   color: var(--ui-muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+}
+
+.ranch-today--empty {
+  margin: 10px 0 0;
+  color: var(--ui-subtle);
+  line-height: 1.5;
 }
 
 .ranch-today__item b {
@@ -431,5 +790,42 @@ function facilityMeter(f: any) {
 
 .ranch-facility.is-pending {
   opacity: 0.6;
+}
+
+/* 日志收在页面最后，固定高度，避免占掉概览的视觉重心 */
+.ov-log {
+  display: flex;
+  min-width: 0;
+}
+
+.ov-log :deep(.dash-logs) {
+  width: 100%;
+  flex: none;
+}
+
+.ov-log :deep(.dash-logs__card) {
+  height: 240px;
+  flex: none;
+}
+
+@media (min-width: 1180px) {
+  .ov-log :deep(.dash-logs__card) {
+    height: 220px;
+  }
+}
+
+@media (max-width: 639px) {
+  .ranch-card-head {
+    align-items: flex-start;
+  }
+
+  .ov-herd__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .ov-log :deep(.dash-logs__card) {
+    height: 260px;
+  }
 }
 </style>

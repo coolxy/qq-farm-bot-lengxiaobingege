@@ -284,7 +284,8 @@ function target(animal: any) {
 
 .ranch-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  /* auto-fit：动物少时卡片铺开占满一行，动物多时与 auto-fill 表现一致 */
+  grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
   gap: 12px;
 }
 

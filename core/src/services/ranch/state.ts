@@ -218,6 +218,46 @@ async function canCatalog(raw: any, slotType = 6): Promise<any> {
     return { slotType, goods };
 }
 
+/**
+ * 牧场活动：ActivityList 是全局列表，这里按 extra.uid / 已确认活动 id 只留牧场场景的活动。
+ * 农场活动中心仍然展示全量，两者的分工是「全站」与「牧场专属」，不再重复。
+ */
+async function ranchActivities(): Promise<any[]> {
+    const nowSec = getServerTimeSec();
+    let windows: any[] = [];
+    try {
+        windows = await require('../activity-windows').getActivityWindows();
+    } catch {
+        return [];
+    }
+    const rows = windows
+        .filter((window: any) => require('../../config/activity-scene').isRanchActivity(window))
+        // 已结束的活动留在列表里没有操作价值，只保留进行中和即将开始。
+        .filter((window: any) => !window.endTime || window.endTime >= nowSec)
+        .map((window: any) => ({
+            id: String(window.id),
+            name: String(window.name || ''),
+            uid: String(window.uid || ''),
+            startTime: Number(window.beginTime || 0) * 1000,
+            endTime: Number(window.endTime || 0) * 1000,
+            rules: Array.isArray(window.rules) ? window.rules : [],
+        }));
+    // 活动说明通常不在 ActivityList 里（牧场活动没有玩家进度节点），按分组补一次内容。
+    for (const row of rows) {
+        if (row.rules.length && row.uid) continue;
+        try {
+            const extra = await require('../activity-windows').getActivityGroupExtra(row.id);
+            if (!row.rules.length && extra.rules.length) row.rules = extra.rules;
+            if (!row.uid && extra.uid) row.uid = extra.uid;
+        } catch { /* 说明拉不到不影响活动时间与状态展示 */ }
+    }
+    const started = rows.filter(row => row.startTime <= nowSec * 1000)
+        .sort((left, right) => (left.endTime || Infinity) - (right.endTime || Infinity));
+    const upcoming = rows.filter(row => row.startTime > nowSec * 1000)
+        .sort((left, right) => left.startTime - right.startTime);
+    return [...started, ...upcoming];
+}
+
 async function getState(view = 'animals', shopId?: number, hostGid?: string): Promise<any> {
     if (!['animals', 'facilities', 'bag', 'shop', 'market', 'tasks', 'friends', 'illustrated', 'activities', 'cans'].includes(view)) throw error('INVALID_ARGUMENT', '未知牧场页面');
     if (!isUnlocked()) return { unlocked: false, sceneId: 2, reason: '牧场尚未解锁，请先在游戏中完成开启条件' };
@@ -238,9 +278,7 @@ async function getState(view = 'animals', shopId?: number, hostGid?: string): Pr
         if (view === 'illustrated') state.book = await require('./book').getBook();
         if (view === 'activities') {
             state.dailyShare = require('./daily-share').getState();
-            const reply = await rpc('activities', { game_scene_id: 2 });
-            state.activities = reply.activities.map((group: any) => ({ id: quantity(group.activity.activity_id), name: group.activity.name,
-                startTime: Number(group.activity.begin_time) * 1000, endTime: Number(group.activity.end_time) * 1000 }));
+            state.activities = await ranchActivities();
         }
         if (view === 'friends') {
             if (hostGid !== undefined) state.friendRanch = await require('./friends').getFriend(hostGid);

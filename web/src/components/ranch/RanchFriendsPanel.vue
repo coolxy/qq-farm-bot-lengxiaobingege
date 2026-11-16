@@ -127,7 +127,6 @@ async function reloadList() {
             <div class="friend-main">
               <div class="friend-name-row">
                 <strong class="friend-name" :title="friend.name">{{ friend.name }}</strong>
-                <span class="friend-gid">{{ friend.gid }}</span>
               </div>
               <div class="friend-tags">
                 <template v-if="selected === friend.gid && detail">
@@ -136,7 +135,10 @@ async function reloadList() {
                     <span class="i-carbon-shopping-bag" />{{ detail.canSteal ? `可偷 ${detail.stealableShelves} 个货架` : '暂无可偷产物' }}
                   </span>
                 </template>
-                <span v-else class="f-tag">点击查看牧场</span>
+                <template v-else>
+                  <span v-if="friend.name !== friend.gid" class="friend-gid" :title="`GID ${friend.gid}`">GID {{ friend.gid }}</span>
+                  <span class="f-tag f-tag--hint">查看牧场</span>
+                </template>
               </div>
             </div>
             <span class="friend-chevron i-carbon-chevron-down" aria-hidden="true" />
@@ -289,8 +291,8 @@ async function reloadList() {
 }
 
 .friends__list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
   gap: 10px;
 }
 
@@ -302,19 +304,27 @@ async function reloadList() {
   box-shadow:
     inset 0 1px 0 var(--glass-highlight),
     var(--ui-shadow-sm);
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+/* 展开的牧场详情要跨满整行，不然卡片墙会把详情挤成一条 */
 .friend-card.is-expanded {
+  grid-column: 1 / -1;
   border-color: color-mix(in srgb, var(--ui-primary) 32%, var(--ui-border));
+  box-shadow: 0 10px 30px -22px rgba(38, 74, 52, 0.55);
+}
+
+.friend-card:not(.is-expanded):hover {
+  border-color: color-mix(in srgb, var(--ui-primary) 28%, var(--ui-border));
+  box-shadow: 0 8px 20px -16px rgba(38, 74, 52, 0.5);
 }
 
 .friend-row {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 20px;
+  grid-template-columns: 40px minmax(0, 1fr) 16px;
   align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
+  gap: 10px;
+  padding: 10px 12px;
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
@@ -330,14 +340,14 @@ async function reloadList() {
 
 .friend-avatar {
   display: grid;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   overflow: hidden;
   place-items: center;
-  border-radius: 14px;
+  border-radius: 12px;
   color: var(--ui-subtle);
   background: var(--ui-surface-soft);
-  font-size: 20px;
+  font-size: 18px;
 }
 
 .friend-avatar img {
@@ -354,14 +364,14 @@ async function reloadList() {
   display: flex;
   min-width: 0;
   align-items: baseline;
-  gap: 8px;
+  gap: 6px;
 }
 
 .friend-name {
   min-width: 0;
   overflow: hidden;
   color: var(--ui-ink);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: var(--fw-650);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -369,8 +379,12 @@ async function reloadList() {
 
 .friend-gid {
   flex: none;
+  max-width: 100%;
+  overflow: hidden;
   color: var(--ui-subtle);
-  font-size: 12px;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
@@ -378,11 +392,11 @@ async function reloadList() {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .f-tag {
-  height: 22px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -390,10 +404,20 @@ async function reloadList() {
   border-radius: 7px;
   color: var(--ui-muted);
   background: var(--ui-surface-soft);
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+
+.f-tag--hint {
+  padding: 0;
+  color: var(--ui-subtle);
+  background: transparent;
+}
+
+.friend-card:hover .f-tag--hint {
+  color: var(--ui-primary);
 }
 
 .f-tag--level {
@@ -525,15 +549,9 @@ async function reloadList() {
 
 @media (max-width: 767px) {
   .friend-row {
-    grid-template-columns: 40px minmax(0, 1fr) 20px;
-    gap: 12px;
-    padding: 12px;
-  }
-
-  .friend-avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
+    grid-template-columns: 40px minmax(0, 1fr) 16px;
+    gap: 10px;
+    padding: 10px 12px;
   }
 
   .friends__search {

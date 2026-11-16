@@ -27,7 +27,7 @@ function decodeActivityWindows(reply: any): ReadonlyMap<string, ActivityWindow> 
             name: String(row?.name || ''),
             beginTime: toNum(row?.begin_time),
             endTime: toNum(row?.end_time),
-            ...(meta ? { type: meta.type, groupId: meta.groupId, rules: meta.rules } : {}),
+            ...(meta ? { type: meta.type, groupId: meta.groupId, rules: meta.rules, uid: meta.uid } : {}),
         });
     }
     return windows;
@@ -38,16 +38,18 @@ function decodeActivityWindows(reply: any): ReadonlyMap<string, ActivityWindow> 
  * 而 activity_windows 只有时间窗口。活动目录要判断玩法归属、拿到说明文本，就得读前者。
  * 注意 activities 是树（children 嵌套），要递归展开。
  */
-function decodeActivityMeta(reply: any): Map<string, { type: number; groupId: string; rules: string[] }> {
-    const metas = new Map<string, { type: number; groupId: string; rules: string[] }>();
+function decodeActivityMeta(reply: any): Map<string, { type: number; groupId: string; rules: string[]; uid: string }> {
+    const metas = new Map<string, { type: number; groupId: string; rules: string[]; uid: string }>();
     const walk = (node: any): void => {
         const head = node?.activity;
         const id = String(toNum(head?.activity_id) || '').trim();
         if (id) {
+            const extra = decodeActivityExtra(head?.extra);
             metas.set(id, {
                 type: toNum(head?.type),
                 groupId: String(toNum(head?.group_id) || ''),
-                rules: extractActivityRules(head?.extra),
+                rules: extra.rules,
+                uid: extra.uid,
             });
         }
         const children = Array.isArray(node?.children) ? node.children : [];
@@ -58,20 +60,25 @@ function decodeActivityMeta(reply: any): Map<string, { type: number; groupId: st
     return metas;
 }
 
-/** ActivityContent.extra 是 UTF-8 JSON，活动说明藏在 tips.txt 里，带富文本标签 */
-function extractActivityRules(extra: any): string[] {
+/**
+ * ActivityContent.extra 是 UTF-8 JSON：tips.txt 存活动说明，uid 标识客户端活动界面。
+ * uid 是区分「这个活动长在哪个场景」的唯一可用信号（协议里没有场景字段）。
+ */
+function decodeActivityExtra(extra: any): { rules: string[]; uid: string } {
     try {
         const raw = Buffer.from(extra || []).toString('utf8').trim();
-        if (!raw) return [];
+        if (!raw) return { rules: [], uid: '' };
         const parsed = JSON.parse(raw);
         const txt = parsed?.tips?.txt;
-        if (!Array.isArray(txt)) return [];
-        return txt
-            .filter((value: any) => typeof value === 'string')
-            .map((value: string) => value.replace(/<[^>]+>/g, '').trim())
-            .filter(Boolean);
+        const rules = Array.isArray(txt)
+            ? txt
+                .filter((value: any) => typeof value === 'string')
+                .map((value: string) => value.replace(/<[^>]+>/g, '').trim())
+                .filter(Boolean)
+            : [];
+        return { rules, uid: typeof parsed?.uid === 'string' ? parsed.uid.trim() : '' };
     } catch {
-        return [];
+        return { rules: [], uid: '' };
     }
 }
 
@@ -116,6 +123,29 @@ async function getActivityWindows(): Promise<ReadonlyArray<ActivityWindow>> {
 
 function invalidateActivityWindows(): void {
     loadedAt = 0;
+    groupExtraCache.clear();
+}
+
+/**
+ * 活动说明与界面标识只在 GetGroup 的 ActivityContent.extra 里。
+ * ActivityList 的 activities 树只覆盖有玩家进度的活动，牧场活动通常不在其中，
+ * 所以按分组单独取一次内容，并缓存 10 分钟（活动说明不会中途变化）。
+ */
+const GROUP_EXTRA_TTL_MS = 10 * 60 * 1000;
+const groupExtraCache = new Map<string, { at: number; value: { uid: string; rules: string[] } }>();
+
+async function getActivityGroupExtra(groupId: string): Promise<{ uid: string; rules: string[] }> {
+    const id = String(groupId || '').trim();
+    if (!id) return { uid: '', rules: [] };
+    const cached = groupExtraCache.get(id);
+    if (cached && Date.now() - cached.at < GROUP_EXTRA_TTL_MS)
+        return cached.value;
+    const body: Uint8Array = types.GetGroupRequest.encode(types.GetGroupRequest.create({ group_id: id })).finish();
+    const { body: replyBody } = await sendMsgAsync('gamepb.activitypb.ActivityService', 'GetGroup', body);
+    const reply = types.GetGroupReply.decode(replyBody);
+    const value = decodeActivityExtra(reply?.group?.activity?.extra);
+    groupExtraCache.set(id, { at: Date.now(), value });
+    return value;
 }
 
 async function getSellConditionContext(): Promise<SellConditionContext> {
@@ -144,6 +174,10 @@ networkEvents.on('disconnected', invalidateActivityWindows);
 module.exports = {
     refreshActivityWindows,
     getActivityWindows,
+    getActivityGroupExtra,
     invalidateActivityWindows,
     getSellConditionContext,
+    // 供测试直接验证解码，不依赖网络
+    decodeActivityWindows,
+    decodeActivityExtra,
 };

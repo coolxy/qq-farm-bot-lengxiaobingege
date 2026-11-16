@@ -9,6 +9,8 @@ export interface ActivityWindow {
     groupId?: string;
     /** 活动说明文本（ActivityContent.extra 里的 tips.txt，已剥离富文本标签） */
     rules?: string[];
+    /** 活动界面标识（ActivityContent.extra 里的 uid，例如牧场主界面 MugeMainUI） */
+    uid?: string;
 }
 
 export interface SellConditionContext {
