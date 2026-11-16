@@ -69,6 +69,7 @@ function createRuntimeEngine(options: RuntimeEngineOptions = {}) {
         triggerEventNotify,
         sendConfiguredPush,
         noteAccountRecovered,
+        getOfflineCycleState,
     } = reloginReminder;
 
     const workerManager = createWorkerManager({
@@ -121,6 +122,7 @@ function createRuntimeEngine(options: RuntimeEngineOptions = {}) {
         }),
         triggerEventNotify,
         sendPush: sendConfiguredPush,
+        getOfflineCycleState,
         setTimeoutTask: (taskName: string, delayMs: number, taskFn: () => Promise<void> | void) => {
             return autoReloginScheduler.setTimeoutTask(taskName, delayMs, taskFn);
         },

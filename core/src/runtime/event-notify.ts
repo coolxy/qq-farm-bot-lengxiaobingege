@@ -518,7 +518,21 @@ function createEventNotifyService(options: ReloginReminderOptions) {
 
     loadState();
 
-    return { getOfflineAutoDeleteMs, triggerEventNotify, sendConfiguredPush, noteAccountRecovered };
+    // 供其他模块（如会话刷新定时器）判断账号是否正处于掉线周期：
+    // 掉线处理中的一切"次要提醒"都应让位给掉线通知，避免同一件事两条推送各说各话
+    function getOfflineCycleState(accountId: string): { active: boolean; noticeSent: boolean; terminal: boolean; reason: string } {
+        const id = String(accountId || '').trim();
+        const cycle = cycles.get(id);
+        if (!cycle) return { active: false, noticeSent: false, terminal: false, reason: '' };
+        return {
+            active: true,
+            noticeSent: cycle.noticeSent,
+            terminal: cycle.terminal,
+            reason: cycle.reason,
+        };
+    }
+
+    return { getOfflineAutoDeleteMs, triggerEventNotify, sendConfiguredPush, noteAccountRecovered, getOfflineCycleState };
 }
 
 module.exports = { createEventNotifyService, markRuntimeStopping, resetRuntimeStopping };

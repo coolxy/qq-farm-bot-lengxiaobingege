@@ -22,6 +22,9 @@ const SESSION_REFRESH_INTERVAL_MS = HOUR_MS;
 const SESSION_REFRESH_AHEAD_MS = SESSION_REFRESH_INTERVAL_MS;
 // 用户要求：成功后不推送，只在续期失败时提醒；想恢复「每小时一条成功提醒」改成 true 即可
 const PUSH_SESSION_REFRESH_SUCCESS = false;
+// 会话刷新失败提醒节流：同一账号 6 小时内只推一次。
+// 连续失败（会话已废、等扫码）每小时重复推没有增量信息，还会淹没掉线通知
+const REFRESH_FAIL_PUSH_THROTTLE_MS = 6 * 60 * 60 * 1000;
 
 interface WechatAutoReloginOptions {
     store: any;
@@ -39,6 +42,8 @@ interface WechatAutoReloginOptions {
     retryDelaysMs?: number[];
     // 让位（kickout 退避）状态落盘路径；传空串禁用，测试用
     kickoutStateFile?: string;
+    /** 查询账号是否处于掉线周期（来自 event-notify）：周期内跳过会话刷新，避免重复提醒 */
+    getOfflineCycleState?: (accountId: string) => { active: boolean; noticeSent: boolean; terminal: boolean; reason: string };
 }
 
 function isWechatPlatform(platform: unknown): boolean {
@@ -99,6 +104,8 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
         triggerEventNotify,
         sendPush,
         retryDelaysMs = DEFAULT_RETRY_DELAYS_MS,
+        // 事件通知的掉线周期查询：掉线处理中的账号不再做会话刷新，也不重复提醒
+        getOfflineCycleState,
     } = options;
     const scheduler = createScheduler('wechat_auto_relogin');
     const sessionRefreshTask = `wx_session_refresh_all`;
@@ -134,6 +141,15 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
         if (!loginBuffer || !credentials) return;
         if (!isWechatAccountNeedsRefresh(account)) return;
         if (cancelled.has(id)) return;
+        // 掉线周期进行中（含自动重登重试、让位等待）：此时会话必然失效，刷新必失败，
+        // 且掉线通知已/将说明情况——再推「刷新失败」只是同一件事的第二条噪音
+        const cycleState = typeof getOfflineCycleState === 'function' ? getOfflineCycleState(id) : null;
+        if (cycleState?.active) {
+            log('系统', `账号 ${name} 掉线处理中，跳过本轮会话刷新（掉线通知已覆盖，恢复后下一整点自动刷新）`, {
+                accountId: id, accountName: name, reason: cycleState.reason,
+            });
+            return;
+        }
         try {
             log('系统', `账号 ${name} 微信会话满 1 小时，自动刷新`, {
                 accountId: id, accountName: name,
@@ -154,6 +170,8 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
             store.addOrUpdateAccount({ id, code, ...accountFieldsFromCredentials(nextBuffer, nextCredentials) });
             log('系统', `账号 ${name} 微信会话自动刷新成功`, { accountId: id, accountName: name });
             addAccountLog('wx_session_refreshed', `账号 ${name} 微信会话自动刷新成功（每小时一次）`, id, name);
+            // 刷新成功：清掉失败提醒节流，之后再次失败时第一时间可推
+            lastRefreshFailPushAt.delete(id);
             // 成功不推送：每小时一条太吵，只有失败才需要人介入
             if (PUSH_SESSION_REFRESH_SUCCESS) {
                 await pushSessionRefresh(account, buildSessionRefreshPush(account, {
@@ -165,6 +183,16 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
             log('错误', `账号 ${name} 微信会话自动刷新失败: ${error?.message || error}`, {
                 accountId: id, accountName: name,
             });
+            // 失败提醒节流：同一账号 6 小时内只推一次，连续失败不再每小时轰炸；
+            // 期间只要刷新成功过一次，节流即重置
+            const lastPush = lastRefreshFailPushAt.get(id) || 0;
+            if (Date.now() - lastPush < REFRESH_FAIL_PUSH_THROTTLE_MS) {
+                log('系统', `账号 ${name} 会话刷新失败提醒已节流（${Math.round(REFRESH_FAIL_PUSH_THROTTLE_MS / 3600000)} 小时内不再重复推送）`, {
+                    accountId: id, accountName: name,
+                });
+                return;
+            }
+            lastRefreshFailPushAt.set(id, Date.now());
             await pushSessionRefresh(account, buildSessionRefreshPush(account, { ok: false, error }));
         }
     }
@@ -219,6 +247,7 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
     const issueWxLoginCode = options.issueWxLoginCode
         || ((loginBuffer: string, appId: string, credentials?: any, aheadMs?: number) => wxLogin.issueCodeFromLoginBuffer(loginBuffer, appId, credentials, aheadMs));
     const attempts = new Map<string, number>();
+    const lastRefreshFailPushAt = new Map<string, number>();
     const cancelled = new Set<string>();
     const trackedIds = new Set<string>();
 

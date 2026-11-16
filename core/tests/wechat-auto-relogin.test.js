@@ -80,6 +80,7 @@ function createHarness(overrides = {}) {
         kickoutStateFile: Object.prototype.hasOwnProperty.call(overrides, 'kickoutStateFile')
             ? overrides.kickoutStateFile
             : '',
+        getOfflineCycleState: overrides.getOfflineCycleState,
         ...(Object.prototype.hasOwnProperty.call(overrides, 'retryDelaysMs')
             ? (overrides.retryDelaysMs ? { retryDelaysMs: overrides.retryDelaysMs } : {})
             : { retryDelaysMs: [5, 10, 15] }),
@@ -421,6 +422,51 @@ test('pushes a failure reminder when the hourly refresh fails', async () => {
     assert.equal(harness.pushes.length, 1);
     assert.match(harness.pushes[0].title, /微信会话自动刷新失败/);
     assert.match(harness.pushes[0].content, /session dead/);
+});
+
+test('skips session refresh entirely while an offline cycle is active', async () => {
+    const harness = createHarness({
+        getOfflineCycleState: (accountId) => accountId === '1'
+            ? { active: true, noticeSent: true, terminal: true, reason: 'auto_relogin_failed:x' }
+            : { active: false, noticeSent: false, terminal: false, reason: '' },
+    });
+    primeWxSession(harness, Date.now() - 2 * 60 * 60 * 1000);
+    harness.setIssueWxLoginCode(async () => { throw new Error('should not be called'); });
+
+    await harness.service.refreshAllSessionsIfNeeded();
+
+    assert.equal(harness.issued.length, 0, '掉线周期内不应尝试刷新');
+    assert.equal(harness.pushes.length, 0, '掉线周期内不应推送刷新失败提醒');
+});
+
+test('throttles repeated refresh-failure pushes to one per 6 hours, reset on success', async () => {
+    const harness = createHarness({
+        getOfflineCycleState: () => ({ active: false, noticeSent: false, terminal: false, reason: '' }),
+    });
+    primeWxSession(harness, Date.now() - 2 * 60 * 60 * 1000);
+    harness.setIssueWxLoginCode(async () => { throw new Error('session dead'); });
+
+    // 第 1 个整点失败：推送
+    await harness.service.refreshAllSessionsIfNeeded();
+    assert.equal(harness.pushes.length, 1);
+
+    // 第 2 个整点仍失败：节流，不推
+    primeWxSession(harness, Date.now() - 2 * 60 * 60 * 1000);
+    await harness.service.refreshAllSessionsIfNeeded();
+    assert.equal(harness.pushes.length, 1, '6 小时内的重复失败不应再推送');
+
+    // 刷新成功后节流重置
+    primeWxSession(harness, Date.now() - 2 * 60 * 60 * 1000);
+    harness.setIssueWxLoginCode(async () => 'recovered-code');
+    await harness.service.refreshAllSessionsIfNeeded();
+    assert.equal(harness.pushes.length, 1);
+    assert.equal(harness.accounts[0].code, 'recovered-code');
+
+    // 之后再次失败：第一时间推送
+    primeWxSession(harness, Date.now() - 2 * 60 * 60 * 1000);
+    harness.setIssueWxLoginCode(async () => { throw new Error('dead again'); });
+    await harness.service.refreshAllSessionsIfNeeded();
+    assert.equal(harness.pushes.length, 2, '成功后节流重置，新失败应推送');
 });
 
 after(() => {
