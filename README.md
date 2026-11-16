@@ -254,11 +254,45 @@ bash ./preflight.sh --full   # 额外跑一遍 core 测试套件
 4. 重启服务使内存中的凭据缓存失效（`admin-store` 会缓存已加载的管理员记录）
 5. 若旧哈希曾进入版本库，用 `git filter-repo` 从历史中抹除并强推，同时视为该密码已永久泄露
 
+### 面板 HTTPS（内置，可选）
+
+面板默认明文 HTTP。同网段抓包即可拿到登录密码与 `x-admin-token`，对外提供服务时应启用 TLS。
+
+项目自带可选 HTTPS，不依赖 Nginx/Caddy：设置证书环境变量即切换为 TLS，未设置时行为与改造前完全一致。
+
+```bash
+# 1. 签发本地 CA + 服务器证书（SAN 自动包含 localhost、127.0.0.1、::1、主机名与全部内网 IPv4）
+./scripts/gen-selfsigned-cert.sh
+
+# 2. 带证书启动
+HTTPS_KEY=core/data/certs/server.key \
+HTTPS_CERT=core/data/certs/server.crt \
+HTTPS_CA=core/data/certs/ca.crt \
+PORT=3000 node client.js
+```
+
+| 环境变量 | 说明 |
+|---|---|
+| `HTTPS_KEY` / `HTTPS_CERT` | 必填且成对，缺一即拒启 |
+| `HTTPS_CA` | 可选，补全证书链或用于校验客户端证书 |
+| `HTTPS_PASSPHRASE` | 可选，加密私钥口令（只走环境变量，不落盘、不进日志） |
+| `HTTPS_HSTS` / `HTTPS_HSTS_MAX_AGE` | 设为 `1` 才下发 HSTS，有效期默认 86400 秒 |
+| `HTTPS_OPTIONAL` | 设为 `1` 时，凭据不可用降级明文而非拒启 |
+
+行为约定：
+
+- **配置了但不可用 → 拒绝启动**（fail-closed），绝不静默降级成明文。缺文件、私钥与证书不配对、PEM 损坏、证书过期或尚未生效，都会在启动阶段抛出可定位的错误（而非运行时才报 TLS 握手失败）
+- 私钥权限宽于 `600` 只告警不阻断（避免权限设错导致面板整体不可用）；证书与 CA 属公开材料，`644` 是正常权限，不告警
+- HSTS 默认**关闭**。一旦下发 `max-age`，浏览器会在有效期内强制 https，证书配错就无法再用 http 回退，因此默认只给一天且必须显式开启
+- 切换到 HTTPS 后端口不变，但访问协议要改：`https://<host>:<port>`。若面板走的是 HTTP 层反向代理，切 TLS 前请先确认代理支持回源 https
+
+自签证书的浏览器表现：未把 `ca.crt` 导入「受信任的根证书颁发机构」时，首次访问提示「连接不是私密连接」，需手动继续；导入后即正常绿锁。`ca.key` 是签发根密钥（权限 600），泄露者可签发任意站点证书，切勿外传。脚本重复执行不会覆盖已有证书，重新签发需显式加 `--force`（旧证书立即失效）。
+
 ### 部署侧加固清单
 
 程序边界之外的安全，需要您在基础设施层完成：
 
-- [ ] 不要将 `3007`/`5173` 直接暴露公网；生产环境使用 Nginx/Caddy 反向代理 + HTTPS，面板路径叠加访问控制（IP 白名单或 Basic Auth）
+- [ ] 不要将 `3007`/`5173` 直接暴露公网；对外提供服务时启用内置 HTTPS（见上一节），或使用 Nginx/Caddy 反向代理 + HTTPS，面板路径叠加访问控制（IP 白名单或 Basic Auth）
 - [ ] 公网机器部署后执行 `sudo bash scripts/firewall-harden.sh [面板端口]`：启用 ufw，仅放行 SSH 与面板端口（带连接速率限制），其余入站默认拒绝
 - [ ] 在面板启用两步验证（TOTP），公网部署为强烈建议项
 - [ ] `core/data/` 目录包含账号凭据、会话令牌与运行数据：权限建议 700，纳入备份但绝不提交到公开仓库
