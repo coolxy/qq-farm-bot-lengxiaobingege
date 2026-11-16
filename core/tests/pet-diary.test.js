@@ -301,7 +301,9 @@ test('pet activity is discoverable without loading any season details', () => {
 
 test('activity directory uses the official pet title without renaming other activities', () => {
     const { buildActivityDirectory } = require('../dist/services/activity-center');
-    const windows = ['2026090100', '2026090101', '2026090102', '2026090103'].map(id => ({ id, name: 'S3 萌宠', beginTime: 1, endTime: 2 }));
+    // endTime 设为未来，避免被“隐藏已结束活动”过滤影响本用例的分组/命名断言
+    const future = Math.floor(Date.now() / 1000) + 86400;
+    const windows = ['2026090100', '2026090101', '2026090102', '2026090103'].map(id => ({ id, name: 'S3 萌宠', beginTime: 1, endTime: future }));
     const directory = buildActivityDirectory(windows, null, null, null, null);
     assert.equal(directory[0].name, '萌宠成长日记');
     assert.equal(directory[0].detailTarget, 'pet');

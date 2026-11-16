@@ -133,8 +133,24 @@ test('buildActivityDirectory 不把牧场活动混进农场活动目录', () => 
         { id: '2026111800', name: '故友重逢', beginTime: 0, endTime: 0 },
     ];
     const names = buildActivityDirectory(windows, null, null, null, null).map((g) => g.name);
-    assert.ok(names.includes('奶茶热销中'), '农场活动应保留');
-    assert.ok(names.includes('故友重逢'), '18 日的全局活动应保留');
+    assert.ok(!names.includes('奶茶热销中'), '已过期的农场活动不应出现（奶茶活动 2026-11-16 23:59:59 结束）');
+    assert.ok(names.includes('故友重逢'), '无结束时间的全局活动应保留');
     assert.ok(!names.some(n => n.startsWith('牧歌初启')), '牧场活动不应出现在农场目录');
     assert.ok(!names.some(n => n.startsWith('以薯换福')), '牧场活动不应出现在农场目录');
+});
+
+test('buildActivityDirectory 隐藏已结束活动、保留进行中与长期活动', () => {
+    const { buildActivityDirectory } = require('../dist/services/activity-center');
+    const nowSec = Math.floor(Date.now() / 1000);
+    const windows = [
+        { id: '2099010100', name: '远古已结束活动', beginTime: nowSec - 86400 * 30, endTime: nowSec - 60 },
+        { id: '2099010200', name: '正在进行活动', beginTime: nowSec - 3600, endTime: nowSec + 86400 },
+        { id: '2099010300', name: '长期活动无结束时间', beginTime: 0, endTime: 0 },
+        { id: '2099010400', name: '负时间戳垃圾活动', beginTime: -62135596800, endTime: -62135596800 },
+    ];
+    const names = buildActivityDirectory(windows, null, null, null, null).map((g) => g.name);
+    assert.ok(!names.includes('远古已结束活动'), 'endTime 已过的活动应隐藏');
+    assert.ok(names.includes('正在进行活动'), '未结束的活动应保留');
+    assert.ok(names.includes('长期活动无结束时间'), 'endTime===0 的长期活动应保留');
+    assert.ok(!names.includes('负时间戳垃圾活动'), '负数 endTime（DateTime.MinValue 垃圾值）应隐藏');
 });

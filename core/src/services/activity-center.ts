@@ -325,7 +325,16 @@ function buildActivityDirectory(windows: any[], season: any, shop: any, solarTer
             rules,
         });
     }
-    return groups.map(group => ({
+    // 隐藏已结束的活动：跨天后不再展示 endTime 已过的活动。
+    // 判定放在分组聚合之后：同一活动的子活动可能只有主活动带 endTime，聚合后取最大值最稳妥。
+    // 以服务器时间为准，避免本机时间不准。endTime 语义：
+    //   - 明确为 0：服务端未下发结束时间，视为长期有效，保留；
+    //   - 负数：protobuf 未设置时间字段时的垃圾值（如 .NET DateTime.MinValue → -62135596800），
+    //     这类活动往往早已结束，不能当长期有效，一并隐藏；
+    //   - 正数：与 nowSec 比较，>now 保留（进行中/即将开始），<=now 隐藏（已结束）。
+    const nowSec = getServerTimeSec();
+    const activeGroups = groups.filter(group => group.endTime === 0 || group.endTime > nowSec);
+    return activeGroups.map(group => ({
         ...group,
         instanceId: shareRewardInstances.find(entry => group.activityIds.includes(entry.activityId))?.activityId || null,
         name: group.activityIds.some((id: string) => ['2026090100', '2026090101', '2026090102', '2026090103'].includes(id)) ? '萌宠成长日记' : group.name,

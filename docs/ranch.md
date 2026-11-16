@@ -97,7 +97,7 @@
   `getActivityGroupExtra(groupId)` 按分组补取内容（缓存 10 分钟），因为牧场活动在 `ActivityList` 里通常没有进度节点。
 - `config/activity-scene.ts`：`activityScope()` / `isRanchActivity()` / `isGlobalActivity()`，未识别的活动一律按全局处理，不混进牧场页。
 - `services/ranch/state.ts` 的 `ranchActivities()`：只留牧场活动，去掉已结束的，进行中在前、即将开始在后。
-- `services/activity-center.ts` 的 `buildActivityDirectory()`：用 `isGlobalActivity()` 反向过滤，农场活动中心只显示全站/农场活动，不再串进牧歌初启、以薯换福。
+- `services/activity-center.ts` 的 `buildActivityDirectory()`：用 `isGlobalActivity()` 反向过滤，农场活动中心只显示全站/农场活动，不再串进牧歌初启、以薯换福；并按服务器时间隐藏 `endTime` 已过的活动（`endTime===0` 视为长期有效；负数为 protobuf 未设置时间的垃圾值如 `DateTime.MinValue`，同样隐藏），与牧场侧 `ranchActivities()` 的"去掉已结束"口径一致——跨天后昨天结束的活动（如奶茶热销中）不再出现在活动中心。判定放在分组聚合之后，取合并后的最大 endTime。
 
 新增牧场活动时：如果界面标识沿用 `Muge` 前缀、或活动 id 落在已登记的牧场日期段，无需改代码；否则把前缀补进 `config/ranch-activity-scope.json`（uid 前缀 / id 前缀 / 精确 id / 排除 id 四类，改完可调 `reloadRanchActivityScope()` 热更新）。
 
