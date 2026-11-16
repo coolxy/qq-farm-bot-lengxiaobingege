@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import api, { getApiErrorMessage } from '@/api'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
@@ -24,6 +24,44 @@ const success = ref('')
 const loading = ref(false)
 const lockoutRemaining = ref(0)
 const rateLimitRemaining = ref(0)
+/** 新设备登录：拿到挑战后进入验证码步骤 */
+const challengeId = ref('')
+const verifyCode = ref('')
+const verifyCountdown = ref(0)
+let countdownTimer: ReturnType<typeof setInterval> | null = null
+
+function stopCountdown() {
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
+  }
+}
+
+function startCountdown(seconds: number) {
+  stopCountdown()
+  verifyCountdown.value = Math.max(0, Math.round(seconds))
+  if (!verifyCountdown.value)
+    return
+  countdownTimer = setInterval(() => {
+    verifyCountdown.value -= 1
+    if (verifyCountdown.value <= 0) {
+      stopCountdown()
+      verifyCountdown.value = 0
+    }
+  }, 1000)
+}
+
+function backToPassword() {
+  stopCountdown()
+  challengeId.value = ''
+  verifyCode.value = ''
+  verifyCountdown.value = 0
+  error.value = ''
+  success.value = ''
+  password.value = ''
+}
+
+onUnmounted(stopCountdown)
 
 const usernameValid = computed(() => {
   const name = username.value
@@ -166,6 +204,13 @@ async function handleSubmit() {
         window.location.href = '/'
       }, 500)
     }
+    else if (result.errorType === 'verify_required' && result.challengeId) {
+      // 新设备：密码已通过，进入验证码步骤（这不是错误，别用红字吓人）
+      challengeId.value = result.challengeId
+      verifyCode.value = ''
+      success.value = result.error || '已向微信发送 6 位验证码，请回填完成登录'
+      startCountdown(result.expiresIn ? result.expiresIn / 1000 : 300)
+    }
     else if (result.errorType === 'rate_limit') {
       error.value = result.error || '请求过于频繁，请稍后重试'
       if (result.remainingMs)
@@ -175,6 +220,9 @@ async function handleSubmit() {
       error.value = result.error || '账户已被锁定'
       if (result.remainingMs)
         lockoutRemaining.value = Math.ceil(result.remainingMs / 1000 / 60)
+    }
+    else if (result.errorType === 'push_failed') {
+      error.value = result.error || '验证码发送失败'
     }
     else {
       error.value = result.error || '登录失败'
@@ -195,6 +243,43 @@ async function handleSubmit() {
     else {
       error.value = getApiErrorMessage(e, '操作异常')
     }
+  }
+  finally {
+    loading.value = false
+  }
+}
+
+async function handleVerify() {
+  if (!/^\d{6}$/.test(verifyCode.value)) {
+    error.value = '请输入 6 位数字验证码'
+    return
+  }
+  loading.value = true
+  error.value = ''
+  try {
+    const result = await userStore.verifyLogin(challengeId.value, verifyCode.value)
+    if (result.ok) {
+      stopCountdown()
+      success.value = '验证通过，该设备已受信任（30 天内免验证码）'
+      setTimeout(() => {
+        window.location.href = '/'
+      }, 600)
+      return
+    }
+    error.value = result.error || '验证码校验失败'
+    // 挑战作废或过期：退回密码步骤，让用户重新获取一次
+    if (result.errorType === 'challenge_expired' || result.errorType === 'challenge_mismatch') {
+      stopCountdown()
+      challengeId.value = ''
+      verifyCode.value = ''
+    }
+    else {
+      verifyCode.value = ''
+    }
+  }
+  catch (e: any) {
+    error.value = getApiErrorMessage(e, '验证失败')
+    verifyCode.value = ''
   }
   finally {
     loading.value = false
@@ -251,82 +336,114 @@ onMounted(() => {
         </div>
       </header>
 
-      <form class="form-area" @submit.prevent="handleSubmit">
-        <div class="form-group">
-          <label class="form-label" for="username">
-            <span class="i-carbon-user" />
-            用户名
-          </label>
-          <BaseInput
-            id="username"
-            v-model="username"
-            type="text"
-            placeholder="请输入用户名"
-            autocomplete="username"
-            :disabled="needsSetup"
-            required
-          />
-          <p v-if="username && !usernameValid.valid" class="form-hint error">
-            {{ usernameValid.message }}
-          </p>
-        </div>
+      <form class="form-area" @submit.prevent="challengeId ? handleVerify() : handleSubmit()">
+        <template v-if="!challengeId">
+          <div class="form-group">
+            <label class="form-label" for="username">
+              <span class="i-carbon-user" />
+              用户名
+            </label>
+            <BaseInput
+              id="username"
+              v-model="username"
+              type="text"
+              placeholder="请输入用户名"
+              autocomplete="username"
+              :disabled="needsSetup"
+              required
+            />
+            <p v-if="username && !usernameValid.valid" class="form-hint error">
+              {{ usernameValid.message }}
+            </p>
+          </div>
 
-        <div class="form-group">
-          <label class="form-label" for="password">
-            <span class="i-carbon-locked" />
-            {{ needsSetup ? '设置密码' : '密码' }}
-          </label>
-          <div v-if="needsSetup" class="generate-row">
-            <BaseButton variant="outline" size="sm" type="button" @click="generateRandomPassword">
+          <div class="form-group">
+            <label class="form-label" for="password">
+              <span class="i-carbon-locked" />
+              {{ needsSetup ? '设置密码' : '密码' }}
+            </label>
+            <div v-if="needsSetup" class="generate-row">
+              <BaseButton variant="outline" size="sm" type="button" @click="generateRandomPassword">
+                <span class="inline-flex items-center gap-1">
+                  <span class="i-carbon-renew" />
+                  生成随机密码
+                </span>
+              </BaseButton>
+              <span class="generate-hint">16 位，含大小写字母、数字、特殊符号</span>
+            </div>
+            <BaseInput
+              id="password"
+              v-model="password"
+              type="password"
+              :placeholder="needsSetup ? '至少8位，含大小写/数字/符号中3类' : '请输入密码'"
+              :autocomplete="needsSetup ? 'new-password' : 'current-password'"
+              required
+            />
+            <p v-if="needsSetup" class="form-hint">
+              账号固定为 admin；密码至少 8 位，且包含大写字母、小写字母、数字、特殊符号中的至少 3 类
+            </p>
+          </div>
+
+          <div v-if="needsSetup" class="form-group">
+            <label class="form-label" for="confirmPassword">
+              <span class="i-carbon-locked" />
+              确认密码
+            </label>
+            <BaseInput
+              id="confirmPassword"
+              v-model="confirmPassword"
+              type="password"
+              placeholder="请再次输入密码"
+              autocomplete="new-password"
+              required
+            />
+          </div>
+
+          <div v-if="generatedPassword" class="generated-box">
+            <div class="generated-label">
+              已生成，请立即保存（仅此一次显示）
+            </div>
+            <div class="generated-value">
+              <code>{{ generatedPassword }}</code>
+              <BaseButton variant="text" size="sm" type="button" @click="copyGeneratedPassword">
+                <span class="inline-flex items-center gap-1">
+                  <span :class="copied ? 'i-carbon-checkmark' : 'i-carbon-copy'" />
+                  {{ copied ? '已复制' : '复制' }}
+                </span>
+              </BaseButton>
+            </div>
+          </div>
+        </template>
+
+        <template v-else>
+          <div class="form-group">
+            <label class="form-label" for="verifyCode">
+              <span class="i-carbon-mobile" />
+              微信验证码
+            </label>
+            <BaseInput
+              id="verifyCode"
+              v-model="verifyCode"
+              type="text"
+              inputmode="numeric"
+              maxlength="6"
+              placeholder="请输入 6 位数字"
+              autocomplete="one-time-code"
+              required
+            />
+            <p class="form-hint">
+              新设备登录需验证。验证码已推送到你的微信，{{ verifyCountdown > 0 ? `${verifyCountdown} 秒内有效` : '已过期，请返回重新获取' }}
+            </p>
+          </div>
+          <div class="verify-actions">
+            <BaseButton variant="text" size="sm" type="button" @click="backToPassword">
               <span class="inline-flex items-center gap-1">
-                <span class="i-carbon-renew" />
-                生成随机密码
+                <span class="i-carbon-arrow-left" />
+                返回重新登录
               </span>
             </BaseButton>
-            <span class="generate-hint">16 位，含大小写字母、数字、特殊符号</span>
           </div>
-          <BaseInput
-            id="password"
-            v-model="password"
-            type="password"
-            :placeholder="needsSetup ? '至少8位，含大小写/数字/符号中3类' : '请输入密码'"
-            :autocomplete="needsSetup ? 'new-password' : 'current-password'"
-            required
-          />
-          <p v-if="needsSetup" class="form-hint">
-            账号固定为 admin；密码至少 8 位，且包含大写字母、小写字母、数字、特殊符号中的至少 3 类
-          </p>
-        </div>
-
-        <div v-if="needsSetup" class="form-group">
-          <label class="form-label" for="confirmPassword">
-            <span class="i-carbon-locked" />
-            确认密码
-          </label>
-          <BaseInput
-            id="confirmPassword"
-            v-model="confirmPassword"
-            type="password"
-            placeholder="请再次输入密码"
-            autocomplete="new-password"
-            required
-          />
-        </div>
-
-        <div v-if="generatedPassword" class="generated-box">
-          <div class="generated-label">
-            已生成，请立即保存（仅此一次显示）
-          </div>
-          <div class="generated-value">
-            <code>{{ generatedPassword }}</code>
-            <BaseButton variant="text" size="sm" type="button" @click="copyGeneratedPassword">
-              <span class="inline-flex items-center gap-1">
-                <span :class="copied ? 'i-carbon-checkmark' : 'i-carbon-copy'" />
-                {{ copied ? '已复制' : '复制' }}
-              </span>
-            </BaseButton>
-          </div>
-        </div>
+        </template>
 
         <div v-if="error" class="message error-message" role="alert">
           <span class="i-carbon-warning-alt" />
@@ -343,8 +460,8 @@ onMounted(() => {
 
         <BaseButton type="submit" variant="primary" block :loading="loading || setupChecking" class="submit-btn">
           <span v-if="!loading" class="inline-flex items-center gap-2">
-            <span :class="needsSetup ? 'i-carbon-password' : 'i-carbon-login'" />
-            {{ needsSetup ? '设置密码并登录' : '登录' }}
+            <span :class="challengeId ? 'i-carbon-checkmark-outline' : needsSetup ? 'i-carbon-password' : 'i-carbon-login'" />
+            {{ challengeId ? '验证并登录' : needsSetup ? '设置密码并登录' : '登录' }}
           </span>
         </BaseButton>
       </form>
@@ -554,6 +671,12 @@ onMounted(() => {
 
 .submit-btn {
   margin-top: 2px;
+}
+
+.verify-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -6px;
 }
 
 .card-footer {

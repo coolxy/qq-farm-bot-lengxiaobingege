@@ -57,10 +57,13 @@ const issueToken = (): string => crypto.randomBytes(24).toString('hex');
 function createAuthRequired(ctx: AdminContext) {
     return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
         const token = String(req.headers['x-admin-token'] || '');
-        if (!token || !ctx.tokens.has(token)) {
+        // get() 内部做过期判定，顺带滑动续期（写盘有节流，不会每请求一次 IO）
+        const session = token ? ctx.tokens.get(token) : null;
+        if (!session) {
             res.status(401).json({ ok: false, error: 'Unauthorized' });
             return;
         }
+        ctx.tokens.touch(token);
         req.adminToken = token;
         next();
     };
@@ -102,7 +105,10 @@ function getProtocolErrorMessage(err: any): string {
 
     const message = String(typeof err === 'string' ? err : err?.message || '').trim();
     if (!isGatewayProtocolError(err)) return '';
-    return message.match(/\bcode=\d+\b\s*(.*)$/)?.[1]?.trim() || '';
+    // 用定位 + 切片代替 `\s*(.*)$`：后者是可交换的嵌套量词，长文本上存在回溯风险
+    const codeMatch = message.match(/\bcode=\d+\b/);
+    if (!codeMatch || codeMatch.index === undefined) return '';
+    return message.slice(codeMatch.index + codeMatch[0].length).trim();
 }
 
 function handleApiError(res: Response, err: any): void {

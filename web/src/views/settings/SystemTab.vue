@@ -23,6 +23,63 @@ const passwordSaving = ref(false)
 const offlineSaving = ref(false)
 const offlineTesting = ref(false)
 
+// ── 登录安全：会话有效期与受信任设备 ──
+const securityLoading = ref(false)
+const securityRevoking = ref(false)
+const securityInfo = ref<any>(null)
+
+function formatDateTime(ts?: number): string {
+  if (!ts)
+    return '—'
+  const date = new Date(ts)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function daysLeft(ts?: number): string {
+  if (!ts)
+    return '—'
+  const left = ts - Date.now()
+  if (left <= 0)
+    return '已过期'
+  const days = Math.floor(left / 86400000)
+  if (days >= 1)
+    return `${days} 天后`
+  return `${Math.max(1, Math.floor(left / 3600000))} 小时后`
+}
+
+async function loadSecurity() {
+  securityLoading.value = true
+  try {
+    securityInfo.value = await userStore.fetchSecurity()
+  }
+  finally {
+    securityLoading.value = false
+  }
+}
+
+async function handleRevokeDevices() {
+  if (!confirm('撤销后，所有浏览器（包括当前这台）下次登录都要重新收微信验证码。确定继续？'))
+    return
+  securityRevoking.value = true
+  try {
+    const result = await userStore.revokeTrustedDevices()
+    if (result?.ok) {
+      showAlert(`已撤销 ${result.data?.revoked ?? 0} 台受信任设备`)
+      await loadSecurity()
+    }
+    else {
+      showAlert(result?.error || '撤销失败', 'danger')
+    }
+  }
+  catch (e: any) {
+    showAlert(getApiErrorMessage(e, '撤销失败'), 'danger')
+  }
+  finally {
+    securityRevoking.value = false
+  }
+}
+
 const passwordForm = ref({
   old: '',
   new: '',
@@ -389,6 +446,7 @@ onMounted(() => {
   syncLocalEventNotify()
   loadSystemConfig()
   loadDevicePresets()
+  loadSecurity()
 })
 </script>
 
@@ -622,6 +680,113 @@ onMounted(() => {
             >
               修改管理员密码
             </BaseButton>
+          </div>
+        </section>
+
+        <section class="farm-card rounded-lg p-4">
+          <div class="mb-4 flex items-start gap-3">
+            <div class="h-9 w-9 flex shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/25 dark:text-blue-400">
+              <span class="i-carbon-security text-xl" />
+            </div>
+            <div class="flex-1">
+              <h4 class="text-base text-gray-900 font-bold dark:text-gray-100">
+                登录安全
+              </h4>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                同一时间只允许一处登录；新设备登录需微信验证码；通过后 30 天内免验证
+              </p>
+            </div>
+            <BaseButton variant="text" size="sm" :loading="securityLoading" @click="loadSecurity">
+              刷新
+            </BaseButton>
+          </div>
+
+          <div v-if="securityInfo" class="space-y-3">
+            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-800/40">
+              <div class="mb-2 text-xs text-gray-500 font-medium dark:text-gray-400">
+                当前会话
+              </div>
+              <div class="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                <div>
+                  <div class="text-gray-400">
+                    设备
+                  </div>
+                  <div class="text-gray-800 dark:text-gray-200">
+                    {{ securityInfo.session?.device || '—' }}
+                  </div>
+                </div>
+                <div>
+                  <div class="text-gray-400">
+                    来源 IP
+                  </div>
+                  <div class="text-gray-800 dark:text-gray-200">
+                    {{ securityInfo.session?.ip || '—' }}
+                  </div>
+                </div>
+                <div>
+                  <div class="text-gray-400">
+                    自动续期至
+                  </div>
+                  <div class="text-gray-800 dark:text-gray-200">
+                    {{ daysLeft(securityInfo.session?.expiresAt) }}
+                  </div>
+                </div>
+                <div>
+                  <div class="text-gray-400">
+                    最迟重登
+                  </div>
+                  <div class="text-gray-800 dark:text-gray-200">
+                    {{ daysLeft(securityInfo.session?.absoluteExpiresAt) }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-800/40">
+              <div class="mb-2 flex items-center justify-between">
+                <span class="text-xs text-gray-500 font-medium dark:text-gray-400">
+                  受信任设备（{{ securityInfo.devices?.length || 0 }}）
+                </span>
+                <span v-if="!securityInfo.deviceVerifyEnabled" class="text-xs text-amber-600">
+                  设备验证已通过环境变量关闭
+                </span>
+              </div>
+              <div v-if="!securityInfo.devices?.length" class="text-xs text-gray-400">
+                暂无受信任设备。下次在新浏览器登录会立刻信任该设备并推送通知。
+              </div>
+              <ul v-else class="space-y-2">
+                <li
+                  v-for="device in securityInfo.devices"
+                  :key="device.label + device.createdAt"
+                  class="flex items-center justify-between text-xs"
+                >
+                  <span class="text-gray-800 dark:text-gray-200">
+                    {{ device.label }}
+                  </span>
+                  <span class="text-gray-400">
+                    最近 {{ formatDateTime(device.lastSeenAt) }} · {{ daysLeft(device.expiresAt) }}失效
+                  </span>
+                </li>
+              </ul>
+            </div>
+
+            <div class="flex items-center justify-between border-t pt-3 dark:border-gray-700">
+              <span class="text-xs text-gray-500 dark:text-gray-400">
+                撤销后所有设备都要重新收验证码
+              </span>
+              <BaseButton
+                variant="outline"
+                size="sm"
+                :loading="securityRevoking"
+                :disabled="!securityInfo.devices?.length"
+                @click="handleRevokeDevices"
+              >
+                撤销全部设备
+              </BaseButton>
+            </div>
+          </div>
+          <div v-else class="text-xs text-gray-400">
+            加载中…
           </div>
         </section>
 

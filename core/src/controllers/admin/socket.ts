@@ -12,6 +12,9 @@ const {
 } = require('./middleware');
 const { getAllowedOrigins } = require('./cors');
 
+/** socket 上复核会话有效性的间隔 */
+const SOCKET_TOKEN_RECHECK_MS = 5 * 60 * 1000;
+
 function applySocketSubscription(ctx: AdminContext, socket: any, accountRef: string = ''): void {
     const incoming = String(accountRef || '').trim();
     const resolved = incoming && incoming !== 'all' ? resolveAccId(ctx, incoming) : '';
@@ -78,9 +81,11 @@ function setupSocketIO(ctx: AdminContext): void {
             ? String(socket.handshake.headers['x-admin-token'])
             : '';
         const token = authToken || headerToken;
-        if (!token || !ctx.tokens.has(token)) {
+        const session = token ? ctx.tokens.get(token) : null;
+        if (!session) {
             return next(new Error('Unauthorized'));
         }
+        ctx.tokens.touch(token);
         socket.data.adminToken = token;
         return next();
     });
@@ -91,6 +96,20 @@ function setupSocketIO(ctx: AdminContext): void {
             || '';
         applySocketSubscription(ctx, socket, initialAccountRef);
         socket.emit('ready', { ok: true, ts: Date.now() });
+
+        // 长连接不会重复走 HTTP 鉴权：定时复核 token 是否已被踢下线/过期，
+        // 否则改密码或单会话强制后，旧标签页仍能通过 socket 持续收到实时数据。
+        const guard = setInterval(() => {
+            const current = socket.data && socket.data.adminToken;
+            if (!current || !ctx.tokens.get(String(current))) {
+                clearInterval(guard);
+                socket.disconnect(true);
+                return;
+            }
+            ctx.tokens.touch(String(current));
+        }, SOCKET_TOKEN_RECHECK_MS);
+        if (typeof guard.unref === 'function') guard.unref();
+        socket.on('disconnect', () => clearInterval(guard));
 
         socket.on('subscribe', (payload: any) => {
             const body = (payload && typeof payload === 'object') ? payload : {};

@@ -6,12 +6,45 @@ const security = require('./auth-security');
 
 const ADMIN_FILE: string = getDataFile('admin.json');
 
+/**
+ * 受信任设备：通过过微信验证码的浏览器，30 天内登录免二次验证。
+ * id 由浏览器 localStorage 随机生成（32 hex），服务端只做比对，不参与任何密钥运算。
+ */
+interface TrustedDevice {
+    id: string;
+    label: string;
+    createdAt: number;
+    lastSeenAt: number;
+    expiresAt: number;
+}
+
 interface AdminRecord {
     username: string;
     password: string;
     createdAt: number;
     mustChangePassword?: boolean;
     needsSetup?: boolean;
+    trustedDevices?: TrustedDevice[];
+}
+
+/** 受信任设备有效期 */
+const DEVICE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+/** 最多保留的设备数，超出按最久未用淘汰 */
+const MAX_TRUSTED_DEVICES = 5;
+const DEVICE_ID_RE = /^[a-f0-9]{16,64}$/i;
+
+function normalizeDevice(raw: any): TrustedDevice | null {
+    if (!raw || typeof raw !== 'object') return null;
+    const id = String(raw.id || '').trim();
+    if (!DEVICE_ID_RE.test(id)) return null;
+    const createdAt = Number(raw.createdAt) > 0 ? Number(raw.createdAt) : Date.now();
+    return {
+        id,
+        label: String(raw.label || '未知设备').slice(0, 120),
+        createdAt,
+        lastSeenAt: Number(raw.lastSeenAt) > 0 ? Number(raw.lastSeenAt) : createdAt,
+        expiresAt: Number(raw.expiresAt) > 0 ? Number(raw.expiresAt) : createdAt + DEVICE_TTL_MS,
+    };
 }
 
 let admin: AdminRecord | null = null;
@@ -22,12 +55,16 @@ function normalizeAdmin(raw: any): AdminRecord | null {
     const password = String(raw.password || '');
     // 未初始化状态允许空密码；已初始化的记录必须有密码哈希
     if (!needsSetup && !password.trim()) return null;
+    const devices = Array.isArray(raw.trustedDevices)
+        ? raw.trustedDevices.map(normalizeDevice).filter((item: TrustedDevice | null): item is TrustedDevice => !!item)
+        : [];
     return {
         username: String(raw.username || 'admin').trim() || 'admin',
         password,
         createdAt: Number(raw.createdAt) || Date.now(),
         mustChangePassword: raw.mustChangePassword === true || undefined,
         needsSetup: needsSetup || undefined,
+        trustedDevices: devices.length ? devices : undefined,
     };
 }
 
@@ -139,8 +176,113 @@ function changePassword(oldPassword: string, newPassword: string): { ok: boolean
     return { ok: true, message: '密码修改成功' };
 }
 
+function describeDevice(ua: string): string {
+    const text = String(ua || '');
+    if (!text) return '未知设备';
+    const os = /Windows/i.test(text) ? 'Windows'
+        : /iPhone|iPad|iOS/i.test(text) ? 'iOS'
+            : /Android/i.test(text) ? 'Android'
+                : /Macintosh|Mac OS/i.test(text) ? 'macOS'
+                    : /Linux/i.test(text) ? 'Linux' : '';
+    const browser = /Edg\//i.test(text) ? 'Edge'
+        : /OPR\/|Opera/i.test(text) ? 'Opera'
+            : /Firefox\//i.test(text) ? 'Firefox'
+                : /Chrome\//i.test(text) ? 'Chrome'
+                    : /Safari\//i.test(text) ? 'Safari' : '';
+    const label = [os, browser].filter(Boolean).join(' / ');
+    return label || text.slice(0, 40);
+}
+
+/** 清理过期设备，返回剩余有效设备 */
+function activeDevices(): TrustedDevice[] {
+    const current = loadAdmin();
+    const now = Date.now();
+    const devices = Array.isArray(current.trustedDevices) ? current.trustedDevices : [];
+    const alive = devices.filter(item => item.expiresAt > now);
+    if (alive.length !== devices.length) {
+        current.trustedDevices = alive.length ? alive : undefined;
+        saveAdmin();
+    }
+    return alive;
+}
+
+function isValidDeviceId(deviceId: unknown): boolean {
+    return DEVICE_ID_RE.test(String(deviceId || '').trim());
+}
+
+/** 该设备是否已通过过二次验证（且在有效期内） */
+function isTrustedDevice(deviceId: string): boolean {
+    const id = String(deviceId || '').trim();
+    if (!isValidDeviceId(id)) return false;
+    return activeDevices().some(item => item.id === id);
+}
+
+function touchTrustedDevice(deviceId: string): void {
+    const id = String(deviceId || '').trim();
+    if (!isValidDeviceId(id)) return;
+    const current = loadAdmin();
+    const device = (current.trustedDevices || []).find(item => item.id === id);
+    if (!device) return;
+    const now = Date.now();
+    device.lastSeenAt = now;
+    device.expiresAt = now + DEVICE_TTL_MS;
+    saveAdmin();
+}
+
+/** 信任一台新设备：超出上限时淘汰最久未使用的 */
+function trustDevice(deviceId: string, userAgent: string): { ok: boolean; label?: string; error?: string } {
+    const id = String(deviceId || '').trim();
+    if (!isValidDeviceId(id)) return { ok: false, error: '设备标识无效' };
+    const current = loadAdmin();
+    const now = Date.now();
+    const devices = activeDevices();
+    const existing = devices.find(item => item.id === id);
+    const label = describeDevice(userAgent);
+    if (existing) {
+        existing.lastSeenAt = now;
+        existing.expiresAt = now + DEVICE_TTL_MS;
+        existing.label = label;
+    } else {
+        devices.push({ id, label, createdAt: now, lastSeenAt: now, expiresAt: now + DEVICE_TTL_MS });
+    }
+    current.trustedDevices = devices
+        .sort((a, b) => b.lastSeenAt - a.lastSeenAt)
+        .slice(0, MAX_TRUSTED_DEVICES);
+    saveAdmin();
+    return { ok: true, label };
+}
+
+function listTrustedDevices(): Array<{ label: string; createdAt: number; lastSeenAt: number; expiresAt: number }> {
+    return activeDevices()
+        .sort((a, b) => b.lastSeenAt - a.lastSeenAt)
+        .map(item => ({
+            label: item.label,
+            createdAt: item.createdAt,
+            lastSeenAt: item.lastSeenAt,
+            expiresAt: item.expiresAt,
+        }));
+}
+
+/** 撤销全部受信任设备：所有浏览器下次登录都必须重新收验证码 */
+function revokeTrustedDevices(): number {
+    const current = loadAdmin();
+    const count = (current.trustedDevices || []).length;
+    if (count) {
+        current.trustedDevices = undefined;
+        saveAdmin();
+    }
+    return count;
+}
+
+/** 是否已存在任何受信任设备（用于判断「首次启用」放行） */
+function hasTrustedDevices(): boolean {
+    return activeDevices().length > 0;
+}
+
 loadAdmin();
 
 module.exports = {
     getAdminInfo, isSetupPending, setupPassword, validateAdmin, changePassword,
+    isTrustedDevice, touchTrustedDevice, trustDevice, listTrustedDevices,
+    revokeTrustedDevices, hasTrustedDevices, isValidDeviceId, describeDevice,
 };
