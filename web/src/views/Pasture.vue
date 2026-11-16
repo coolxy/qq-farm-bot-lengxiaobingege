@@ -171,7 +171,27 @@ function formatBucket(seconds: number): string {
 }
 
 function stageLabel(stage: number): string {
-  return ['幼崽', '成长期', '成年', '可收获', '成熟'][Math.max(0, Math.min(4, stage - 1))] || `阶段${stage}`
+  // 实包核对：stage 4 的动物 mature_ready_at 还没到，所以 stage4 不是「可收获」，只是成年后期。
+  return ({ 1: '幼崽', 2: '成长期', 3: '成年', 4: '壮年', 5: '成熟' } as any)[stage] || `阶段${stage}`
+}
+
+/** 这只动物下一步该做什么：喂食 / 等产物 / 已就绪可收 */
+function animalNextStep(a: any): string {
+  if (a.canHarvest)
+    return '产物就绪，点「一键收取」'
+  if (a.matureReadyAt && a.matureReadyAt > Date.now())
+    return `成熟倒计时：${formatRemain(a.matureReadyAt - Date.now())}`
+  if (a.canFeed)
+    return bucketSeconds.value > 0 ? '等待喂食（消耗罐头桶时长）' : '等待喂食，但罐头桶已空'
+  return '产出积累中'
+}
+
+function formatRemain(ms: number): string {
+  if (!ms || ms <= 0) return '已就绪'
+  const minutes = Math.floor(ms / 60000)
+  const hours = Math.floor(minutes / 60)
+  if (hours > 0) return `${hours}小时${minutes % 60}分`
+  return `${minutes}分`
 }
 
 function quotaLabel(opId: number): string {
@@ -194,7 +214,12 @@ async function run(action: string, input: any = {}) {
   const ok = await pastureStore.operate(currentAccountId.value, action, { ...base, ...input })
   void fetchPastureLogs()
   if (ok) {
-    toast.success('操作成功')
+    // 后端会把「没有可收取的产物」这类业务态当作成功返回，但带一句人话说明，用 info 展示即可。
+    const message = String(pastureStore.lastResult?.message || '')
+    if (message && /没有可|没有需要|已满|已用完/.test(message))
+      toast.info(message)
+    else
+      toast.success(message || '操作成功')
     return
   }
   const message = error.value || '操作失败'
@@ -354,9 +379,17 @@ onMounted(() => {
         </div>
       </div>
 
+      <div
+        v-if="!bucketSeconds && !cannedCount"
+        class="border border-amber-200 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200"
+      >
+        饲料为 0：罐头桶余量和背包罐头都是空的，动物不会产生产物，所以「一键收取」只会收到「当前没有可收取的产物」。
+        去下方「牧场补给（商城罐头）」买有机罐头，或先在游戏里补充罐头，再点收取才有东西可收。
+      </div>
+
       <div class="flex flex-wrap gap-2">
         <NButton size="small" type="primary" :loading="operating === 'harvest'" :disabled="!isConnected" @click="run('harvest')">
-          收获产物
+          一键收取（催产+收获）
         </NButton>
         <NButton size="small" :loading="operating === 'triggerProduce'" :disabled="!isConnected" @click="run('triggerProduce')">
           一键催产
@@ -541,12 +574,15 @@ onMounted(() => {
             </div>
             <div class="mt-2 text-xs text-gray-600 space-y-1 dark:text-gray-400">
               <div>动物 ID：{{ a.animal_id }}</div>
-              <div>产物成熟：{{ formatClock(a.growReadyAt) }}</div>
-              <div>成年：{{ formatClock(a.matureReadyAt) }}</div>
-              <div>已收获 {{ a.produceCount }} 次 · 期望售价 {{ a.expectedHarvestGold }}</div>
+              <div>产物就绪：{{ formatClock(a.growReadyAt) }}</div>
+              <div>成熟时间：{{ a.matureReadyAt ? formatClock(a.matureReadyAt) : '—' }}</div>
+              <div>已产出 {{ a.produceCount }} 次 · 预计收获 {{ a.expectedHarvestGold }} 金</div>
+            </div>
+            <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              {{ animalNextStep(a) }}
             </div>
             <div class="mt-2 flex flex-wrap gap-1">
-              <span v-if="a.canHarvest" class="rounded bg-green-50 px-2 py-0.5 text-xs text-green-700 dark:bg-green-900/30 dark:text-green-300">可收获</span>
+              <span v-if="a.canHarvest" class="rounded bg-green-50 px-2 py-0.5 text-xs text-green-700 dark:bg-green-900/30 dark:text-green-300">产物就绪</span>
               <span v-if="a.canFeed" class="rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">可喂</span>
               <span v-if="a.canStroke" class="rounded bg-pink-50 px-2 py-0.5 text-xs text-pink-700 dark:bg-pink-900/30 dark:text-pink-300">可抚摸</span>
             </div>

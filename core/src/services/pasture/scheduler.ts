@@ -166,25 +166,33 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
             }
         }
 
-        // 1. 成熟即收（回包直接带最新 RanchInfo，用回包更新本地引用）
+        // 1. 成熟即收
+        // 实包勘误（2026-11-16 抓包解密）：真实客户端每次都是 TriggerProduce → HarvestRanch 成对发出。
+        // 只发 HarvestRanch 一定回 1045211「当前没有可收取的产物」，因为产物要先由催产结算到货架。
         if (auto.pasture_harvest) {
             await safeStep('收获产物', async () => {
                 const before = analyzeRanch(ranch, Date.now());
-                if (before.harvestable.length > 0) {
-                    const res = await api.harvestRanch(toNum(ranch.ranch_inst_id), 1);
-                    if (res && res.ranch) {
-                        ranch = res.ranch;
-                        actions.push(`收获 ${before.harvestable.length} 只动物的产物`);
-                        recordOperation('牧场收获', before.harvestable.length);
-                        actionCooldownUntil['收获产物'] = 0;
-                        await sleep(400);
-                    }
+                if (before.harvestable.length === 0) return;
+                let shelves = 0;
+                try {
+                    const tp = await api.triggerProduce();
+                    if (tp && tp.ranch) ranch = tp.ranch;
+                    if (tp && Array.isArray(tp.shelves)) shelves = tp.shelves.length;
+                } catch {
+                    // 1045232「当前没有可以生产的动物」是正常业务态，继续尝试收货架。
                 }
+                const res = await api.harvestRanch(toNum(ranch.ranch_inst_id), 1);
+                const got = res && Array.isArray(res.shelves) ? res.shelves.length : 0;
+                if (res && res.ranch) ranch = res.ranch;
+                if (got > 0 || shelves > 0) {
+                    const count = got || shelves;
+                    actions.push(`收获 ${count} 批产物`);
+                    recordOperation('牧场收获', count);
+                    actionCooldownUntil['收获产物'] = 0;
+                }
+                await sleep(400);
             });
         }
-
-        // 一键催产保留为面板手动操作：自动化里它会在无动物可生产时返回 1045232，
-        // 白增一次请求且容易触发网关限流，因此不再每轮自动调用。
 
         await sleep(700);
 
@@ -289,25 +297,15 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
             });
         }
 
-        // 6. 每日抚摸（有 strokable 的动物，每轮一只）
+        // 6. 每日抚摸
+        // 实测（2026-11-16）：对自己的动物发 StrokeAnimal 一律回 1000020「请求参数错误」，
+        // 抓包里的抚摸全部发生在好友家园（owner_gid=好友）。所以自动化不再对自家动物空撞，
+        // 只保留好友牧场抚摸（下面第 7 步），避免每轮白刷一条失败日志。
         if (auto.pasture_stroke) {
-            await safeStep('每日抚摸', async () => {
-                const strokeState = analyzeRanch(ranch, Date.now());
-                if (strokeState.strokable.length > 0) {
-                    const target = strokeState.strokable[0];
-                    const updated = await api.strokeAnimal(
-                        toNum(state.gid), toNum(target.ranch_inst_id || ranch.ranch_inst_id), toNum(target.animal_inst_id));
-                    if (updated) {
-                        ranch = updated;
-                        actions.push(`抚摸栏位 ${target.slot_index}`);
-                        recordOperation('牧场抚摸', 1);
-                    }
-                }
-                else {
-                    notes.push('今日可抚摸的动物都已抚摸过');
-                }
-                return null;
-            });
+            const strokeState = analyzeRanch(ranch, Date.now());
+            if (strokeState.strokable.length > 0) {
+                notes.push('自家动物不可抚摸（服务端只允许在好友牧场抚摸），已跳过');
+            }
         }
 
         await sleep(700);

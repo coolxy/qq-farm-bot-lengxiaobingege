@@ -26,12 +26,21 @@ function needType(name: string): any {
     return t;
 }
 
-async function call(Req: any, req: any, service: string, method: string, Reply?: any): Promise<any> {
+/**
+ * 牧场「正常业务态」错误码：没有可收产物、没有可生产动物、没有可清理的灾害、
+ * 罐头用完、牧草机已满、动物用过一次性桶、目标不可操作。
+ * 这些不是故障，声明成 expectedErrorCodes 后网络层不再按 warn 刷全局日志，
+ * 由牧场自己翻译成人话写进牧场日志。
+ */
+const PASTURE_BENIGN_CODES = [1045211, 1045232, 1045233, 1045234, 1045136, 1045226, 1045207, 1000020];
+
+async function call(Req: any, req: any, service: string, method: string, Reply?: any,
+    expectedErrorCodes: number[] = PASTURE_BENIGN_CODES): Promise<any> {
     await ensureProtoLoaded();
     const RequestType = typeof Req === 'string' ? needType(Req) : Req;
     const ReplyType = Reply ? (typeof Reply === 'string' ? needType(Reply) : Reply) : null;
     const body = RequestType.encode(RequestType.create(req || {})).finish();
-    const { body: replyBody } = await sendMsgAsync(service, method, Buffer.from(body));
+    const { body: replyBody } = await sendMsgAsync(service, method, Buffer.from(body), { expectedErrorCodes });
     return ReplyType ? ReplyType.decode(replyBody) : { ok: true };
 }
 

@@ -3,11 +3,13 @@ export {};
  * 牧场状态分析 - 把 RanchInfo 转成可执行的动作清单
  *
  * 判定规则全部来自 2026-11-16 微信端实包：
- * - grow_ready_at_ms 是产物成熟墙钟，<= now 表示该动物有产物可收；
- * - can_feed=1 表示该动物可喂（喂一次消耗牧草，推进成长）；
+ * - grow_ready_at_ms 是「本阶段产物/成长就绪」墙钟，<= now 只表示该动物进入下一个可结算点；
+ *   它不是「服务端一定同意收获」的充分条件（线上实测：就绪了但货架为空时 HarvestRanch 回 1045211），
+ *   所以 canHarvest 只用来决定「这一轮值不值得发一次收获」，真正的判定交给服务端业务码；
+ * - can_feed=1 表示该动物可喂（喂食后才会产出，罐头桶空了就会停在这）；
  * - mutation.strokable=1 表示可抚摸（每日有次数限制，走 OpQuota）；
  * - grass.empty_at_ms 是牧草耗尽墙钟，接近耗尽时需要加草/换罐头；
- * - mature_ready_at_ms 是动物成年墙钟，仅作展示。
+ * - mature_ready_at_ms 是动物长大可整只收获的墙钟，只有该字段出现时才代表倒计时可算。
  */
 
 const { toNum } = require('../../utils/utils');

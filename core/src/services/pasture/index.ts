@@ -8,6 +8,29 @@ const analysis = require('./analysis');
 const scheduler = require('./scheduler');
 const { getUserState } = require('../../utils/network');
 
+/**
+ * 把服务端业务码翻成人话。
+ * 牧场这些码都是正常业务态（不是故障），直接抛给前端只会显示成一串「gamepb... code=1045211」。
+ */
+const PASTURE_ERROR_TEXT: Record<number, string> = {
+    1045211: '当前没有可收取的产物',
+    1045232: '当前没有可以生产的动物',
+    1045233: '牧场没有需要清理的蚊子或便便',
+    1045234: '罐头皮已用完，需要补充有机罐头',
+    1045136: '牧草机已经满了',
+    1045226: '该动物已经用过无机罐头桶（一生只能用一次）',
+    1000020: '目标不存在或当前不可操作',
+};
+
+function readablePastureError(message: string): string {
+    const matched = message.match(/\b(1045\d{3}|104\d{4}|1000020)\b/);
+    if (matched) {
+        const text = PASTURE_ERROR_TEXT[Number(matched[1])];
+        if (text) return text;
+    }
+    return message;
+}
+
 /** 给前端的完整牧场快照：详情 + 分析结果 + 配额 + 牧草机 + 商店/背包 */
 async function getPastureSnapshot(): Promise<any> {
     const detail = await api.getRanchDetail();
@@ -168,8 +191,46 @@ async function operatePasture(action: string, input: any = {}): Promise<any> {
             };
         }
         case 'harvest': {
-            const res = await api.harvestRanch(input.ranchInstId, 1);
-            return { ok: true, ranch: res && res.ranch };
+            // 真实客户端（2026-11-16 抓包）永远是 TriggerProduce → HarvestRanch 成对出现：
+            // 催产把动物产出结算到货架，收获再把货架收进背包。只发收获必回 1045211「没有可收取的产物」。
+            const notes: string[] = [];
+            let ranch: any = null;
+            let shelves: any[] = [];
+            let produced = 0;
+            try {
+                const tp = await api.triggerProduce();
+                if (tp && tp.ranch) ranch = tp.ranch;
+                if (tp && Array.isArray(tp.shelves)) {
+                    shelves = tp.shelves;
+                    produced = tp.shelves.length;
+                    notes.push(`催产出 ${produced} 批产物`);
+                }
+            } catch (e: any) {
+                const message = String(e && e.message ? e.message : e);
+                // 1045232 = 当前没有可以生产的动物，属正常业务态。
+                if (!/1045232|没有可以生产/.test(message)) notes.push(`催产失败：${readablePastureError(message)}`);
+            }
+            try {
+                const res = await api.harvestRanch(input.ranchInstId, 1);
+                if (res && res.ranch) ranch = res.ranch;
+                if (res && Array.isArray(res.shelves)) shelves = res.shelves;
+                if (shelves.length > 0) notes.push(`收获 ${shelves.length} 批产物`);
+                return {
+                    ok: true, ranch, shelves,
+                    message: shelves.length > 0 ? `收获 ${shelves.length} 批产物` : '收获完成',
+                    notes,
+                };
+            } catch (e: any) {
+                const message = String(e && e.message ? e.message : e);
+                if (/1045211/.test(message)) {
+                    return {
+                        ok: true, ranch, shelves,
+                        message: '当前没有可收取的产物：动物要先喂食并积累产出，货架才有东西可收',
+                        notes,
+                    };
+                }
+                throw new Error(readablePastureError(message));
+            }
         }
         case 'cleanAll': {
             const ranch = await api.cleanAllRanch();
