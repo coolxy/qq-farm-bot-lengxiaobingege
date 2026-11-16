@@ -115,6 +115,14 @@ function drainRequestQueue(): void {
             continue;
         }
 
+        // 发送前闸门：调用方可能已经取消（自动化被叫停、账号切换、场景回滚中），
+        // 这一步必须在真正写 socket 之前，避免把旧请求发到错误场景。
+        const blocked = request.beforeSend ? request.beforeSend() : null;
+        if (blocked) {
+            settleQueuedRequest(request, blocked);
+            continue;
+        }
+
         const seq = S.clientSeq;
         request.seq = seq;
         const pending: PendingRequest | undefined = request.expectReply ? {
@@ -132,6 +140,7 @@ function drainRequestQueue(): void {
         } : undefined;
         codecMod.sendMsg(request.context, request.serviceName, request.methodName, request.bodyBytes, pending).then((sent) => {
             if (sent) {
+                try { request.onSent?.(); } catch { /* 记账失败不影响发送结果 */ }
                 if (!request.expectReply) {
                     settleQueuedRequest(request, undefined, { body: Buffer.alloc(0), meta: {} });
                     drainRequestQueue();

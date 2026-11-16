@@ -5,14 +5,14 @@ import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import ThemeSwitcher from '@/components/ThemeSwitcher.vue'
-import { menuRoutes } from '@/router/menu'
+import { allMenuRoutes } from '@/router/menu'
 import { useAppStore } from '@/stores/app'
 
 const route = useRoute()
 const appStore = useAppStore()
 const isDesktop = useMediaQuery('(min-width: 1024px)')
 const { sidebarOpen, sidebarCollapsed } = storeToRefs(appStore)
-const currentPage = computed(() => menuRoutes.find(item => item.name === route.name))
+const currentPage = computed(() => allMenuRoutes.find(item => item.name === route.name))
 const navigationExpanded = computed(() => isDesktop.value ? !sidebarCollapsed.value : sidebarOpen.value)
 const navigationToggleLabel = computed(() => navigationExpanded.value ? '收起侧栏' : '展开侧栏')
 const navigationIcon = computed(() => {

@@ -370,6 +370,50 @@ function mountFarmRoutes(app: Application, ctx: AdminContext): void {
         }
     });
 
+    // ============ 牧场（services/ranch，移植自上游 liyangpengs/qq-farm-bot） ============
+    app.get('/api/ranch/automation-options', (_req: Request, res: Response) => {
+        res.json({ ok: true, data: require('../../config/ranch-automation').RANCH_ANIMAL_OPTIONS });
+    });
+
+    app.get('/api/ranch', async (req: Request, res: Response) => {
+        const id = getAccId(ctx, req);
+        if (!id) return res.status(400).json({ ok: false, error: 'Missing x-account-id' });
+        try {
+            const data = await ctx.provider.getRanchState(
+                id,
+                String(req.query.view || 'animals'),
+                req.query.shopId === undefined ? undefined : Number(req.query.shopId),
+                req.query.hostGid === undefined ? undefined : String(req.query.hostGid),
+            );
+            res.json({ ok: true, data });
+        } catch (e: any) {
+            handleApiError(res, e);
+        }
+    });
+
+    // 报价/预演：只计算费用与收益，不落库，用于二次确认弹窗。
+    app.post('/api/ranch/:action/quote', async (req: Request, res: Response) => {
+        const id = getAccId(ctx, req);
+        if (!id) return res.status(400).json({ ok: false, error: 'Missing x-account-id' });
+        try {
+            const data = await ctx.provider.prepareRanchAction(id, String(req.params.action), req.body || {});
+            res.json({ ok: true, data });
+        } catch (e: any) {
+            handleApiError(res, e);
+        }
+    });
+
+    app.post('/api/ranch/:action', async (req: Request, res: Response) => {
+        const id = getAccId(ctx, req);
+        if (!id) return res.status(400).json({ ok: false, error: 'Missing x-account-id' });
+        try {
+            const data = await ctx.provider.operateRanch(id, String(req.params.action), req.body || {});
+            res.json({ ok: true, data });
+        } catch (e: any) {
+            handleApiError(res, e);
+        }
+    });
+
     app.get('/api/collections', async (req: Request, res: Response) => {
         const id = getAccId(ctx, req);
         if (!id) return res.status(400).json({ ok: false, error: 'Missing x-account-id' });

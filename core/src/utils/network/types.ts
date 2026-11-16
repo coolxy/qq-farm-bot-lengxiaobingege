@@ -29,6 +29,13 @@ export interface SendMsgOptions {
     requestClass?: RequestClass;
     criticalLane?: CriticalLane;
     expectReply?: boolean;
+    /**
+     * 真正发出前的最后一道闸：返回 Error 表示放弃发送（例如自动化任务已被取消、
+     * 账号已切换）。牧场切场期间用它避免旧队列里的请求落到错误场景。
+     */
+    beforeSend?: () => Error | null;
+    /** 写请求成功发出后的回调（牧场用它记账本轮动作）。 */
+    onSent?: () => void;
 }
 
 export interface PendingRequest {
@@ -57,6 +64,10 @@ export interface QueuedRequest {
     criticalLane?: CriticalLane;
     enqueuedAt: number;
     expectReply: boolean;
+    /** 发送前闸门（见 SendMsgOptions.beforeSend） */
+    beforeSend?: () => Error | null;
+    /** 发送成功回调（见 SendMsgOptions.onSent） */
+    onSent?: () => void;
 }
 
 export class GatewayError extends Error {

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import type { SettingsState } from '@/stores/setting'
 import { NCheckbox, NCheckboxGroup } from 'naive-ui/es/checkbox'
+import { NInputNumber } from 'naive-ui/es/input-number'
+import { onMounted, ref } from 'vue'
+import api from '@/api'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
@@ -32,6 +35,45 @@ const emit = defineEmits<{
 }>()
 
 const settings = defineModel<AutomationSettingsFormModel>({ required: true })
+
+// 牧场自动化（services/ranch）开关，与后端 config/ranch-automation.ts 一一对应。
+const ranchSwitches = [
+  { key: 'ranch_harvest', label: '自动收获产物' },
+  { key: 'ranch_produce', label: '自动生产（催产）' },
+  { key: 'ranch_buy', label: '自动补栏（金券）' },
+  { key: 'ranch_upgrade', label: '自动升级设施（金券）' },
+  { key: 'ranch_sell', label: '自动出售牧场产物' },
+  { key: 'ranch_clean', label: '自动清理灾害' },
+  { key: 'ranch_grass', label: '自动补充牧草' },
+  { key: 'ranch_grass_buy', label: '牧草不足时购买（金券）' },
+  { key: 'ranch_fill_cans', label: '自动填充库存罐头' },
+  { key: 'ranch_feed_normal', label: '普通罐头喂养' },
+  { key: 'ranch_feed_organic', label: '有机罐头喂养' },
+  { key: 'ranch_task', label: '自动领取牧场任务奖励' },
+  { key: 'ranch_share', label: '每日首次分享礼包' },
+] as const
+const ranchFriendSwitches = [
+  { key: 'ranch_friend_steal', label: '偷取好友产物' },
+  { key: 'ranch_friend_clean', label: '帮好友清理' },
+  { key: 'ranch_stroke', label: '抚摸好友动物' },
+  { key: 'ranch_friend_mosquito', label: '给好友放蚊子' },
+] as const
+const RANCH_STRATEGIES = [
+  { label: '按已解锁等级', value: 'level' },
+  { label: '指定动物', value: 'preferred' },
+  { label: '优先背包幼崽', value: 'bag_priority' },
+]
+const ranchAnimalOptions = ref<Array<{ value: number, label: string, kind: string }>>([])
+onMounted(async () => {
+  try {
+    const { data } = await api.get('/api/ranch/automation-options', { skipErrorToast: true } as any)
+    if (data?.ok && Array.isArray(data.data))
+      ranchAnimalOptions.value = data.data
+  }
+  catch {
+    // 拿不到动物列表时只影响「指定动物」下拉，其余设置照常保存
+  }
+})
 </script>
 
 <template>
@@ -331,74 +373,62 @@ const settings = defineModel<AutomationSettingsFormModel>({ required: true })
                 牧场
               </h4>
               <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                成熟即收、缺草即补、可喂即喂（内测活动）
+                收获、催产、补草、喂养、清理与好友互动（移植自上游 ranch 模块）
               </p>
             </div>
           </div>
 
           <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div class="automation-setting-item">
-              <BaseSwitch v-model="settings.automation.pasture" class="automation-setting-item" label="启用牧场自动化" />
-            </div>
-            <div class="automation-setting-item">
+            <div v-for="{ key, label } in ranchSwitches" :key="key" class="automation-setting-item">
               <BaseSwitch
-                v-model="settings.automation.pasture_harvest"
-                class="automation-setting-item"
-                label="收获产物（催产为手动）"
-                :disabled="!settings.automation.pasture"
+                v-model="(settings.automation as any)[key]"
+                :label="label"
+                :disabled="key === 'ranch_grass_buy' && !settings.automation.ranch_grass"
               />
             </div>
             <div class="automation-setting-item">
-              <BaseSwitch
-                v-model="settings.automation.pasture_feed"
-                class="automation-setting-item"
-                label="喂养动物"
-                :disabled="!settings.automation.pasture"
-              />
-            </div>
-            <div class="automation-setting-item">
-              <BaseSwitch
-                v-model="settings.automation.pasture_grass"
-                class="automation-setting-item"
-                label="牧草机补草"
-                :disabled="!settings.automation.pasture"
-              />
-            </div>
-            <div class="automation-setting-item">
-              <BaseSwitch
-                v-model="settings.automation.pasture_buy_cub"
-                class="automation-setting-item"
-                label="空栏自动买幼崽"
-                :disabled="!settings.automation.pasture"
-              />
-            </div>
-            <div class="automation-setting-item">
-              <BaseSwitch
-                v-model="settings.automation.pasture_friend_visit"
-                class="automation-setting-item"
-                label="访问好友牧场互动"
-                :disabled="!settings.automation.pasture"
-              />
-            </div>
-            <div class="automation-setting-item">
-              <BaseSwitch
-                v-model="settings.automation.pasture_hazard"
-                class="automation-setting-item"
-                label="清理灾害"
-                :disabled="!settings.automation.pasture"
-              />
-            </div>
-            <div class="automation-setting-item">
-              <BaseSwitch
-                v-model="settings.automation.pasture_stroke"
-                class="automation-setting-item"
-                label="每日抚摸"
-                :disabled="!settings.automation.pasture"
-              />
+              <NInputNumber v-model:value="settings.automation.ranch_check_minutes" :min="1" :max="60" :step="1" class="w-full">
+                <template #prefix>
+                  巡查间隔
+                </template>
+              </NInputNumber>
             </div>
           </div>
+
+          <div class="mt-4">
+            <h4 class="mb-2 text-sm text-gray-900 font-bold dark:text-gray-100">
+              好友互动
+            </h4>
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div v-for="{ key, label } in ranchFriendSwitches" :key="key" class="automation-setting-item">
+                <BaseSwitch v-model="(settings.automation as any)[key]" :label="label" />
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <BaseSelect v-model="settings.automation.ranch_strategy" label="养殖策略" :options="RANCH_STRATEGIES" />
+            <BaseSelect
+              v-if="settings.automation.ranch_strategy === 'bag_priority'"
+              v-model="settings.automation.ranch_bag_fallback"
+              label="库存不足时"
+              :options="RANCH_STRATEGIES.slice(0, 2)"
+            />
+            <template v-if="settings.automation.ranch_strategy === 'preferred' || (settings.automation.ranch_strategy === 'bag_priority' && settings.automation.ranch_bag_fallback === 'preferred')">
+              <BaseSelect
+                v-model="settings.automation.ranch_coop_animal"
+                label="窝 · 指定动物"
+                :options="[{ value: 0, label: '不购买' }, ...ranchAnimalOptions.filter(animal => animal.kind === '窝')]"
+              />
+              <BaseSelect
+                v-model="settings.automation.ranch_shed_animal"
+                label="棚 · 指定动物"
+                :options="[{ value: 0, label: '不购买' }, ...ranchAnimalOptions.filter(animal => animal.kind === '棚')]"
+              />
+            </template>
+          </div>
           <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
-            牧场数据来自 2026-11-16 实包抓取；抚摸为可选每日互动，默认关闭。需先在下方牧场页确认动物状态。
+            牧场自动化会把收获/喂养等写操作切到牧场场景再执行；未解锁场景 2 的账号会自动降级为当前场景读取，无需额外设置。
           </p>
         </section>
       </div>

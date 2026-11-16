@@ -44,6 +44,10 @@ const S = {
         openId: '',
         avatarUrl: '',
         ranchLevel: 0,
+        // 当前所处游戏场景（1=农场，2=牧场/大农场）。牧场写操作要求在场景 2 内发出。
+        globalSceneId: 1,
+        // 已解锁场景 id 列表，登录回包 unlocked_scene_ids 提供；不含 2 表示牧场尚未解锁。
+        unlockedSceneIds: [] as number[],
     },
     now: (): number => performance.now(),
     /** 可注入 socket 工厂（默认在 connection 模块中赋值为 ws） */

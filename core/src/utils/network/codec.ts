@@ -124,6 +124,8 @@ function sendMsgAsync(serviceName: string, methodName: string, bodyBytes: Buffer
             criticalLane,
             enqueuedAt: S.now(),
             expectReply,
+            beforeSend: options.beforeSend,
+            onSent: options.onSent,
         };
         S.queue.push(request);
         S.scheduler.setTimeoutTask(request.timeoutKey, timeoutMs, () => {

@@ -83,6 +83,29 @@ const DEFAULT_ACCOUNT_CONFIG: AccountConfig = {
         pasture_grass: true,
         pasture_buy_cub: true,
         pasture_friend_visit: true,
+        // 牧场（上游 ranch 模块）：默认只开「收产物」，其余按需在设置里打开。
+        ranch_harvest: true,
+        ranch_produce: true,
+        ranch_buy: false,
+        ranch_upgrade: false,
+        ranch_sell: false,
+        ranch_grass: true,
+        ranch_grass_buy: false,
+        ranch_fill_cans: false,
+        ranch_feed_normal: true,
+        ranch_feed_organic: true,
+        ranch_clean: true,
+        ranch_stroke: true,
+        ranch_friend_steal: false,
+        ranch_friend_clean: true,
+        ranch_friend_mosquito: false,
+        ranch_task: true,
+        ranch_share: true,
+        ranch_check_minutes: 5,
+        ranch_strategy: 'level',
+        ranch_bag_fallback: 'level',
+        ranch_coop_animal: 0,
+        ranch_shed_animal: 0,
     },
     plantingStrategy: 'max_exp',
     preferredSeedId: 0,
@@ -353,6 +376,14 @@ function normalizeAccountConfig(input: unknown, fallback: AccountConfig = accoun
                 cfg.automation.fertilizer_land_types = normalizeFertilizerLandTypes(v, cfg.automation.fertilizer_land_types);
             } else if (k === 'fertilizer_smart_seconds') {
                 cfg.automation.fertilizer_smart_seconds = Math.max(30, Math.min(3600, Number(v) || 300));
+            } else if (k.startsWith('ranch_')
+                && ['ranch_strategy', 'ranch_bag_fallback', 'ranch_check_minutes', 'ranch_coop_animal', 'ranch_shed_animal'].includes(k)) {
+                // 牧场这几个键不是布尔值，交给牧场配置模块做取值范围校验；非法值保留原值。
+                try {
+                    (cfg.automation as any)[k] = require('../../config/ranch-automation').normalizeRanchSetting(k, v);
+                } catch {
+                    // 非法配置直接忽略，沿用默认
+                }
             } else {
                 (cfg.automation as any)[k] = !!v;
             }

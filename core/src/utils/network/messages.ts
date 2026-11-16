@@ -252,6 +252,19 @@ function handleNotify(msg: any): void {
             return;
         }
 
+        // 场景解锁通知（含牧场 scene=2 解锁）
+        if (type.includes('GlobalSceneUnlockNotify')) {
+            try {
+                const notify = types.GlobalSceneUnlockNotify.decode(eventBody);
+                const ids = (notify.unlocked_scenes || []).map((id: any) => utilsMod.toNum(id));
+                if (ids.length > 0) {
+                    S.user.unlockedSceneIds = Array.from(new Set<number>([...S.user.unlockedSceneIds, ...ids]));
+                    utilsMod.log('系统', `新解锁场景: ${ids.join(',')}`);
+                }
+            } catch (err) { ignoreErrorMod.ignoreError('core/src/utils/network/messages.ts', err); }
+            return;
+        }
+
         // 商品解锁通知
         if (type.includes('GoodsUnlockNotify')) {
             try {

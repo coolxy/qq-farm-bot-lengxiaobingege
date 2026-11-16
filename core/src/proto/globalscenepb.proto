@@ -13,3 +13,9 @@ message PlayerSceneLoginReply {
     bytes farm_scene_ext_data = 10;
     bytes big_farm_scene_ext_data = 11;
 }
+
+// 场景解锁推送（牧场 scene=2 解锁时下发）
+message GlobalSceneUnlockNotify {
+    repeated int32 unlocked_scenes = 1;
+    string source = 2;
+}

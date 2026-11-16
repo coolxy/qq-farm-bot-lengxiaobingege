@@ -57,6 +57,17 @@ function applyRuntimeConfig(snapshot: any, syncNow: boolean = false): number {
         if (hasAutomationPayload) {
             const nextAuto = getAutomation();
 
+            // 牧场（ranch 模块）开关/策略/间隔变化时重置它的内部排期，避免沿用旧一轮的等待。
+            const ranchChanged = Object.keys(nextAuto).some((key: string) => key.startsWith('ranch_')
+                && (nextAuto as any)[key] !== (prevAuto as any)[key]);
+            if (ranchChanged) {
+                try {
+                    require('../../services/ranch/automation').resetSchedule();
+                } catch { /* 牧场模块尚未加载，忽略 */ }
+                resetUnifiedSchedule();
+                scheduleUnifiedNextTick();
+            }
+
             const prevFertilizerMode = String(prevAuto && prevAuto.fertilizer ? prevAuto.fertilizer : '').toLowerCase();
             const nextFertilizerMode = String(nextAuto && nextAuto.fertilizer ? nextAuto.fertilizer : '').toLowerCase();
             const fertilizerChanged = prevFertilizerMode !== nextFertilizerMode;

@@ -9,7 +9,7 @@ import api from '@/api'
 import AccountModal from '@/components/AccountModal.vue'
 import RemarkModal from '@/components/RemarkModal.vue'
 import BrandMark from '@/components/ui/BrandMark.vue'
-import { menuRoutes } from '@/router/menu'
+import { visibleMenuRoutes } from '@/router/menu'
 import { getPlatformClass, getPlatformLabel, useAccountStore } from '@/stores/account'
 import { useAppStore } from '@/stores/app'
 import { useStatusStore } from '@/stores/status'
@@ -303,7 +303,7 @@ const connectionStatus = computed(() => {
 })
 
 const navItems = computed(() => {
-  return menuRoutes
+  return visibleMenuRoutes
     .map(item => ({
       path: item.path ? `/${item.path}` : '/',
       label: item.label,

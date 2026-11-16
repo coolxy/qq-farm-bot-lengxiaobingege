@@ -43,6 +43,15 @@ async function handleApiCall(msg: any): Promise<void> {
             case 'operatePasture':
                 result = await require('../../services/pasture').operatePasture(args[0], args[1]);
                 break;
+            case 'getRanchState':
+                result = await require('../../services/ranch').getRanchState(args[0], args[1], args[2]);
+                break;
+            case 'prepareRanchAction':
+                result = await require('../../services/ranch').prepareRanchAction(args[0], args[1]);
+                break;
+            case 'operateRanch':
+                result = await require('../../services/ranch').operateRanch(args[0], args[1]);
+                break;
             case 'getCollectionsSnapshot':
                 result = await require('../../services/collections').getCollectionsSnapshot();
                 break;

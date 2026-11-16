@@ -45,6 +45,8 @@ export interface AutomationConfig {
   fertilizer_smart_seconds: number;
   skip_own_weed_bug: boolean;
   show_manual_fertilizer: boolean;
+  // 旧版牧场自动化（services/pasture）：已由上游 ranch 模块取代，
+  // 保留字段只为兼容历史配置文件与旧接口，不再参与调度。
   pasture: boolean;
   pasture_harvest: boolean;
   pasture_feed: boolean;
@@ -53,6 +55,31 @@ export interface AutomationConfig {
   pasture_grass: boolean;
   pasture_buy_cub: boolean;
   pasture_friend_visit: boolean;
+  // 牧场自动化（services/ranch，移植自上游 liyangpengs/qq-farm-bot）
+  ranch_harvest: boolean;
+  ranch_produce: boolean;
+  ranch_buy: boolean;
+  ranch_upgrade: boolean;
+  ranch_sell: boolean;
+  ranch_grass: boolean;
+  ranch_grass_buy: boolean;
+  ranch_fill_cans: boolean;
+  ranch_feed_normal: boolean;
+  ranch_feed_organic: boolean;
+  ranch_clean: boolean;
+  ranch_stroke: boolean;
+  ranch_friend_steal: boolean;
+  ranch_friend_clean: boolean;
+  ranch_friend_mosquito: boolean;
+  ranch_task: boolean;
+  ranch_share: boolean;
+  /** 牧场巡查间隔（分钟，1–60） */
+  ranch_check_minutes: number;
+  /** 养殖策略：level 按等级最高 / preferred 指定动物优先 / bag_priority 背包幼崽优先 */
+  ranch_strategy: 'level' | 'preferred' | 'bag_priority';
+  ranch_bag_fallback: 'level' | 'preferred';
+  ranch_coop_animal: number;
+  ranch_shed_animal: number;
 }
 
 export interface IntervalConfig {

@@ -48,6 +48,7 @@ async function loadProto(): Promise<void> {
         getResourcePath('proto', 'illustratedpb.proto'),
         getResourcePath('proto', 'collectionpb.proto'),
         getResourcePath('proto', 'interactpb.proto'),
+        getResourcePath('proto', 'ranchv2.proto'),
         getResourcePath('proto', 'activitypb.proto'),
         getResourcePath('proto', 'seasonpb.proto'),
         getResourcePath('proto', 'solartermspb.proto'),
@@ -84,6 +85,7 @@ async function loadProto(): Promise<void> {
     types.PlayerLoginReply = root.lookupType('gamepb.userpb.PlayerLoginReply');
     types.PlayerSceneLoginRequest = root.lookupType('gamepb.globalscenepb.PlayerSceneLoginRequest');
     types.PlayerSceneLoginReply = root.lookupType('gamepb.globalscenepb.PlayerSceneLoginReply');
+    types.GlobalSceneUnlockNotify = root.lookupType('gamepb.globalscenepb.GlobalSceneUnlockNotify');
 
     // 牧场（内测，2026-11-16 抓包实测）
     types.RanchInfo = root.lookupType('gamepb.animalpb.RanchInfo');
@@ -117,6 +119,16 @@ async function loadProto(): Promise<void> {
     types.GetBuildingListReply = root.lookupType('gamepb.homesteadpb.GetBuildingListReply');
     types.AddFeedRequest = root.lookupType('gamepb.homesteadpb.AddFeedRequest');
     types.AddFeedReply = root.lookupType('gamepb.homesteadpb.AddFeedReply');
+
+    // 牧场 v2（移植自上游 liyangpengs/qq-farm-bot 的 ranch 模块）：
+    // 全部消息都在独立包 gamepb.ranchv2 中，统一以 Ranch<名字> 注册。
+    // 例如 gamepb.ranchv2.HarvestRanchRequest -> types.RanchHarvestRanchRequest。
+    const ranchV2 = root.lookup('gamepb.ranchv2') as protobuf.Namespace;
+    for (const definition of ranchV2.nestedArray) {
+        if (definition instanceof protobufModule.Type) {
+            types[`Ranch${definition.name}`] = definition as protobuf.Type;
+        }
+    }
 
     // 用户
     types.LoginRequest = root.lookupType('gamepb.userpb.LoginRequest');
@@ -271,6 +283,9 @@ async function loadProto(): Promise<void> {
     types.BatchClaimTaskRewardReply = root.lookupType('gamepb.taskpb.BatchClaimTaskRewardReply');
     types.ClaimDailyRewardRequest = root.lookupType('gamepb.taskpb.ClaimDailyRewardRequest');
     types.ClaimDailyRewardReply = root.lookupType('gamepb.taskpb.ClaimDailyRewardReply');
+    // 牧场任务进度上报（移植自上游 ranch 模块，此前未注册）
+    types.ClientReportProgressRequest = root.lookupType('gamepb.taskpb.ClientReportProgressRequest');
+    types.ClientReportProgressReply = root.lookupType('gamepb.taskpb.ClientReportProgressReply');
 
     // 邮箱
     types.GetEmailListRequest = root.lookupType('gamepb.emailpb.GetEmailListRequest');

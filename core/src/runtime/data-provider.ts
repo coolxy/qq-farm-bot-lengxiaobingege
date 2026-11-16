@@ -116,6 +116,15 @@ function createDataProvider(options: DataProviderOptions) {
         getIllustratedSnapshot: (accountRef: string) => callWorkerApi(resolveAccountRefId(accountRef), 'getIllustratedSnapshot'),
         getPastureSnapshot: (accountRef: string) => callWorkerApi(resolveAccountRefId(accountRef), 'getPastureSnapshot'),
         operatePasture: (accountRef: string, action: string, input?: any) => callWorkerApi(resolveAccountRefId(accountRef), 'operatePasture', action, input),
+        getRanchState: (accountRef: string, view = 'animals', shopId?: number, hostGid?: string) => (
+            callWorkerApi(resolveAccountRefId(accountRef), 'getRanchState', view, shopId, hostGid)
+        ),
+        prepareRanchAction: (accountRef: string, action: string, input?: any) => (
+            callWorkerApi(resolveAccountRefId(accountRef), 'prepareRanchAction', action, input)
+        ),
+        operateRanch: (accountRef: string, action: string, input?: any) => (
+            callWorkerApi(resolveAccountRefId(accountRef), 'operateRanch', action, input)
+        ),
         getCollectionsSnapshot: (accountRef: string) => callWorkerApi(resolveAccountRefId(accountRef), 'getCollectionsSnapshot'),
         operateCollections: (accountRef: string, action: string, input: any) => callWorkerApi(resolveAccountRefId(accountRef), 'operateCollections', action, input),
         claimIllustratedRewards: (accountRef: string, type: number) => callWorkerApi(resolveAccountRefId(accountRef), 'claimIllustratedRewards', type),

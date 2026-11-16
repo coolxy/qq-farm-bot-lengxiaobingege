@@ -11,7 +11,7 @@ const { performDailyMonthCardGift } = require('../../services/monthcard');
 const { buyFreeGifts, getFreeGiftDailyState } = require('../../services/mall');
 const { checkFarm, startFarmCheckLoop, stopFarmCheckLoop, refreshFarmCheckLoop, runFertilizerByConfig } = require('../../services/farm');
 const { checkFriends, startFriendCheckLoop, stopFriendCheckLoop, refreshFriendCheckLoop } = require('../../services/friend');
-const { checkPasture } = require('../../services/pasture');
+const ranchAutomation = require('../../services/ranch/automation');
 const { checkAndClaimTasks } = require('../../services/task');
 const { checkAndClaimActivityTasks } = require('../../services/activity-auto-task');
 const { openFertilizerGiftPacksSilently } = require('../../services/warehouse');
@@ -225,14 +225,24 @@ async function runFriendTick(auto: any): Promise<void> {
     }
 }
 
-// ============ 牧场统一任务：收/喂/补草/清灾害/抚摸 ============
+// ============ 牧场统一任务（services/ranch：收获/催产/喂养/补草/清灾害/好友互动/每日任务） ============
+// 说明：牧场实现已整体换成上游 liyangpengs/qq-farm-bot 的 ranch 模块。
+// 该模块内部的自动化会自己判断每个动作的开关与到期时间，这里只负责按间隔把它唤醒；
+// 它的写操作全部包裹在 transport.inScene(2) 里（切到牧场场景再发），这是之前牧场
+// 收获/喂养一直失败的根本原因。
+
+/** 牧场自动化是否有任何一项被开启（含每日任务/分享）。 */
+function isRanchAutomationEnabled(auto: any): boolean {
+    const { RANCH_SWITCH_KEYS } = require('../../config/ranch-automation');
+    return RANCH_SWITCH_KEYS.some((key: string) => auto[key] === true);
+}
+
 async function runPastureTick(auto: any): Promise<void> {
     if (st.pastureTaskRunning) return;
     const generation = st.runtimeGeneration;
-    const pastureMs = randomIntervalMs(30000, 45000);
-    // pasture 总开关关闭时也要推进到期时间，避免调度器每秒空转。
-    if (!auto.pasture) {
-        st.nextPastureRunAt = Date.now() + pastureMs;
+    const idleMs = Math.max(60_000, (Number(auto.ranch_check_minutes) || 5) * 60_000);
+    if (!isRanchAutomationEnabled(auto)) {
+        st.nextPastureRunAt = Date.now() + idleMs;
         return;
     }
 
@@ -245,19 +255,19 @@ async function runPastureTick(auto: any): Promise<void> {
     st.pastureTaskRunning = true;
     try {
         await runWithRequestClass('pasture', async () => {
-            const result = await checkPasture({ external: true });
-            if (result && result.hadWork && result.actions && result.actions.length) {
-                log('牧场', `自动完成: ${result.actions.join('、')}`, {
-                    module: 'pasture', event: '牧场定时任务', result: 'ok',
-                    actions: result.actions,
-                });
-            }
+            await ranchAutomation.run({
+                // 农场即将巡查时，牧场本轮让路，避免两边同时改写场景。
+                farmDeadline: () => Number(st.nextFarmRunAt) || Number.POSITIVE_INFINITY,
+            });
         });
     } catch (e: any) {
-        log('牧场', `自动任务失败: ${e.message}`, { module: 'pasture', event: '牧场定时任务', result: 'error' });
+        log('牧场', `自动任务失败: ${e.message}`, { module: 'ranch', event: '牧场定时任务', result: 'error' });
     } finally {
         if (generation === st.runtimeGeneration) {
-            st.nextPastureRunAt = Date.now() + pastureMs;
+            // 下一轮以 ranch 模块内部的 nextCheckAt 为准（它自己按 ranch_check_minutes 排期）。
+            const routine = ranchAutomation.getRoutineState();
+            const nextAt = Number(routine && routine.nextCheckAt) || 0;
+            st.nextPastureRunAt = Math.max(Date.now() + 30_000, nextAt > 0 ? nextAt : Date.now() + idleMs);
             st.pastureTaskRunning = false;
         }
     }

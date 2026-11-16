@@ -1,6 +1,7 @@
 export {};
 const stateMod: typeof import('./state') = require('./state');
 const sessionMod: typeof import('./session') = require('./session');
+const sceneMod: typeof import('./scene') = require('./scene');
 const codecMod: typeof import('./codec') = require('./codec');
 const keepaliveMod: typeof import('./keepalive') = require('./keepalive');
 const { Buffer } = require('node:buffer');
@@ -83,6 +84,12 @@ async function sendLogin(context: ConnectionContext, onLoginSuccess?: () => void
         // 牧场等级在登录回包 BasicInfo.f20（16:57 抓包实测=9，与游戏内一致）。
         // GetRanchWeightScoreV2 的 f1 并非当前等级（时有时无，勿用）。
         S.user.ranchLevel = utilsMod.toNum(reply.basic.ranch_level);
+        // 场景：登录后一定站在农场（1）；已解锁场景由 PlayerLogin 回包给出（含 2 才有牧场）。
+        S.user.globalSceneId = 1;
+        const unlocked = modern ? (reply.unlocked_scene_ids || []).map((id: any) => utilsMod.toNum(id)) : [1];
+        S.user.unlockedSceneIds = Array.from(new Set<number>(unlocked));
+        // 分享信息随登录下发，牧场每日分享要用。
+        sceneMod.applyShareInfos(reply.basic.share_infos);
 
         statusMod.updateStatusFromLogin({
             name: S.user.name,
@@ -93,6 +100,7 @@ async function sendLogin(context: ConnectionContext, onLoginSuccess?: () => void
         });
 
         utilsMod.log('系统', `登录成功: ${S.user.name} (Lv${S.user.level})`);
+        utilsMod.log('系统', `已解锁场景: ${S.user.unlockedSceneIds.join(',') || '无'}`, { module: 'system', event: '场景解锁' });
 
         if (context.loginInitialized) return;
         context.loginInitialized = true;
