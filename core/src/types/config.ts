@@ -51,6 +51,8 @@ export interface AutomationConfig {
   pasture_stroke: boolean;
   pasture_hazard: boolean;
   pasture_grass: boolean;
+  pasture_buy_cub: boolean;
+  pasture_friend_visit: boolean;
 }
 
 export interface IntervalConfig {

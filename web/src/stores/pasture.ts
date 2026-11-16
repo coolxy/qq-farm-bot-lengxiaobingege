@@ -7,6 +7,7 @@ export const usePastureStore = defineStore('pasture', () => {
   const loading = ref(false)
   const operating = ref('')
   const error = ref('')
+  const lastResult = ref<any>(null)
   let requestId = 0
 
   async function fetch(accountId: string) {
@@ -54,6 +55,7 @@ export const usePastureStore = defineStore('pasture', () => {
         error.value = getApiErrorMessage(response.data, '操作失败')
         return false
       }
+      lastResult.value = response.data.data || null
       // 操作后刷新快照
       await fetch(accountId)
       return true
@@ -72,7 +74,8 @@ export const usePastureStore = defineStore('pasture', () => {
     data.value = null
     loading.value = false
     error.value = ''
+    lastResult.value = null
   }
 
-  return { data, loading, operating, error, fetch, operate, reset }
+  return { data, loading, operating, error, lastResult, fetch, operate, reset }
 })

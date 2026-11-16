@@ -77,9 +77,11 @@ const localAutomationSettings = ref({
     pasture: false,
     pasture_harvest: true,
     pasture_feed: true,
-    pasture_stroke: false,
+    pasture_stroke: true,
     pasture_hazard: true,
     pasture_grass: true,
+    pasture_buy_cub: true,
+    pasture_friend_visit: true,
   },
   fertilizerBuyOrganicCount: 10,
   fertilizerBuyOrganicThresholdHours: 10,
@@ -181,9 +183,11 @@ function syncLocalAutomationSettings() {
         pasture: false,
         pasture_harvest: true,
         pasture_feed: true,
-        pasture_stroke: false,
+        pasture_stroke: true,
         pasture_hazard: true,
         pasture_grass: true,
+        pasture_buy_cub: true,
+        pasture_friend_visit: true,
       }
     }
     else {
@@ -220,9 +224,11 @@ function syncLocalAutomationSettings() {
         pasture: false,
         pasture_harvest: true,
         pasture_feed: true,
-        pasture_stroke: false,
+        pasture_stroke: true,
         pasture_hazard: true,
         pasture_grass: true,
+        pasture_buy_cub: true,
+        pasture_friend_visit: true,
       }
       localAutomationSettings.value.automation = {
         ...defaults,

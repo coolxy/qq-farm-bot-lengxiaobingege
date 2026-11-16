@@ -39,7 +39,7 @@ async function call(Req: any, req: any, service: string, method: string, Reply?:
 async function getRanchDetail(gid?: number | string): Promise<any> {
     const state = getUserState();
     const selfGid = toNum(gid || (state && state.gid) || 0);
-    const reply = await call('GetRanchDetailRequest', { unknown_2: null },
+    const reply = await call('GetRanchDetailRequest', { unknown_2: Buffer.alloc(0) },
         ANIMAL_SERVICE, 'GetRanchDetail', 'GetRanchDetailReply');
     const ranch = reply && reply.ranch;
     if (!ranch) return { ranch: null, ownerGid: selfGid };
@@ -100,10 +100,60 @@ async function addFeed(instId: number | string, count: number = 1): Promise<any>
     return reply && reply.grass;
 }
 
-/** 买幼崽。goodsId 实测 10003、price 从 ShopInfo 取。 */
+/** 商店概览（实包 f1 固定=2） */
+async function getShopProfiles(): Promise<any> {
+    return call('ShopProfilesRequest', { unknown_1: 2 },
+        SHOP_SERVICE, 'ShopProfiles', 'ShopProfilesReply');
+}
+
+/** 指定商店商品列表 */
+async function getShopInfo(shopId: number): Promise<any> {
+    return call('ShopInfoRequest', { shop_id: toLong(shopId) },
+        SHOP_SERVICE, 'ShopInfo', 'ShopInfoReply');
+}
+
+/**
+ * 幼崽商店实包：shop_type=5 / shop_name=幼崽；商品 10003 → item_id=60002、单价 1080。
+ * 这里动态取价，避免写死价格导致活动调价后买失败。
+ */
+async function getCubShopGoods(): Promise<any> {
+    const profiles = await getShopProfiles();
+    const list = (profiles && profiles.shop_profiles) || [];
+    const shop = list.find((p: any) => toNum(p.shop_type) === 5)
+        || list.find((p: any) => /幼崽|cub/i.test(String(p.shop_name || '')))
+        || { shop_id: toLong(5), shop_name: '幼崽', shop_type: 5 };
+    const shopId = toNum(shop.shop_id) || 5;
+    const info = await getShopInfo(shopId);
+    const nowSec = Date.now() / 1000;
+    const goods = ((info && info.goods_list) || []).map((g: any) => {
+        const discount = toNum(g.discount_price);
+        const start = toNum(g.discount_start_time);
+        const end = toNum(g.discount_end_time);
+        const inDiscount = discount > 0
+            && (!start || start <= nowSec)
+            && (!end || end >= nowSec);
+        return {
+            goodsId: toNum(g.id),
+            itemId: toNum(g.item_id),
+            itemCount: toNum(g.item_count) || 1,
+            price: inDiscount ? discount : toNum(g.price),
+            limit: toNum(g.limit_count),
+            bought: toNum(g.bought_num),
+            unlocked: !!g.unlocked,
+        };
+    });
+    // 60002 是实包里买到的幼崽；10003 是该商品的 goods_id，作为兼容兜底。
+    const cub = goods.find((g: any) => g.itemId === 60002 && g.unlocked)
+        || goods.find((g: any) => g.goodsId === 10003 && g.unlocked)
+        || goods.find((g: any) => g.unlocked && g.itemId > 0)
+        || null;
+    return { shopId, shopName: String(shop.shop_name || '幼崽'), goods, cub };
+}
+
+/** 买幼崽。f4 实测=1，缺失会被服务器判为参数错误。 */
 async function buyCub(goodsId: number, num: number, price: number): Promise<any> {
     return call('BuyGoodsRequest', {
-        goods_id: toLong(goodsId), num: toLong(num), price: toLong(price),
+        goods_id: toLong(goodsId), num: toLong(num), price: toLong(price), unknown_4: 1,
     }, SHOP_SERVICE, 'BuyGoods', 'BuyGoodsReply');
 }
 
@@ -113,6 +163,16 @@ async function batchUse(itemId: number, count: number): Promise<any> {
         item: { item_id: itemId, count, unknown_6: 62478 },
         unknown_8: Buffer.alloc(0),
     }, ITEM_SERVICE, 'BatchUse', 'BatchUseReply');
+}
+
+/** 背包中某个道具的数量（用于判断是否还有罐头可换草） */
+async function getBagItemCount(itemId: number): Promise<number> {
+    const { getBag, getBagItems } = require('../warehouse');
+    const bag = await getBag();
+    const items: any[] = getBagItems(bag) || [];
+    return items
+        .filter((it: any) => toNum(it.id) === itemId)
+        .reduce((sum: number, it: any) => sum + toNum(it.count), 0);
 }
 
 /** 进/出好友家园（回包 f1 是 BasicInfo） */
@@ -140,8 +200,12 @@ module.exports = {
     strokeAnimal,
     putHazard,
     addFeed,
+    getShopProfiles,
+    getShopInfo,
+    getCubShopGoods,
     buyCub,
     batchUse,
+    getBagItemCount,
     enterHomestead,
     leaveHomestead,
     getFacilityDetail,

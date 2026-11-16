@@ -107,6 +107,24 @@ test('decodes StrokeAnimal / PutHazard / BuyGoods / EnterHomestead from live fra
     assert.equal(Number(basic.level), 151);
 });
 
+// 2026-11-16 幼崽商店实包：ShopInfo(shop_id=5) 前两个商品。
+// 10002→60001(2金)，10003→60002(1080金)，后者就是买幼崽用的商品。
+const CUB_SHOP_REPLY_HEX = '0a2908924e1802280130e1d4033801420408031001608092b8c398feffffff01688092b8c398feffffff010a2a08934e18b808280130e2d4033801420408031003608092b8c398feffffff01688092b8c398feffffff01';
+
+test('decodes cub shop goods and encodes ShopProfiles request', async () => {
+    await proto.ensureProtoLoaded();
+    const rep = proto.types.ShopInfoReply.decode(Buffer.from(CUB_SHOP_REPLY_HEX, 'hex'));
+    assert.equal(rep.goods_list.length, 2);
+    assert.equal(Number(rep.goods_list[0].id), 10002);
+    assert.equal(Number(rep.goods_list[0].item_id), 60001);
+    assert.equal(Number(rep.goods_list[1].id), 10003);
+    assert.equal(Number(rep.goods_list[1].price), 1080);
+    assert.equal(Number(rep.goods_list[1].item_id), 60002);
+    const reqBytes = proto.types.ShopProfilesRequest.encode(
+        proto.types.ShopProfilesRequest.create({ unknown_1: 2 })).finish();
+    assert.equal(Buffer.from(reqBytes).toString('hex'), '0802');
+});
+
 test('every牧场 API 请求/回包类型都在运行时注册表中', async () => {
     await proto.ensureProtoLoaded();
     const apiSource = fs.readFileSync(path.join(__dirname, '../src/services/pasture/api.ts'), 'utf8');

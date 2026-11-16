@@ -366,6 +366,22 @@ const settings = defineModel<AutomationSettingsFormModel>({ required: true })
             </div>
             <div class="automation-setting-item">
               <BaseSwitch
+                v-model="settings.automation.pasture_buy_cub"
+                class="automation-setting-item"
+                label="空栏自动买幼崽"
+                :disabled="!settings.automation.pasture"
+              />
+            </div>
+            <div class="automation-setting-item">
+              <BaseSwitch
+                v-model="settings.automation.pasture_friend_visit"
+                class="automation-setting-item"
+                label="访问好友牧场互动"
+                :disabled="!settings.automation.pasture"
+              />
+            </div>
+            <div class="automation-setting-item">
+              <BaseSwitch
                 v-model="settings.automation.pasture_hazard"
                 class="automation-setting-item"
                 label="清理灾害"

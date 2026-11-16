@@ -12,8 +12,9 @@ const { toLong, toNum, logWarn, sleep } = require('../../utils/utils');
 const { createScheduler } = require('../scheduler');
 const { runExclusiveAutomationTask } = require('../automation-lock');
 const { recordOperation } = require('../stats');
+const { getFriendsList } = require('../friend');
 const api = require('./api');
-const { analyzeRanch, isGrassLow } = require('./analysis');
+const { analyzeRanch, isGrassLow, cansToTarget, CANNED_ITEM_ID } = require('./analysis');
 
 const pastureScheduler = createScheduler('pasture');
 
@@ -28,6 +29,12 @@ const TICK_MAX_MS = 45 * 1000;
 
 const FEED_MACHINE_INST_ID = 10002;   // 实测牧草机 inst_id
 const GRASS_LOW_THRESHOLD = 3000;     // 牧草低于此值触发补草
+const GRASS_TARGET_AFTER_CAN = 10000; // 罐头换草一次补到该目标
+const FRIEND_VISIT_LIMIT = 3;         // 每轮最多访问的好友数
+const FRIEND_VISIT_COOLDOWN_MS = 10 * 60 * 1000;
+let lastCheckAt = 0;
+let lastActions: string[] = [];
+let nextFriendVisitAt = 0;
 
 function randomIntervalMs(): number {
     return TICK_MIN_MS + Math.floor(Math.random() * (TICK_MAX_MS - TICK_MIN_MS + 1));
@@ -56,6 +63,17 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
     }
     isChecking = true;
     const actions: string[] = [];
+    lastActions = [];
+
+    // 单个动作失败不应该让后续动作全部停摆（例如金币不足、好友离线）。
+    const safeStep = async (label: string, fn: () => Promise<any>): Promise<any> => {
+        try {
+            return await fn();
+        } catch (e: any) {
+            logWarn('牧场', `${label}失败: ${e && e.message ? e.message : e}`, { module: 'pasture' });
+            return null;
+        }
+    };
 
     try {
         const auto = getAutomation();
@@ -66,100 +84,203 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
             return { actions, hadWork: false };
         }
 
-        // 1. 成熟即收（回包直接带最新 RanchInfo，用回包更新本地引用）
-        if (auto.pasture_harvest) {
-            const before = analyzeRanch(ranch, Date.now());
-            if (before.harvestable.length > 0) {
-                const res = await api.harvestRanch(toNum(ranch.ranch_inst_id), 1);
-                if (res && res.ranch) {
-                    ranch = res.ranch;
-                    actions.push(`收获 ${before.harvestable.length} 只动物的产物`);
-                    recordOperation('牧场收获', before.harvestable.length);
-                    await sleep(400);
-                }
-            }
+        let hazardRemaining = 0;
+        if (auto.pasture_hazard) {
+            const quotas = (await safeStep('读取操作配额', () => api.getRanchOpTimes())) || [];
+            const hazardQuota = quotas.find((q: any) => toNum(q.op_id) === 11003);
+            hazardRemaining = hazardQuota ? toNum(hazardQuota.remaining_times) : 0;
         }
 
-        // 2. 一键催产（空请求）→ 若又成熟则再收一次；回包带最新状态
-        if (auto.pasture_harvest) {
-            const res = await api.triggerProduce();
-            if (res && res.ranch) {
-                ranch = res.ranch;
-                const after = analyzeRanch(ranch, Date.now());
-                if (after.harvestable.length > 0) {
-                    const harvested = await api.harvestRanch(toNum(ranch.ranch_inst_id), 1);
-                    if (harvested && harvested.ranch) {
-                        ranch = harvested.ranch;
-                        actions.push(`催产后收获 ${after.harvestable.length} 只`);
-                        recordOperation('牧场收获', after.harvestable.length);
-                        await sleep(400);
+        // 0. 空栏自动补幼崽（买满到容量上限，单轮最多 3 只，价格从幼崽商店实包读取）
+        if (auto.pasture_buy_cub) {
+            const beforeBuy = analyzeRanch(ranch, Date.now());
+            const vacancy = beforeBuy.capacity - beforeBuy.animalCount;
+            if (vacancy > 0) {
+                const shop = await safeStep('读取幼崽商店', () => api.getCubShopGoods());
+                const cub = shop && shop.cub;
+                if (cub && toNum(cub.price) > 0) {
+                    const stock = toNum(cub.limit) > 0
+                        ? Math.max(0, toNum(cub.limit) - toNum(cub.bought))
+                        : vacancy;
+                    const num = Math.min(vacancy, stock, 3);
+                    if (num > 0) {
+                        const bought = await safeStep('购买幼崽', () => api.buyCub(toNum(cub.goodsId), num, toNum(cub.price)));
+                        if (bought) {
+                            actions.push(`购买幼崽 ×${num}（${toNum(cub.price)} 金/只）`);
+                            recordOperation('牧场买幼崽', num);
+                            await sleep(500);
+                        }
                     }
                 }
             }
         }
 
-        // 3. 缺草即补：牧草机加草（免费）。单次增量实测不确定，每轮加一次，下轮复查。
-        if (auto.pasture_grass && isGrassLow(ranch, GRASS_LOW_THRESHOLD, Date.now())) {
-            const machine = await api.getFacilityDetail(FEED_MACHINE_INST_ID);
-            if (machine && toNum(machine.grass && machine.grass.amount) > 0) {
-                const grass = await api.addFeed(FEED_MACHINE_INST_ID, 1);
-                if (grass) {
-                    actions.push('牧草机加草 ×1');
-                    recordOperation('牧场加草', 1);
-                    if (ranch.grass) ranch.grass.amount = grass.amount != null ? grass.amount : toLong(toNum(grass.amount));
-                    await sleep(400);
+        // 1. 成熟即收（回包直接带最新 RanchInfo，用回包更新本地引用）
+        if (auto.pasture_harvest) {
+            await safeStep('收获产物', async () => {
+                const before = analyzeRanch(ranch, Date.now());
+                if (before.harvestable.length > 0) {
+                    const res = await api.harvestRanch(toNum(ranch.ranch_inst_id), 1);
+                    if (res && res.ranch) {
+                        ranch = res.ranch;
+                        actions.push(`收获 ${before.harvestable.length} 只动物的产物`);
+                        recordOperation('牧场收获', before.harvestable.length);
+                        await sleep(400);
+                    }
                 }
+            });
+        }
+
+        // 2. 一键催产（空请求）→ 若又成熟则再收一次；回包带最新状态
+        if (auto.pasture_harvest) {
+            await safeStep('一键催产', async () => {
+                const res = await api.triggerProduce();
+                if (res && res.ranch) {
+                    ranch = res.ranch;
+                    const after = analyzeRanch(ranch, Date.now());
+                    if (after.harvestable.length > 0) {
+                        const harvested = await api.harvestRanch(toNum(ranch.ranch_inst_id), 1);
+                        if (harvested && harvested.ranch) {
+                            ranch = harvested.ranch;
+                            actions.push(`催产后收获 ${after.harvestable.length} 只`);
+                            recordOperation('牧场收获', after.harvestable.length);
+                            await sleep(400);
+                        }
+                    }
+                }
+            });
+        }
+
+        // 3. 缺草即补：先加免费牧草机，仍低则把背包里的罐头换成牧草。
+        if (auto.pasture_grass && isGrassLow(ranch, GRASS_LOW_THRESHOLD, Date.now())) {
+            await safeStep('牧草机加草', async () => {
+                const machine = await api.getFacilityDetail(FEED_MACHINE_INST_ID);
+                if (machine && toNum(machine.grass && machine.grass.amount) > 0) {
+                    const grass = await api.addFeed(FEED_MACHINE_INST_ID, 1);
+                    if (grass) {
+                        actions.push('牧草机加草 ×1');
+                        recordOperation('牧场加草', 1);
+                        if (ranch.grass) ranch.grass.amount = toLong(toNum(grass.amount));
+                        await sleep(400);
+                    }
+                }
+            });
+            const afterMachine = analyzeRanch(ranch, Date.now()).grass;
+            if (afterMachine < GRASS_LOW_THRESHOLD) {
+                await safeStep('罐头换草', async () => {
+                    const cans = (await api.getBagItemCount(CANNED_ITEM_ID)) || 0;
+                    const use = Math.min(cans, Math.max(1, cansToTarget(afterMachine, GRASS_TARGET_AFTER_CAN)));
+                    if (use > 0) {
+                        const exchanged = await api.batchUse(CANNED_ITEM_ID, use);
+                        const gainedGrass = toNum(exchanged && exchanged.gained && exchanged.gained.count);
+                        if (gainedGrass > 0) {
+                            actions.push(`罐头换草 ×${use} → ${gainedGrass} 牧草`);
+                            recordOperation('牧场罐头换草', use);
+                            if (ranch.grass) ranch.grass.amount = toLong(gainedGrass);
+                            await sleep(400);
+                        }
+                    }
+                });
             }
         }
 
         // 4. 可喂即喂（每轮只喂一只，避免请求风暴；牧草为 0 时跳过）
         if (auto.pasture_feed) {
-            const feedState = analyzeRanch(ranch, Date.now());
-            if (feedState.grass > 0 && feedState.feedable.length > 0) {
-                const target = feedState.feedable[0];
-                const updated = await api.feedAnimal(toNum(ranch.ranch_inst_id), 1);
-                if (updated) {
-                    ranch = updated;
-                    actions.push(`喂养栏位 ${target.slot_index}`);
-                    recordOperation('牧场喂养', 1);
-                    await sleep(500);
+            await safeStep('喂养动物', async () => {
+                const feedState = analyzeRanch(ranch, Date.now());
+                if (feedState.grass > 0 && feedState.feedable.length > 0) {
+                    const target = feedState.feedable[0];
+                    const updated = await api.feedAnimal(toNum(ranch.ranch_inst_id), 1);
+                    if (updated) {
+                        ranch = updated;
+                        actions.push(`喂养栏位 ${target.slot_index}`);
+                        recordOperation('牧场喂养', 1);
+                        await sleep(500);
+                    }
                 }
-            }
+            });
         }
 
         // 5. 清灾害（有配额时尝试一次；服务端无灾害时回包 result≠1，静默跳过）
-        if (auto.pasture_hazard) {
-            const quotas = await api.getRanchOpTimes();
-            const hazardQuota = (quotas || []).find((q: any) => toNum(q.op_id) === 11003);
-            if (hazardQuota && toNum(hazardQuota.remaining_times) > 0) {
+        if (auto.pasture_hazard && hazardRemaining > 0) {
+            await safeStep('清理灾害', async () => {
                 const res = await api.putHazard(toNum(ranch.ranch_inst_id), toNum(state.gid), 11003);
                 if (res && toNum(res.result) === 1) {
-                    actions.push(`清理灾害，剩余 ${toNum(res.remaining)} 次`);
+                    hazardRemaining -= 1;
+                    actions.push(`清理灾害，剩余 ${hazardRemaining} 次`);
                     recordOperation('牧场清灾害', 1);
                     await sleep(400);
                 }
-            }
+            });
         }
 
         // 6. 每日抚摸（有 strokable 的动物，每轮一只）
         if (auto.pasture_stroke) {
-            const strokeState = analyzeRanch(ranch, Date.now());
-            if (strokeState.strokable.length > 0) {
-                const target = strokeState.strokable[0];
-                const updated = await api.strokeAnimal(
-                    toNum(state.gid), toNum(ranch.ranch_inst_id), toNum(target.animal_inst_id));
-                if (updated) {
-                    ranch = updated;
-                    actions.push(`抚摸栏位 ${target.slot_index}`);
-                    recordOperation('牧场抚摸', 1);
+            await safeStep('每日抚摸', async () => {
+                const strokeState = analyzeRanch(ranch, Date.now());
+                if (strokeState.strokable.length > 0) {
+                    const target = strokeState.strokable[0];
+                    const updated = await api.strokeAnimal(
+                        toNum(state.gid), toNum(ranch.ranch_inst_id), toNum(target.animal_inst_id));
+                    if (updated) {
+                        ranch = updated;
+                        actions.push(`抚摸栏位 ${target.slot_index}`);
+                        recordOperation('牧场抚摸', 1);
+                    }
+                }
+            });
+        }
+
+        // 7. 访问好友家园并互动（10 分钟一轮，最多 3 位，进/出成对）
+        if (auto.pasture_friend_visit && Date.now() >= nextFriendVisitAt) {
+            nextFriendVisitAt = Date.now() + FRIEND_VISIT_COOLDOWN_MS;
+            const friends = (await safeStep('读取好友列表', () => getFriendsList(false, 'low'))) || [];
+            const candidates = friends
+                .filter((f: any) => toNum(f.gid) > 0 && toNum(f.gid) !== toNum(state.gid))
+                .slice(0, FRIEND_VISIT_LIMIT);
+            for (const friend of candidates) {
+                const friendGid = toNum(friend.gid);
+                const friendName = String(friend.name || friend.nick || friendGid);
+                let entered = false;
+                try {
+                    await api.enterHomestead(friendGid, 2);
+                    entered = true;
+                    const friendDetail = await api.getRanchDetail(friendGid);
+                    const friendRanch = friendDetail && friendDetail.ranch;
+                    if (!friendRanch) continue;
+                    const friendState = analyzeRanch(friendRanch, Date.now());
+                    if (auto.pasture_stroke && friendState.strokable.length > 0) {
+                        const target = friendState.strokable[0];
+                        await api.strokeAnimal(friendGid, toNum(friendRanch.ranch_inst_id), toNum(target.animal_inst_id));
+                        actions.push(`抚摸 ${friendName} 的牧场动物`);
+                        recordOperation('牧场好友互动', 1);
+                    }
+                    if (auto.pasture_hazard && hazardRemaining > 0) {
+                        const res = await api.putHazard(toNum(friendRanch.ranch_inst_id), toNum(state.gid), 11003);
+                        if (res && toNum(res.result) === 1) {
+                            hazardRemaining -= 1;
+                            actions.push(`清理 ${friendName} 牧场灾害`);
+                            recordOperation('牧场清灾害', 1);
+                        }
+                    }
+                } catch (e: any) {
+                    logWarn('牧场', `访问好友 ${friendGid} 失败: ${e && e.message ? e.message : e}`, { module: 'pasture' });
+                } finally {
+                    if (entered) {
+                        try { await api.leaveHomestead(friendGid); } catch { /* 离开失败忽略 */ }
+                    }
                 }
             }
         }
 
+        lastCheckAt = Date.now();
+        lastActions = [...actions];
         noteOutcome(actions.length > 0);
         return { actions, hadWork: actions.length > 0 };
     } catch (e: any) {
-        logWarn('牧场', `自动检查失败: ${e && e.message ? e.message : e}`);
+        logWarn('牧场', `自动检查失败: ${e && e.message ? e.message : e}`, { module: 'pasture' });
+        lastCheckAt = Date.now();
+        lastActions = [...actions];
         noteOutcome(false);
         return { actions, hadWork: false };
     } finally {
@@ -204,4 +325,5 @@ module.exports = {
     refreshPastureLoop,
     analyzeRanch,
     isChecking: () => isChecking,
+    getLastState: () => ({ lastCheckAt, lastActions: [...lastActions] }),
 };

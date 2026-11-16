@@ -61,7 +61,9 @@ message Cond {
 // ============ 请求/回复 ============
 
 // --- 获取商店列表 ---
-message ShopProfilesRequest {}
+message ShopProfilesRequest {
+    int32 unknown_1 = 1; // 实包固定发 2（2026-11-16 抓包）
+}
 
 message ShopProfilesReply {
     repeated ShopProfile shop_profiles = 1;

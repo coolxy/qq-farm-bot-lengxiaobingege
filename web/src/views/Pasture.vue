@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { NButton } from 'naive-ui/es/button'
+import { NInputNumber } from 'naive-ui/es/input-number'
 import { NSpin } from 'naive-ui/es/spin'
 import { storeToRefs } from 'pinia'
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import BaseSelect from '@/components/ui/BaseSelect.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { useAccountStore } from '@/stores/account'
+import { useFriendStore } from '@/stores/friend'
 import { usePastureStore } from '@/stores/pasture'
 import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
@@ -12,10 +15,17 @@ import { useToastStore } from '@/stores/toast'
 const accountStore = useAccountStore()
 const pastureStore = usePastureStore()
 const statusStore = useStatusStore()
+const friendStore = useFriendStore()
 const toast = useToastStore()
 const { currentAccountId } = storeToRefs(accountStore)
 const { currentAccountConnected: isConnected } = storeToRefs(statusStore)
 const { data, loading, operating, error } = storeToRefs(pastureStore)
+const { friends } = storeToRefs(friendStore)
+
+const buyCount = ref(1)
+const canCount = ref(1)
+const selectedFriendGid = ref<number | string>('')
+const visitResult = ref('')
 
 const animals = computed<any[]>(() => (data.value && Array.isArray(data.value.animals)) ? data.value.animals : [])
 const quotas = computed<any[]>(() => (data.value && Array.isArray(data.value.quotas)) ? data.value.quotas : [])
@@ -24,6 +34,15 @@ const capacity = computed(() => Number(data.value?.capacity) || 0)
 const animalCount = computed(() => Number(data.value?.animalCount) || animals.value.length)
 const facility = computed(() => data.value?.facility || null)
 const serverTime = computed(() => Number(data.value?.serverTime) || 0)
+const cubGoods = computed<any>(() => data.value?.cubShop?.cub || null)
+const cannedCount = computed(() => Number(data.value?.cannedCount) || 0)
+const lastActions = computed<string[]>(() => (data.value && Array.isArray(data.value.lastActions)) ? data.value.lastActions : [])
+const friendOptions = computed(() => friends.value
+  .map((friend: any) => ({
+    label: `${friend.name || friend.nick || '好友'} (${friend.gid})`,
+    value: Number(friend.gid),
+  }))
+  .filter((option: any) => Number.isFinite(option.value) && option.value > 0))
 
 function formatClock(ms: number): string {
   if (!ms || ms > 9007199254740992)
@@ -55,14 +74,59 @@ async function run(action: string, input: any = {}) {
   toast[ok ? 'success' : 'error'](ok ? '操作成功' : (error.value || '操作失败'))
 }
 
+async function buyCub() {
+  const count = Math.max(1, Number(buyCount.value) || 1)
+  await run('buyCub', { num: count })
+}
+
+async function exchangeGrass() {
+  const count = Math.max(1, Number(canCount.value) || 1)
+  await run('exchangeGrass', { count })
+}
+
+async function visitFriend() {
+  const hostGid = Number(selectedFriendGid.value) || 0
+  if (!hostGid) {
+    toast.error('请先选择一位好友')
+    return
+  }
+  visitResult.value = ''
+  const base = { ranchInstId: data.value?.ranchInstId, ownerGid: data.value?.ownerGid }
+  const ok = await pastureStore.operate(currentAccountId.value!, 'visitFriend', {
+    ...base,
+    hostGid,
+    interact: true,
+    stroke: true,
+    clearHazard: true,
+  })
+  if (ok) {
+    const result: any = pastureStore.lastResult
+    const interactions = Array.isArray(result?.interaction) ? result.interaction.join('、') : ''
+    visitResult.value = interactions
+      ? `已访问 ${result.hostGid}，完成：${interactions}`
+      : `已访问 ${result?.hostGid || hostGid}，本次无可互动项`
+    toast.success('已访问好友牧场')
+  }
+  else {
+    toast.error(error.value || '访问失败')
+  }
+}
+
 watch(currentAccountId, (id) => {
-  if (id)
+  if (id) {
     refresh()
-  else
+    void friendStore.fetchFriendsCache(id)
+  }
+  else {
     pastureStore.reset()
+  }
 })
 
-onMounted(refresh)
+onMounted(() => {
+  refresh()
+  if (currentAccountId.value)
+    void friendStore.fetchFriendsCache(currentAccountId.value)
+})
 </script>
 
 <template>
@@ -91,7 +155,7 @@ onMounted(refresh)
       :tone="error ? 'error' : 'default'"
     />
     <div v-else class="space-y-4">
-      <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <div class="border border-gray-200 rounded-lg p-3 dark:border-gray-700">
           <div class="text-xs text-gray-500 dark:text-gray-400">
             动物
@@ -124,6 +188,22 @@ onMounted(refresh)
             {{ formatClock(serverTime) }}
           </div>
         </div>
+        <div class="border border-gray-200 rounded-lg p-3 dark:border-gray-700">
+          <div class="text-xs text-gray-500 dark:text-gray-400">
+            幼崽售价
+          </div>
+          <div class="mt-1 text-sm text-gray-900 font-bold dark:text-gray-100">
+            {{ cubGoods ? `${cubGoods.price} 金` : '—' }}
+          </div>
+        </div>
+        <div class="border border-gray-200 rounded-lg p-3 dark:border-gray-700">
+          <div class="text-xs text-gray-500 dark:text-gray-400">
+            罐头存栏
+          </div>
+          <div class="mt-1 text-sm text-gray-900 font-bold dark:text-gray-100">
+            {{ cannedCount }} 个
+          </div>
+        </div>
       </div>
 
       <div class="flex flex-wrap gap-2">
@@ -142,7 +222,46 @@ onMounted(refresh)
         <NButton size="small" :loading="operating === 'putHazard'" :disabled="!isConnected" @click="run('putHazard', { opId: 11003 })">
           清灾害
         </NButton>
+        <NButton size="small" type="primary" :loading="operating === 'check'" :disabled="!isConnected" @click="run('check')">
+          立即自动执行
+        </NButton>
       </div>
+
+      <div class="flex flex-wrap items-center gap-2 border border-gray-200 rounded-lg p-3 dark:border-gray-700">
+        <span class="text-xs text-gray-500 dark:text-gray-400">补栏：</span>
+        <NInputNumber v-model:value="buyCount" :min="1" :max="20" size="small" class="w-24" />
+        <NButton size="small" type="primary" :loading="operating === 'buyCub'" :disabled="!isConnected" @click="buyCub">
+          买幼崽
+        </NButton>
+        <span class="ml-3 text-xs text-gray-500 dark:text-gray-400">罐头换草：</span>
+        <NInputNumber v-model:value="canCount" :min="1" :max="100" size="small" class="w-24" />
+        <NButton size="small" :loading="operating === 'exchangeGrass'" :disabled="!isConnected || cannedCount <= 0" @click="exchangeGrass">
+          换 {{ canCount * 3600 }} 牧草
+        </NButton>
+        <span class="ml-3 text-xs text-gray-500 dark:text-gray-400">好友牧场：</span>
+        <BaseSelect v-model="selectedFriendGid" :options="friendOptions" placeholder="选择好友" filterable class="w-56" />
+        <NButton size="small" :loading="operating === 'visitFriend'" :disabled="!isConnected || !selectedFriendGid" @click="visitFriend">
+          访问并互动
+        </NButton>
+      </div>
+      <p v-if="visitResult" class="text-xs text-gray-500 dark:text-gray-400">
+        {{ visitResult }}
+      </p>
+
+      <section v-if="lastActions.length">
+        <h4 class="mb-2 text-sm text-gray-800 font-bold dark:text-gray-200">
+          自动化最近动作
+        </h4>
+        <div class="flex flex-wrap gap-2">
+          <span
+            v-for="(action, index) in lastActions"
+            :key="`${index}-${action}`"
+            class="rounded bg-emerald-50 px-2 py-1 text-xs text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+          >
+            {{ action }}
+          </span>
+        </div>
+      </section>
 
       <section>
         <h4 class="mb-2 text-sm text-gray-800 font-bold dark:text-gray-200">
@@ -199,7 +318,7 @@ onMounted(refresh)
       </section>
 
       <p class="text-xs text-gray-400 dark:text-gray-500">
-        自动化开关在「设置 → 自动控制 → 牧场」中开启。操作需账号在线；点击后立即刷新快照。
+        自动化开关在「设置 → 自动控制 → 牧场」中开启，包含空栏买幼崽、罐头换草、好友牧场互动。操作需账号在线；点击后立即刷新快照。
       </p>
     </div>
   </div>
