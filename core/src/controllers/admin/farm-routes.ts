@@ -348,28 +348,6 @@ function mountFarmRoutes(app: Application, ctx: AdminContext): void {
         }
     });
 
-    app.get('/api/pasture', async (req: Request, res: Response) => {
-        const id = getAccId(ctx, req);
-        if (!id) return res.status(400).json({ ok: false, error: 'Missing x-account-id' });
-        try {
-            const data = await ctx.provider.getPastureSnapshot(id);
-            res.json({ ok: true, data });
-        } catch (e: any) {
-            handleApiError(res, e);
-        }
-    });
-
-    app.post('/api/pasture/:action', async (req: Request, res: Response) => {
-        const id = getAccId(ctx, req);
-        if (!id) return res.status(400).json({ ok: false, error: 'Missing x-account-id' });
-        try {
-            const data = await ctx.provider.operatePasture(id, String(req.params.action), req.body || {});
-            res.json({ ok: true, data });
-        } catch (e: any) {
-            handleApiError(res, e);
-        }
-    });
-
     // ============ 牧场（services/ranch，移植自上游 liyangpengs/qq-farm-bot） ============
     app.get('/api/ranch/automation-options', (_req: Request, res: Response) => {
         res.json({ ok: true, data: require('../../config/ranch-automation').RANCH_ANIMAL_OPTIONS });

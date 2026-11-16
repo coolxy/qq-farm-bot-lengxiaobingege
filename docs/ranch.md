@@ -1,14 +1,15 @@
 # 牧场（ranch）模块说明
 
-牧场功能整体移植自上游 [liyangpengs/qq-farm-bot](https://github.com/liyangpengs/qq-farm-bot) 的 `ranch` 实现（PR #134 / #135 / #136），
-替代原先自研的 `services/pasture`（旧实现只保留 `/api/pasture` 手动接口，不再参与调度）。
+牧场功能整体移植自上游 [liyangpengs/qq-farm-bot](https://github.com/liyangpengs/qq-farm-bot) 的 `ranch` 实现（PR #134 / #135 / #136）。
+原先自研的 `services/pasture`、`/api/pasture` 手动接口、`pasture_*` 配置以及 `animalpb.proto`/`homesteadpb.proto`
+已随隔离审计全部下线（详见 `docs/ranch-isolation-audit.md`），牧场协议统一使用自包含的 `ranchv2.proto`。
 
 ## 一、为什么不能直接合并上游
 
 - 本地与上游是**两套独立 Git 历史**（`git merge` 直接报 unrelated histories），且本地领先 139 个提交、上游领先 132 个。
 - worker 层结构完全不同：上游把 worker 收敛成单个 `core/src/core/worker.ts`，本地是按 `worker/{schedules,api-handlers,runtime-config,state...}.ts` 拆分。
-- proto 同名消息字段不同：本地 `animalpb` 的 `HarvestRanch` / `FeedAnimal` / `GetRanchDetail` 是按我们自己的抓包手写的，
-  与上游从官方定义整理的版本**字段编号语义不同**，直接复用会解码错位。
+- proto 同名消息字段不同：早期本地 `animalpb` 的 `HarvestRanch` / `FeedAnimal` / `GetRanchDetail` 是按我们自己的抓包手写的，
+  与上游从官方定义整理的版本**字段编号语义不同**，直接复用会解码错位。因此改用独立包 `gamepb.ranchv2` 全量承载牧场消息。
 
 因此采用「**按模块移植 + 独立命名空间**」：
 

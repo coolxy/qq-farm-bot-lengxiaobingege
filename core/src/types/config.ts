@@ -45,16 +45,6 @@ export interface AutomationConfig {
   fertilizer_smart_seconds: number;
   skip_own_weed_bug: boolean;
   show_manual_fertilizer: boolean;
-  // 旧版牧场自动化（services/pasture）：已由上游 ranch 模块取代，
-  // 保留字段只为兼容历史配置文件与旧接口，不再参与调度。
-  pasture: boolean;
-  pasture_harvest: boolean;
-  pasture_feed: boolean;
-  pasture_stroke: boolean;
-  pasture_hazard: boolean;
-  pasture_grass: boolean;
-  pasture_buy_cub: boolean;
-  pasture_friend_visit: boolean;
   // 牧场自动化（services/ranch，移植自上游 liyangpengs/qq-farm-bot）
   ranch_harvest: boolean;
   ranch_produce: boolean;

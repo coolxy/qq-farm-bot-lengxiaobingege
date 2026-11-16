@@ -2,7 +2,8 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { decodeActivityWindows, decodeActivityExtra } = require('../dist/services/activity-windows');
-const { activityScope, isRanchActivity, isGlobalActivity } = require('../dist/config/activity-scene');
+const activityScene = require('../dist/config/activity-scene');
+const { activityScope, isRanchActivity, isGlobalActivity } = activityScene;
 
 /**
  * 牧场活动页此前直接展示全局 ActivityList，把「奶茶热销中」「故友重逢」这类农场活动
@@ -73,6 +74,52 @@ test('isGlobalActivity 反向过滤牧场活动，农场活动中心据此不串
     assert.equal(isGlobalActivity({ id: '2026111800', beginTime: 0, endTime: 0 }), true);
     // 未识别、无 id 的兜底项按全局处理，避免误删
     assert.equal(isGlobalActivity({ beginTime: 0, endTime: 0 }), true);
+});
+
+test('归属规则可由配置注入：新增 uid/id 前缀、精确 id 立即生效', () => {
+    try {
+        activityScene.setRanchActivityScopeRules({
+            uidPrefixes: ['NewRanchUI'],
+            idPrefixes: ['20261201'],
+            exactIds: ['2026999999'],
+            excludeIds: [],
+        });
+        assert.equal(activityScope({ id: '2026120100', beginTime: 0, endTime: 0 }), 'ranch');
+        assert.equal(activityScope({ id: 'x', beginTime: 0, endTime: 0, uid: 'NewRanchUI' }), 'ranch');
+        assert.equal(activityScope({ id: '2026999999', beginTime: 0, endTime: 0 }), 'ranch');
+        // 旧前缀已从配置移除，不再判为牧场
+        assert.equal(activityScope({ id: '2026111700', beginTime: 0, endTime: 0 }), 'global');
+        assert.ok(activityScene.getRanchActivityScopeRules().idPrefixes.includes('20261201'));
+    } finally {
+        // 恢复默认配置，避免污染后续用例
+        activityScene.reloadRanchActivityScope();
+    }
+});
+
+test('excludeIds 修正前缀误判：即使命中牧场 id 前缀也判为全局', () => {
+    try {
+        activityScene.setRanchActivityScopeRules({
+            uidPrefixes: [], idPrefixes: ['20261117'], exactIds: [], excludeIds: ['2026111799'],
+        });
+        assert.equal(activityScope({ id: '2026111700', beginTime: 0, endTime: 0 }), 'ranch');
+        assert.equal(isGlobalActivity({ id: '2026111799', beginTime: 0, endTime: 0 }), true);
+        assert.equal(isRanchActivity({ id: '2026111799', beginTime: 0, endTime: 0 }), false);
+    } finally {
+        activityScene.reloadRanchActivityScope();
+    }
+});
+
+test('归属规则对脏配置做清洗，过滤非字符串与空值', () => {
+    try {
+        const rules = activityScene.setRanchActivityScopeRules({
+            uidPrefixes: ['Valid', '', 123, null, '  '],
+            idPrefixes: 'not-array',
+        });
+        assert.deepEqual(rules.uidPrefixes, ['Valid']);
+        assert.deepEqual(rules.idPrefixes, []);
+    } finally {
+        activityScene.reloadRanchActivityScope();
+    }
 });
 
 test('buildActivityDirectory 不把牧场活动混进农场活动目录', () => {

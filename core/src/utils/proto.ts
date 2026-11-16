@@ -67,8 +67,7 @@ async function loadProto(): Promise<void> {
         getResourcePath('proto', 'mutantpb.proto'),
         getResourcePath('proto', 'miscpb.proto'),
         getResourcePath('proto', 'achievepb.proto'),
-        getResourcePath('proto', 'animalpb.proto'),
-        getResourcePath('proto', 'homesteadpb.proto'),
+        // 牧场协议统一用自包含的 ranchv2.proto（见下方注册），旧 animalpb/homesteadpb 已随旧 pasture 实现下线。
     ], { keepCase: true });
 
     // 网关
@@ -86,39 +85,6 @@ async function loadProto(): Promise<void> {
     types.PlayerSceneLoginRequest = root.lookupType('gamepb.globalscenepb.PlayerSceneLoginRequest');
     types.PlayerSceneLoginReply = root.lookupType('gamepb.globalscenepb.PlayerSceneLoginReply');
     types.GlobalSceneUnlockNotify = root.lookupType('gamepb.globalscenepb.GlobalSceneUnlockNotify');
-
-    // 牧场（内测，2026-11-16 抓包实测）
-    types.RanchInfo = root.lookupType('gamepb.animalpb.RanchInfo');
-    types.RanchExtras = root.lookupType('gamepb.animalpb.RanchExtras');
-    types.AnimalInst = root.lookupType('gamepb.animalpb.AnimalInst');
-    types.GetRanchDetailRequest = root.lookupType('gamepb.animalpb.GetRanchDetailRequest');
-    types.GetRanchDetailReply = root.lookupType('gamepb.animalpb.GetRanchDetailReply');
-    types.FeedAnimalRequest = root.lookupType('gamepb.animalpb.FeedAnimalRequest');
-    types.FeedAnimalReply = root.lookupType('gamepb.animalpb.FeedAnimalReply');
-    types.HarvestRanchRequest = root.lookupType('gamepb.animalpb.HarvestRanchRequest');
-    types.HarvestRanchReply = root.lookupType('gamepb.animalpb.HarvestRanchReply');
-    types.GetRanchOpTimesRequest = root.lookupType('gamepb.animalpb.GetRanchOpTimesRequest');
-    types.GetRanchOpTimesReply = root.lookupType('gamepb.animalpb.GetRanchOpTimesReply');
-    types.TriggerProduceRequest = root.lookupType('gamepb.animalpb.TriggerProduceRequest');
-    types.TriggerProduceReply = root.lookupType('gamepb.animalpb.TriggerProduceReply');
-    types.StrokeAnimalRequest = root.lookupType('gamepb.animalpb.StrokeAnimalRequest');
-    types.StrokeAnimalReply = root.lookupType('gamepb.animalpb.StrokeAnimalReply');
-    types.AnimalRef = root.lookupType('gamepb.animalpb.AnimalRef');
-    types.PutHazardRequest = root.lookupType('gamepb.animalpb.PutHazardRequest');
-    types.PutHazardReply = root.lookupType('gamepb.animalpb.PutHazardReply');
-    types.CleanAllRanchRequest = root.lookupType('gamepb.animalpb.CleanAllRanchRequest');
-    types.CleanAllRanchReply = root.lookupType('gamepb.animalpb.CleanAllRanchReply');
-    types.Grass = root.lookupType('gamepb.animalpb.Grass');
-    types.Shelf = root.lookupType('gamepb.animalpb.Shelf');
-    types.ShelfLot = root.lookupType('gamepb.animalpb.ShelfLot');
-    types.OpQuota = root.lookupType('gamepb.animalpb.OpQuota');
-    types.FacilityDetail = root.lookupType('gamepb.homesteadpb.FacilityDetail');
-    types.GetFacilityDetailRequest = root.lookupType('gamepb.homesteadpb.GetFacilityDetailRequest');
-    types.GetFacilityDetailReply = root.lookupType('gamepb.homesteadpb.GetFacilityDetailReply');
-    types.GetBuildingListRequest = root.lookupType('gamepb.homesteadpb.GetBuildingListRequest');
-    types.GetBuildingListReply = root.lookupType('gamepb.homesteadpb.GetBuildingListReply');
-    types.AddFeedRequest = root.lookupType('gamepb.homesteadpb.AddFeedRequest');
-    types.AddFeedReply = root.lookupType('gamepb.homesteadpb.AddFeedReply');
 
     // 牧场 v2（移植自上游 liyangpengs/qq-farm-bot 的 ranch 模块）：
     // 全部消息都在独立包 gamepb.ranchv2 中，统一以 Ranch<名字> 注册。

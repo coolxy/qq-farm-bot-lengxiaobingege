@@ -254,7 +254,9 @@ async function runPastureTick(auto: any): Promise<void> {
 
     st.pastureTaskRunning = true;
     try {
-        await runWithRequestClass('pasture', async () => {
+        // 牧场自动化复用农场班次：pasture 不是合法 RequestClass，会让环境班次注入失败，
+        // 进而 isManualRequest() 恒真、巡查自我让路。farm 班次与农场共用互斥锁串行，不抢槽位。
+        await runWithRequestClass('farm', async () => {
             await ranchAutomation.run({
                 // 农场即将巡查时，牧场本轮让路，避免两边同时改写场景。
                 farmDeadline: () => Number(st.nextFarmRunAt) || Number.POSITIVE_INFINITY,

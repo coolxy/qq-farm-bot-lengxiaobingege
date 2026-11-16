@@ -103,7 +103,9 @@ function cacheSet(kind: 'cells' | 'bag', value: any): void {
  *
  * 自动巡查整体占着 ranch.scene 队列（最长一个 5 秒切片），而面板点「一键收获」排在队尾，
  * 用户要等到巡查跑完才有响应。这里用请求班次区分：HTTP 面板请求没有环境班次（前台），
- * 自动巡查跑在 pasture 班次里。巡查的 checkpoint 看到有人在等就让路，5 秒内不重复让路。
+ * 自动巡查跑在 farm 班次里（由 schedules.ts 注入）。巡查的 checkpoint 看到有人在等就让路，
+ * 5 秒内不重复让路。注意班次必须是 request-priority 白名单里的合法值，否则注入失败会让
+ * isManualRequest() 恒真、巡查把自己也当成手动请求而反复让路。
  */
 const MANUAL_WAIT_MS = 30_000;
 const MANUAL_YIELD_COOLDOWN_MS = 5_000;
