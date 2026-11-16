@@ -49,12 +49,12 @@ test('decodes Shelf lots produced by HarvestRanch', async () => {
     assert.equal(Number(shelf.lots[1].num), 360);
 });
 
-// 2026-11-16 第三段抓包：罐头批量使用换牧草（ItemService.BatchUse）。
-// 请求 {item:{item_id:80031(10小时有机罐头), count:60}, unknown_8:空}，回包 gained{7004(牧草), 216000}。
+// 2026-11-16 第三段抓包：罐头批量使用补充罐头桶（ItemService.BatchUse）。
+// 请求 {item:{item_id:80031(1小时有机罐头), count:60}, unknown_8:空}，回包 gained{7004(有机罐头容器), 216000 秒}。
 const BATCH_USE_REQ_HEX = '0a0c089ff104103c308ee8034200';
 const BATCH_USE_REPLY_HEX = '0a0a089ff104103c308ee803121208dc3610c0970d188092b8c398feffffff01';
 
-test('decodes BatchUse can-to-grass exchange captured live', async () => {
+test('decodes BatchUse can-to-bucket refill captured live', async () => {
     await proto.ensureProtoLoaded();
     const req = proto.types.BatchUseRequest.decode(Buffer.from(BATCH_USE_REQ_HEX, 'hex'));
     assert.equal(Number(req.item.item_id), 80031);
@@ -65,7 +65,7 @@ test('decodes BatchUse can-to-grass exchange captured live', async () => {
     assert.equal(Number(rep.used.item_id), 80031);
     assert.equal(Number(rep.used.count), 60);
     assert.equal(Number(rep.gained.item_id), 7004);
-    assert.equal(Number(rep.gained.count), 216000); // 60 罐头 × 3600 牧草
+    assert.equal(Number(rep.gained.count), 216000); // 60 罐头 × 3600 秒
 });
 
 // 2026-11-16 第四段抓包（16:13，好友牧场/互动/清灾害/买幼崽场景）。

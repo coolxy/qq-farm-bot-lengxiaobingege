@@ -16,6 +16,7 @@ async function getPastureSnapshot(): Promise<any> {
     let facility: any = null;
     let cubShop: any = null;
     let cannedCount = 0;
+    let bucketSeconds = 0;
     try {
         quotas = await api.getRanchOpTimes();
     } catch { /* 配额接口失败不影响主快照 */ }
@@ -27,6 +28,7 @@ async function getPastureSnapshot(): Promise<any> {
     } catch { /* 幼崽商店失败不影响主快照 */ }
     try {
         cannedCount = await api.getBagItemCount(analysis.CANNED_ITEM_ID);
+        bucketSeconds = await api.getBagItemCount(analysis.BUCKET_ITEM_ID);
     } catch { /* 背包失败不影响主快照 */ }
 
     const analyzed = ranch ? analysis.analyzeRanch(ranch, Date.now()) : {
@@ -61,6 +63,7 @@ async function getPastureSnapshot(): Promise<any> {
             cub: cubShop.cub,
         } : null,
         cannedCount,
+        bucketSeconds,
         lastCheckAt: lastState.lastCheckAt,
         lastActions: lastState.lastActions,
         constants: {
@@ -79,6 +82,19 @@ async function operatePasture(action: string, input: any = {}): Promise<any> {
         case 'check': {
             const result = await scheduler.checkPasture({ external: true });
             return { ok: true, ...result };
+        }
+        case 'shopInfo': {
+            const shop = await api.getShopInfo(Number(input.shopId) || 6);
+            return {
+                ok: true,
+                goods: ((shop && shop.goods_list) || []).map((g: any) => ({
+                    goodsId: Number(g.id),
+                    itemId: Number(g.item_id),
+                    itemCount: Number(g.item_count),
+                    price: Number(g.price),
+                    unlocked: !!g.unlocked,
+                })),
+            };
         }
         case 'harvest': {
             const res = await api.harvestRanch(input.ranchInstId, 1);
@@ -117,6 +133,7 @@ async function operatePasture(action: string, input: any = {}): Promise<any> {
             const res = await api.buyCub(goodsId, num, price);
             return { ok: true, goodsId, price, num, result: res };
         }
+        case 'refillBucket':
         case 'exchangeGrass': {
             const count = Math.max(1, Number(input.count) || 1);
             const res = await api.batchUse(analysis.CANNED_ITEM_ID, count);
@@ -124,6 +141,7 @@ async function operatePasture(action: string, input: any = {}): Promise<any> {
                 ok: true,
                 used: res && res.used ? { itemId: Number(res.used.item_id), count: Number(res.used.count) } : null,
                 gained: res && res.gained ? { itemId: Number(res.gained.item_id), count: Number(res.gained.count) } : null,
+                message: `罐头桶增加 ${Math.max(1, Number(input.count) || 1) * analysis.CANNED_TO_BUCKET_SECONDS} 秒`,
             };
         }
         case 'visitFriend': {

@@ -14,7 +14,9 @@ const { runExclusiveAutomationTask } = require('../automation-lock');
 const { recordOperation } = require('../stats');
 const { getFriendsList } = require('../friend');
 const api = require('./api');
-const { analyzeRanch, isGrassLow, cansToTarget, CANNED_ITEM_ID } = require('./analysis');
+const {
+    analyzeRanch, isGrassLow, BUCKET_ITEM_ID, CANNED_ITEM_ID, CANNED_TO_BUCKET_SECONDS,
+} = require('./analysis');
 
 const pastureScheduler = createScheduler('pasture');
 
@@ -28,13 +30,13 @@ const TICK_MIN_MS = 30 * 1000;
 const TICK_MAX_MS = 45 * 1000;
 
 const FEED_MACHINE_INST_ID = 10002;   // 实测牧草机 inst_id
-const GRASS_LOW_THRESHOLD = 3000;     // 牧草低于此值触发补草
-const GRASS_TARGET_AFTER_CAN = 10000; // 罐头换草一次补到该目标
+const GRASS_LOW_THRESHOLD = 3000;     // 牧草低于此值触发牧草机补草
 const FRIEND_VISIT_LIMIT = 3;         // 每轮最多访问的好友数
 const FRIEND_VISIT_COOLDOWN_MS = 10 * 60 * 1000;
 let lastCheckAt = 0;
 let lastActions: string[] = [];
 let nextFriendVisitAt = 0;
+let lastBucketSeconds = 0;
 
 function randomIntervalMs(): number {
     return TICK_MIN_MS + Math.floor(Math.random() * (TICK_MAX_MS - TICK_MIN_MS + 1));
@@ -89,6 +91,23 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
             const quotas = (await safeStep('读取操作配额', () => api.getRanchOpTimes())) || [];
             const hazardQuota = quotas.find((q: any) => toNum(q.op_id) === 11003);
             hazardRemaining = hazardQuota ? toNum(hazardQuota.remaining_times) : 0;
+        }
+        // 喂养消耗的是「有机罐头容器」余额（item 7004，单位秒），不是牧场里的牧草。
+        lastBucketSeconds = (await safeStep('读取罐头桶余额', () => api.getBagItemCount(BUCKET_ITEM_ID))) || 0;
+        if (auto.pasture_feed && lastBucketSeconds <= 0) {
+            await safeStep('补充罐头桶', async () => {
+                const cans = (await api.getBagItemCount(CANNED_ITEM_ID)) || 0;
+                if (cans <= 0) return;
+                const used = Math.min(cans, Math.max(1, Math.ceil(3600 / CANNED_TO_BUCKET_SECONDS)));
+                const exchanged = await api.batchUse(CANNED_ITEM_ID, used);
+                const gained = toNum(exchanged && exchanged.gained && exchanged.gained.count);
+                if (gained > 0) {
+                    lastBucketSeconds += gained;
+                    actions.push(`补充罐头桶 ${gained} 秒（${used} 个罐头）`);
+                    recordOperation('牧场补充罐头', used);
+                    await sleep(400);
+                }
+            });
         }
 
         // 0. 空栏自动补幼崽（买满到容量上限，单轮最多 3 只，价格从幼崽商店实包读取）
@@ -165,30 +184,13 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
                     }
                 }
             });
-            const afterMachine = analyzeRanch(ranch, Date.now()).grass;
-            if (afterMachine < GRASS_LOW_THRESHOLD) {
-                await safeStep('罐头换草', async () => {
-                    const cans = (await api.getBagItemCount(CANNED_ITEM_ID)) || 0;
-                    const use = Math.min(cans, Math.max(1, cansToTarget(afterMachine, GRASS_TARGET_AFTER_CAN)));
-                    if (use > 0) {
-                        const exchanged = await api.batchUse(CANNED_ITEM_ID, use);
-                        const gainedGrass = toNum(exchanged && exchanged.gained && exchanged.gained.count);
-                        if (gainedGrass > 0) {
-                            actions.push(`罐头换草 ×${use} → ${gainedGrass} 牧草`);
-                            recordOperation('牧场罐头换草', use);
-                            if (ranch.grass) ranch.grass.amount = toLong(gainedGrass);
-                            await sleep(400);
-                        }
-                    }
-                });
-            }
         }
 
         // 4. 可喂即喂（每轮只喂一只，避免请求风暴；牧草为 0 时跳过）
         if (auto.pasture_feed) {
             await safeStep('喂养动物', async () => {
                 const feedState = analyzeRanch(ranch, Date.now());
-                if (feedState.grass > 0 && feedState.feedable.length > 0) {
+                if (lastBucketSeconds > 0 && feedState.feedable.length > 0) {
                     const target = feedState.feedable[0];
                     const updated = await api.feedAnimal(toNum(ranch.ranch_inst_id), 1);
                     if (updated) {
@@ -325,5 +327,5 @@ module.exports = {
     refreshPastureLoop,
     analyzeRanch,
     isChecking: () => isChecking,
-    getLastState: () => ({ lastCheckAt, lastActions: [...lastActions] }),
+    getLastState: () => ({ lastCheckAt, lastActions: [...lastActions], lastBucketSeconds }),
 };

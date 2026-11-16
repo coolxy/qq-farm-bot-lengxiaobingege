@@ -47,5 +47,5 @@ test('cansToTarget converts grass deficit to canned count', () => {
     assert.equal(analysis.cansToTarget(0, 6000), 2);
     assert.equal(analysis.cansToTarget(3000, 6000), 1);
     assert.equal(analysis.cansToTarget(6000, 6000), 0);
-    assert.equal(analysis.CANNED_TO_GRASS, 3600);
+    assert.equal(analysis.CANNED_TO_BUCKET_SECONDS, 3600);
 });

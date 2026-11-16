@@ -12,9 +12,15 @@ export {};
 
 const { toNum } = require('../../utils/utils');
 
-const GRASS_ITEM_ID = 7004;      // 牧草（BatchUse 回包实测）
-const CANNED_ITEM_ID = 80031;    // 10小时有机罐头，1 个 = 3600 牧草
-const CANNED_TO_GRASS = 3600;
+// 实包勘误（2026-11-16 补充）：BatchUse 回包里的 7004 不是牧草，
+// 而是 ItemInfo.json 中的「有机罐头容器」——喂养动物真正消耗的是这个桶的时长（秒）。
+// 80031「有机罐头(1小时)」用掉后给桶增加 3600 秒，不是 3600 株牧草。
+const BUCKET_ITEM_ID = 7004;     // 有机罐头容器（余额单位：秒）
+const CANNED_ITEM_ID = 80031;    // 有机罐头(1小时)
+const CANNED_TO_BUCKET_SECONDS = 3600;
+// 兼容旧调用的名字（语义实际是罐头桶，不是牧草）。
+const GRASS_ITEM_ID = BUCKET_ITEM_ID;
+const CANNED_TO_GRASS = CANNED_TO_BUCKET_SECONDS;
 
 function num(v: any): number {
     return toNum(v);
@@ -104,7 +110,9 @@ module.exports = {
     analyzeRanch,
     isGrassLow,
     cansToTarget,
-    GRASS_ITEM_ID,
+    BUCKET_ITEM_ID,
     CANNED_ITEM_ID,
+    CANNED_TO_BUCKET_SECONDS,
+    GRASS_ITEM_ID,
     CANNED_TO_GRASS,
 };

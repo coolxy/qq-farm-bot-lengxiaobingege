@@ -36,6 +36,7 @@ const facility = computed(() => data.value?.facility || null)
 const serverTime = computed(() => Number(data.value?.serverTime) || 0)
 const cubGoods = computed<any>(() => data.value?.cubShop?.cub || null)
 const cannedCount = computed(() => Number(data.value?.cannedCount) || 0)
+const bucketSeconds = computed(() => Number(data.value?.bucketSeconds) || 0)
 const lastActions = computed<string[]>(() => (data.value && Array.isArray(data.value.lastActions)) ? data.value.lastActions : [])
 const friendOptions = computed(() => friends.value
   .map((friend: any) => ({
@@ -48,6 +49,13 @@ function formatClock(ms: number): string {
   if (!ms || ms > 9007199254740992)
     return '—'
   return new Date(ms).toLocaleString('zh-CN', { hour12: false, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function formatBucket(seconds: number): string {
+  if (!seconds || seconds <= 0) return '0'
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  return hours > 0 ? `${hours}小时${minutes ? `${minutes}分` : ''}` : `${minutes}分`
 }
 
 function stageLabel(stage: number): string {
@@ -79,9 +87,9 @@ async function buyCub() {
   await run('buyCub', { num: count })
 }
 
-async function exchangeGrass() {
+async function refillBucket() {
   const count = Math.max(1, Number(canCount.value) || 1)
-  await run('exchangeGrass', { count })
+  await run('refillBucket', { count })
 }
 
 async function visitFriend() {
@@ -198,10 +206,10 @@ onMounted(() => {
         </div>
         <div class="border border-gray-200 rounded-lg p-3 dark:border-gray-700">
           <div class="text-xs text-gray-500 dark:text-gray-400">
-            罐头存栏
+            罐头桶余量
           </div>
           <div class="mt-1 text-sm text-gray-900 font-bold dark:text-gray-100">
-            {{ cannedCount }} 个
+            {{ formatBucket(bucketSeconds) }}
           </div>
         </div>
       </div>
@@ -233,10 +241,10 @@ onMounted(() => {
         <NButton size="small" type="primary" :loading="operating === 'buyCub'" :disabled="!isConnected" @click="buyCub">
           买幼崽
         </NButton>
-        <span class="ml-3 text-xs text-gray-500 dark:text-gray-400">罐头换草：</span>
+        <span class="ml-3 text-xs text-gray-500 dark:text-gray-400">罐头补桶（库存 {{ cannedCount }}）：</span>
         <NInputNumber v-model:value="canCount" :min="1" :max="100" size="small" class="w-24" />
-        <NButton size="small" :loading="operating === 'exchangeGrass'" :disabled="!isConnected || cannedCount <= 0" @click="exchangeGrass">
-          换 {{ canCount * 3600 }} 牧草
+        <NButton size="small" :loading="operating === 'refillBucket'" :disabled="!isConnected || cannedCount <= 0" @click="refillBucket">
+          加 {{ formatBucket(canCount * 3600) }}
         </NButton>
         <span class="ml-3 text-xs text-gray-500 dark:text-gray-400">好友牧场：</span>
         <BaseSelect v-model="selectedFriendGid" :options="friendOptions" placeholder="选择好友" filterable class="w-56" />
@@ -318,7 +326,7 @@ onMounted(() => {
       </section>
 
       <p class="text-xs text-gray-400 dark:text-gray-500">
-        自动化开关在「设置 → 自动控制 → 牧场」中开启，包含空栏买幼崽、罐头换草、好友牧场互动。操作需账号在线；点击后立即刷新快照。
+        自动化开关在「设置 → 自动控制 → 牧场」中开启，包含空栏买幼崽、罐头补桶后喂养、好友牧场互动。操作需账号在线；点击后立即刷新快照。
       </p>
     </div>
   </div>
