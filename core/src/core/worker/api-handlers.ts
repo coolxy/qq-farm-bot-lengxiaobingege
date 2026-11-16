@@ -244,6 +244,9 @@ async function handleApiCall(msg: any): Promise<void> {
             case 'getShareRewardActivity':
                 result = await require('../../services/share-reward-activity').getShareRewardActivity(args[0]);
                 break;
+            case 'probeActivityGroup':
+                result = await require('../../services/activity-probe').probeActivityGroup(args[0]);
+                break;
             case 'operateShareRewardActivity':
                 result = await require('../../services/share-reward-activity').operateShareRewardActivity(args[0], args[1], args[2]);
                 break;

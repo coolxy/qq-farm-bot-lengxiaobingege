@@ -195,6 +195,7 @@ function createDataProvider(options: DataProviderOptions) {
         getMilkTeaActivity: (accountRef: string, page: string, input: any) => callWorkerApi(resolveAccountRefId(accountRef), 'getMilkTeaActivity', page, input),
         operateMilkTeaActivity: (accountRef: string, action: string, input: any) => callWorkerApi(resolveAccountRefId(accountRef), 'operateMilkTeaActivity', action, input),
         getShareRewardActivity: (accountRef: string, activityId: string) => callWorkerApi(resolveAccountRefId(accountRef), 'getShareRewardActivity', activityId),
+        probeActivityGroup: (accountRef: string, groupId: string) => callWorkerApi(resolveAccountRefId(accountRef), 'probeActivityGroup', groupId),
         operateShareRewardActivity: (accountRef: string, activityId: string, action: string, input: any) => callWorkerApi(resolveAccountRefId(accountRef), 'operateShareRewardActivity', activityId, action, input),
         getPropsShop: (accountRef: string) => callWorkerApi(resolveAccountRefId(accountRef), 'getPropsShop'),
         purchaseProps: (accountRef: string, goodsId: unknown, count: unknown, expectedOffer: unknown) => (
