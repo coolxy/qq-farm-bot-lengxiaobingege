@@ -92,6 +92,13 @@ async function loadProto(): Promise<void> {
     types.FeedAnimalReply = root.lookupType('gamepb.animalpb.FeedAnimalReply');
     types.HarvestRanchReply = root.lookupType('gamepb.animalpb.HarvestRanchReply');
     types.GetRanchOpTimesReply = root.lookupType('gamepb.animalpb.GetRanchOpTimesReply');
+    types.TriggerProduceRequest = root.lookupType('gamepb.animalpb.TriggerProduceRequest');
+    types.TriggerProduceReply = root.lookupType('gamepb.animalpb.TriggerProduceReply');
+    types.StrokeAnimalRequest = root.lookupType('gamepb.animalpb.StrokeAnimalRequest');
+    types.StrokeAnimalReply = root.lookupType('gamepb.animalpb.StrokeAnimalReply');
+    types.AnimalRef = root.lookupType('gamepb.animalpb.AnimalRef');
+    types.PutHazardRequest = root.lookupType('gamepb.animalpb.PutHazardRequest');
+    types.PutHazardReply = root.lookupType('gamepb.animalpb.PutHazardReply');
     types.Grass = root.lookupType('gamepb.animalpb.Grass');
     types.Shelf = root.lookupType('gamepb.animalpb.Shelf');
     types.ShelfLot = root.lookupType('gamepb.animalpb.ShelfLot');
@@ -170,6 +177,8 @@ async function loadProto(): Promise<void> {
     types.ShopInfoReply = root.lookupType('gamepb.shoppb.ShopInfoReply');
     types.BuyGoodsRequest = root.lookupType('gamepb.shoppb.BuyGoodsRequest');
     types.BuyGoodsReply = root.lookupType('gamepb.shoppb.BuyGoodsReply');
+    types.RotationBuyGoodsRequest = root.lookupType('gamepb.shoppb.RotationBuyGoodsRequest');
+    types.RotationBuyGoodsReply = root.lookupType('gamepb.shoppb.RotationBuyGoodsReply');
     types.GetMonthCardInfosRequest = root.lookupType('gamepb.mallpb.GetMonthCardInfosRequest');
     types.GetMonthCardInfosReply = root.lookupType('gamepb.mallpb.GetMonthCardInfosReply');
     types.ClaimMonthCardRewardRequest = root.lookupType('gamepb.mallpb.ClaimMonthCardRewardRequest');
@@ -231,6 +240,8 @@ async function loadProto(): Promise<void> {
     types.VisitEnterReply = root.lookupType('gamepb.visitpb.EnterReply');
     types.VisitLeaveRequest = root.lookupType('gamepb.visitpb.LeaveRequest');
     types.VisitLeaveReply = root.lookupType('gamepb.visitpb.LeaveReply');
+    types.VisitEnterHomesteadReply = root.lookupType('gamepb.visitpb.EnterHomesteadReply');
+    types.UserBasicInfo = root.lookupType('gamepb.userpb.BasicInfo');
 
     // 任务
     types.TaskInfoRequest = root.lookupType('gamepb.taskpb.TaskInfoRequest');

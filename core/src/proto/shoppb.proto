@@ -77,10 +77,14 @@ message ShopInfoReply {
 }
 
 // --- 购买商品 ---
+// 2026-11-16 牧场幼崽实测帧：08934e 1003 18b808 2001
+//   = {goods_id:10003, num:3, price:1080, f4:1}，回包 goods.animal_id=60002
+//   确认幼崽也走 BuyGoods。f4 语义未确认（实测=1），暂不参与编码。
 message BuyGoodsRequest {
     int64 goods_id = 1;   // 商品ID (GoodsInfo.id)
     int64 num = 2;        // 购买数量
     int64 price = 3;      // 单价
+    int64 unknown_4 = 4;  // 实测 1（买幼崽帧），语义未确认
 }
 
 message BuyGoodsReply {
@@ -88,6 +92,18 @@ message BuyGoodsReply {
     repeated corepb.Item get_items = 2;   // 获得的物品
     repeated corepb.Item cost_items = 3;  // 消耗的物品
 }
+
+// --- 轮换商店购买（2026-11-16 实测）---
+// 请求 {101, 1, 1794758400, 1}：f3 是轮换周期起始日（与 RotationShopInfo.f3 一致），
+// f4 实测=1 语义未确认。回包为空。
+message RotationBuyGoodsRequest {
+    int64 goods_id = 1;        // 实测 101
+    int64 num = 2;             // 实测 1
+    int64 rotation_day_sec = 3; // 实测 1794758400 = 2026-11-17 00:00
+    int64 unknown_4 = 4;       // 实测 1
+}
+
+message RotationBuyGoodsReply {}
 
 // --- 商品解锁推送 ---
 message GoodsUnlockNotify {

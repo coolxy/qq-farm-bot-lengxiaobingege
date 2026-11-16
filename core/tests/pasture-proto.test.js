@@ -64,3 +64,42 @@ test('decodes BatchUse can-to-grass exchange captured live', async () => {
     assert.equal(Number(rep.gained.item_id), 7004);
     assert.equal(Number(rep.gained.count), 216000); // 60 罐头 × 3600 牧草
 });
+
+// 2026-11-16 第四段抓包（16:13，好友牧场/互动/清灾害/买幼崽场景）。
+// StrokeAnimal 请求：抚摸好友动物 {owner_gid:1215360471, animal:{10001,46}}。
+const STROKE_REQ_HEX = '08d7dbc3c304120508914e102e';
+// PutHazard 请求：清灾害 {ranch:10001, gid:1220383670, op:11003, 1}。
+const HAZARD_REQ_HEX = '08914e10b6a7f6c50418fb552001';
+// PutHazard 回包：结果=1、剩余=99、奖励 1102×5。
+const HAZARD_REPLY_HEX = '080110631a0a080210c499a2cd041801220808ce081005a20600';
+// BuyGoods 请求：买幼崽 {goods_id:10003, num:3, price:1080, f4:1}。
+const BUY_CUB_REQ_HEX = '08934e100318b8082001';
+// EnterHomestead 回包 f1：BasicInfo{gid:1215360471, name:婷児꧔, level:151}。
+const ENTER_HOMESTEAD_BASIC_HEX = '08d7dbc3c3041209e5a9b7e58590eaa79418970120e192ab1e28bcd195cc01321c6f4c36314d7667656274317979355a687041387361383576596833633a9c0168747470733a2f2f746869726477782e716c6f676f2e636e2f6d6d6f70656e2f76695f33322f665a6472334842565a6436753962515069624d32314b6f6c74536831483135454969624e656d4633534c4733517a6266526a784e4852696150523737657064413563786d4f524435743369633263396d75554a6e59456a326f5769624e5567506961637a734747696276725531374c4f566b2f313332';
+
+test('decodes StrokeAnimal / PutHazard / BuyGoods / EnterHomestead from live frames', async () => {
+    await proto.ensureProtoLoaded();
+    const stroke = proto.types.StrokeAnimalRequest.decode(Buffer.from(STROKE_REQ_HEX, 'hex'));
+    assert.equal(Number(stroke.owner_gid), 1215360471);
+    assert.equal(Number(stroke.animal.ranch_inst_id), 10001);
+    assert.equal(Number(stroke.animal.animal_inst_id), 46);
+
+    const hazardReq = proto.types.PutHazardRequest.decode(Buffer.from(HAZARD_REQ_HEX, 'hex'));
+    assert.equal(Number(hazardReq.ranch_inst_id), 10001);
+    assert.equal(Number(hazardReq.op_id), 11003);
+    const hazardRep = proto.types.PutHazardReply.decode(Buffer.from(HAZARD_REPLY_HEX, 'hex'));
+    assert.equal(hazardRep.result, 1);
+    assert.equal(hazardRep.remaining, 99);
+    assert.equal(Number(hazardRep.reward.item_id), 1102);
+    assert.equal(Number(hazardRep.reward.num), 5);
+
+    const buy = proto.types.BuyGoodsRequest.decode(Buffer.from(BUY_CUB_REQ_HEX, 'hex'));
+    assert.equal(Number(buy.goods_id), 10003);
+    assert.equal(Number(buy.price), 1080);
+    assert.equal(Number(buy.unknown_4), 1);
+
+    const basic = proto.types.UserBasicInfo.decode(Buffer.from(ENTER_HOMESTEAD_BASIC_HEX, 'hex'));
+    assert.equal(Number(basic.gid), 1215360471);
+    assert.equal(basic.name, '婷児꧔');
+    assert.equal(Number(basic.level), 151);
+});

@@ -129,6 +129,16 @@ message HarvestRanchReply {
     repeated Shelf shelves = 5;
 }
 
+// 一键催产/互动（2026-11-16 第三段抓包实测）：请求体为空，对当前牧场全部
+// 就绪动物触发产出；回包返回最新 RanchInfo（动物 f19 置 1、货架出现新产物批，
+// 货架挂在 f3 而非 HarvestRanch 的 f5）。
+message TriggerProduceRequest {}
+
+message TriggerProduceReply {
+    RanchInfo ranch = 1;
+    repeated Shelf shelves = 3;
+}
+
 message GetRanchOpTimesRequest {
 }
 
@@ -136,12 +146,62 @@ message GetRanchOpTimesReply {
     repeated OpQuota quotas = 1;
 }
 
+// 抚摸动物（RanchService.StrokeAnimal，2026-11-16 实测）。
+// 请求 f1=主人 gid；f2=AnimalRef{ranch_inst_id, animal_inst_id}。
+// 回包是最新 RanchInfo（animal.mutation.strokable/stroked_gids 会更新）。
+message AnimalRef {
+    int64 ranch_inst_id = 1;       // 实测 10001
+    int64 animal_inst_id = 2;      // 实测 46/33（动物实例 id，不是 animal_id）
+}
+
+message StrokeAnimalRequest {
+    int64 owner_gid = 1;           // 实测 1215360471（自己/好友 gid）
+    AnimalRef animal = 2;
+}
+
+message StrokeAnimalReply {
+    RanchInfo ranch = 1;
+}
+
+// 清理灾害（RanchService.PutHazard，2026-11-16 实测）。
+// 请求 f1=ranch、f2=操作者 gid、f3=op_id(11003)、f4=1。
+// 回包 f1=结果码(1)、f2=当日剩余可清理数(99→97)、f3=清理记录、
+//       f4=奖励 corepb.Item{1102(点券), 5}（每条 5 点券）。
+message HazardRecord {
+    int32 unknown_1 = 1;           // 实测 2/3/4
+    int64 at_sec = 2;              // 实测 1235782852（墙钟秒）
+    int32 unknown_3 = 3;           // 实测 1
+}
+
+message HazardReward {
+    int64 item_id = 1;             // 实测 1102（点券）
+    int64 num = 2;                 // 实测 5
+    bytes unknown_100 = 100;
+}
+
+message PutHazardRequest {
+    int64 ranch_inst_id = 1;       // 实测 10001
+    int64 operator_gid = 2;        // 实测 1220383670
+    int64 op_id = 3;               // 实测 11003
+    int32 unknown_4 = 4;           // 实测 1
+}
+
+message PutHazardReply {
+    int32 result = 1;              // 实测 1
+    int32 remaining = 2;           // 实测 99/98/97（当日剩余）
+    repeated HazardRecord records = 3;
+    HazardReward reward = 4;
+}
+
 service AnimalService {
     rpc GetRanchDetail(GetRanchDetailRequest) returns (GetRanchDetailReply);
     rpc FeedAnimal(FeedAnimalRequest) returns (FeedAnimalReply);
     rpc HarvestRanch(HarvestRanchRequest) returns (HarvestRanchReply);
+    rpc TriggerProduce(TriggerProduceRequest) returns (TriggerProduceReply);
+    rpc StrokeAnimal(StrokeAnimalRequest) returns (StrokeAnimalReply);
 }
 
 service RanchService {
     rpc GetRanchOpTimes(GetRanchOpTimesRequest) returns (GetRanchOpTimesReply);
+    rpc PutHazard(PutHazardRequest) returns (PutHazardReply);
 }

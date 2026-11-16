@@ -10,6 +10,16 @@ import "weatherpb.proto";
 service VisitService {
     rpc Enter(EnterRequest) returns (EnterReply);
     rpc Leave(LeaveRequest) returns (LeaveReply);
+    // 进入/离开好友家园（牧场），2026-11-16 实测。
+    // 请求同 EnterRequest/LeaveRequest：f1=host_gid、f2=reason。
+    // 回包 f1 是 BasicInfo（gid/昵称/等级/头像框/头像URL），与农场 Enter 一致。
+    rpc EnterHomestead(EnterRequest) returns (EnterHomesteadReply);
+    rpc LeaveHomestead(LeaveRequest) returns (LeaveReply);
+}
+
+message EnterHomesteadReply {
+    gamepb.userpb.BasicInfo basic = 1;
+    // 其余字段（好友家园的设施/动物快照等）本次未逐项确认，暂不定义。
 }
 
 // ============ 进入原因枚举 ============
