@@ -173,12 +173,12 @@ test('encodes rotation shop requests from live frames', async () => {
     assert.equal(Buffer.from(buyReq).toString('hex'), ROTATION_BUY_REQ_HEX);
 });
 
-test('decodes/encodes牧场等级 GetRanchWeightScoreV2（实包 f1=10 当前等级，f4 等级配置）', async () => {
+test('decodes/encodes牧场等级 GetRanchWeightScoreV2（f1 非等级勿用，f4 等级配置；BasicInfo.f20 才是等级）', async () => {
     await proto.ensureProtoLoaded();
-    // 按实包结构构造：f1=10、f3=1、f4=[{f1:1,f2:20,f3:[{f1:1002,f2:300},{f1:80023,f2:5}]}]
+    // 16:57 实包回包前缀 080a1801：f1=10（非等级，勿用）、f3=1，f4=等级配置表
     const T = proto.types.GetRanchWeightScoreV2Reply;
     const encoded = T.encode(T.create({
-        current_level: 10,
+        unknown_1: 10,
         unknown_3: 1,
         levels: [{
             level: 1, required_score: 20,
@@ -188,8 +188,10 @@ test('decodes/encodes牧场等级 GetRanchWeightScoreV2（实包 f1=10 当前等
             ],
         }],
     })).finish();
+    // 前缀必须与实包逐字节一致
+    assert.equal(Buffer.from(encoded).slice(0, 3).toString('hex'), '080a18');
     const reply = T.decode(Buffer.from(encoded));
-    assert.equal(reply.current_level, 10);
+    assert.equal(reply.unknown_1, 10);
     assert.equal(reply.levels.length, 1);
     assert.equal(reply.levels[0].level, 1);
     assert.equal(reply.levels[0].required_score, 20);
@@ -198,6 +200,11 @@ test('decodes/encodes牧场等级 GetRanchWeightScoreV2（实包 f1=10 当前等
     const req = proto.types.GetRanchWeightScoreV2Request.encode(
         proto.types.GetRanchWeightScoreV2Request.create({})).finish();
     assert.equal(Buffer.from(req).toString('hex'), ''); // 空请求
+
+    // 真正的牧场等级在登录回包 BasicInfo.f20（16:57 抓包实测=9，与游戏内一致）
+    const b = proto.types.UserBasicInfo.encode(proto.types.UserBasicInfo.create({ ranch_level: 9 })).finish();
+    assert.equal(Buffer.from(b).toString('hex'), 'a00109'); // f20 varint=9
+    assert.equal(Number(proto.types.UserBasicInfo.decode(b).ranch_level), 9);
 });
 
 test('every牧场 API 请求/回包类型都在运行时注册表中', async () => {

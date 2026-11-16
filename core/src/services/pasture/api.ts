@@ -225,12 +225,20 @@ async function getBuildingList(): Promise<any> {
 }
 
 /**
- * 牧场等级 / 体重分（2026-11-16 16:57 实包）。
- * IllustratedService.GetRanchWeightScoreV2 空请求；回包 f1=当前等级、f4=等级配置表。
+ * 牧场等级配置表（2026-11-16 16:57 实包）。
+ * IllustratedService.GetRanchWeightScoreV2 空请求；回包 f4=等级配置表（等级→所需体重分→奖励）。
+ * 注意：回包 f1 并非当前等级（同抓包中时有时无，勿用）——
+ * 当前牧场等级来自登录回包 BasicInfo.f20（getSelfRanchLevel）。
  */
-async function getRanchLevel(): Promise<any> {
+async function getRanchLevelConfig(): Promise<any> {
     return call('GetRanchWeightScoreV2Request', {},
         'gamepb.illustratedpb.IllustratedService', 'GetRanchWeightScoreV2', 'GetRanchWeightScoreV2Reply');
+}
+
+/** 当前牧场等级：登录回包 BasicInfo.f20 实测=9，与游戏内一致。 */
+function getSelfRanchLevel(): number {
+    const state = getUserState();
+    return toNum(state && (state as any).ranchLevel) || 0;
 }
 
 /**
@@ -278,7 +286,8 @@ module.exports = {
     cleanAllRanch,
     getRotationShopInfo,
     rotationBuyGoods,
-    getRanchLevel,
+    getRanchLevelConfig,
+    getSelfRanchLevel,
     getMallSupplyGoods,
     purchaseMallGoods,
 };

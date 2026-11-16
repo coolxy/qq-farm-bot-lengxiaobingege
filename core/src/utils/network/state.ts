@@ -43,6 +43,7 @@ const S = {
         goldBean: 0,
         openId: '',
         avatarUrl: '',
+        ranchLevel: 0,
     },
     now: (): number => performance.now(),
     /** 可注入 socket 工厂（默认在 connection 模块中赋值为 ws） */

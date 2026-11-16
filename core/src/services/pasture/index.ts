@@ -37,8 +37,8 @@ async function getPastureSnapshot(): Promise<any> {
         bucketSeconds = await api.getBagItemCount(analysis.BUCKET_ITEM_ID);
     } catch { /* 背包失败不影响主快照 */ }
     try {
-        ranchLevel = await api.getRanchLevel();
-    } catch { /* 牧场等级失败不影响主快照 */ }
+        ranchLevel = await api.getRanchLevelConfig();
+    } catch { /* 牧场等级配置失败不影响主快照 */ }
     try {
         mallGoods = await api.getMallSupplyGoods();
     } catch { /* 商城补给失败不影响主快照 */ }
@@ -63,27 +63,28 @@ async function getPastureSnapshot(): Promise<any> {
             used: Number(q.used_times),
             remaining: Number(q.remaining_times),
         })),
-        // 设施 DTO（字段语义按实框保守标注）：
+        // 设施 DTO：等级取 config_id_2 尾号（实测 牧草机 7001001→Lv1、窝 6001002→Lv2，
+        // 与游戏内一致；f5 不是等级，勿用）。
         // store={item 1007, num} 疑似升级花费；unknown_14 窝实测=4（=牧场格数），牧草机=100（=当前草量）。
         facility: facility ? {
             instId: Number(facility.inst_id),
             name: facility.name,
-            level: Number(facility.level),
+            level: Number(facility.config_id_2) % 1000,
             grass: Number(facility.grass && facility.grass.amount),
         } : null,
         nest: nest ? {
             instId: Number(nest.inst_id),
             name: nest.name,
-            level: Number(nest.level),
+            level: Number(nest.config_id_2) % 1000,
             slots: Number(nest.unknown_14) || 0,
         } : null,
-        ranchLevel: ranchLevel ? {
-            current: Number(ranchLevel.current_level),
-            levels: ((ranchLevel.levels) || []).map((lv: any) => ({
+        ranchLevel: {
+            current: api.getSelfRanchLevel(),
+            levels: ranchLevel ? ((ranchLevel.levels) || []).map((lv: any) => ({
                 level: Number(lv.level),
                 requiredScore: Number(lv.required_score),
-            })),
-        } : null,
+            })) : [],
+        },
         cubShop: cubShop ? {
             shopId: cubShop.shopId,
             shopName: cubShop.shopName,

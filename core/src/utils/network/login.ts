@@ -80,6 +80,9 @@ async function sendLogin(context: ConnectionContext, onLoginSuccess?: () => void
         S.user.exp = utilsMod.toNum(reply.basic.exp);
         S.user.openId = String(reply.basic.open_id || '').trim();
         S.user.avatarUrl = String(reply.basic.avatar_url || '').trim();
+        // 牧场等级在登录回包 BasicInfo.f20（16:57 抓包实测=9，与游戏内一致）。
+        // GetRanchWeightScoreV2 的 f1 并非当前等级（时有时无，勿用）。
+        S.user.ranchLevel = utilsMod.toNum(reply.basic.ranch_level);
 
         statusMod.updateStatusFromLogin({
             name: S.user.name,

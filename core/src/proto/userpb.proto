@@ -146,6 +146,10 @@ message BasicInfo {
     int32 authorized_status = 13;
     bool disable_nudge = 14;
     BasicExtraInfo extra_info = 18;
+    // 2026-11-16 16:57 抓包（PlayerLogin 回包实测）：
+    // f20=9 与游戏内牧场等级一致；f21=11072 疑似体重分/经验，语义未确认。
+    int64 ranch_level = 20;
+    int64 unknown_21 = 21;
 }
 
 message ShareInfo {
