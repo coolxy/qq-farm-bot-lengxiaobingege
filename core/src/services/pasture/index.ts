@@ -264,8 +264,18 @@ async function operatePasture(action: string, input: any = {}): Promise<any> {
         }
         case 'feed': {
             const feedType = Number(input.feedType) || 1;
-            const ranch = await api.feedAnimal(input.ranchInstId, feedType);
-            return { ok: true, feedType, ranch };
+            try {
+                const ranch = await api.feedAnimal(input.ranchInstId, feedType);
+                return { ok: true, feedType, ranch };
+            } catch (e: any) {
+                const message = String(e && e.message ? e.message : e);
+                // 1000020「请求参数错误」在喂养接口上实际含义是「当前这只动物不可喂」：
+                // 抓包请求体 0a0308914e1001 与本项目编码字节完全一致，协议没问题，是游戏状态不允许。
+                if (/1000020/.test(message)) {
+                    throw new Error('当前没有可喂养的动物（可能刚喂过、还在罐头生效期，或罐头桶已空）');
+                }
+                throw new Error(readablePastureError(message));
+            }
         }
         case 'addFeed': {
             const grass = await api.addFeed(input.instId || 10002, input.count || 1);

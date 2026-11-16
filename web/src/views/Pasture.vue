@@ -394,8 +394,8 @@ onMounted(() => {
         <NButton size="small" :loading="operating === 'triggerProduce'" :disabled="!isConnected" @click="run('triggerProduce')">
           一键催产
         </NButton>
-        <NButton size="small" :loading="operating === 'feed'" :disabled="!isConnected" @click="run('feed', { feedType: bucketSeconds > 0 ? 1 : 2 })">
-          喂一只
+        <NButton size="small" :loading="operating === 'feed'" :disabled="!isConnected || (!bucketSeconds && !cannedCount)" @click="run('feed', { feedType: bucketSeconds > 0 ? 1 : 2 })">
+          喂一只{{ !bucketSeconds && !cannedCount ? '（无罐头）' : '' }}
         </NButton>
         <NButton size="small" :loading="operating === 'addFeed'" :disabled="!isConnected" @click="run('addFeed', { instId: facility?.instId || 10002, count: 1 })">
           牧草机加草
