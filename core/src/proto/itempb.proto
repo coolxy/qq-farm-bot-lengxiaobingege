@@ -74,13 +74,25 @@ message UseSocialReward {
 
 // ============ 批量使用物品 ============
 
+// 2026-11-16 实包勘误：f1 是 varint 物品 ID，不是嵌套 Item——
+// 旧定义 repeated Item items=1 在真实帧上解码直接越界报错。
+// 实测帧（牧场草料补给）：BatchUse{80031(10小时有机罐头), 60}
+//   → reply.gained{7004(牧草), 216000}，即 1 罐头 = 3600 牧草。
 message BatchUseRequest {
-    repeated corepb.Item items = 1;
+    uint32 item_id = 1;
+    uint32 count = 2;
+    uint64 unknown_6 = 6;   // 实测 62478，语义未知
+}
+
+message BatchUseEntry {
+    uint32 item_id = 1;
+    uint64 count = 2;
+    sint64 unknown_3 = 3;   // 实测 -62135596800（恰为 .NET 纪元偏移），语义未知
 }
 
 message BatchUseReply {
-    repeated corepb.Item used_items = 1;
-    repeated corepb.Item items = 2;
+    BatchUseEntry used = 1;   // 回显本次使用的物品与数量
+    BatchUseEntry gained = 2; // 使用后获得的物品（罐头→牧草即在此处）
 }
 
 // ============ 取消"新"标记 ============

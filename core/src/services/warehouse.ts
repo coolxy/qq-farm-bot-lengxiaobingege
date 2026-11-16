@@ -143,14 +143,28 @@ function describeUseReply(reply: any): any {
 }
 
 async function batchUseItems(items: any[]): Promise<any> {
-    const payload: any[] = (items || []).map((it: any) => ({
-        id: toLong(it.itemId),
-        count: toLong(it.count || 1),
-        uid: toLong(it.uid || 0),
-    }));
-    const body: Uint8Array = types.BatchUseRequest.encode(types.BatchUseRequest.create({ items: payload })).finish();
-    const { body: replyBody } = await sendMsgAsync('gamepb.itempb.ItemService', 'BatchUse', body);
-    return describeUseReply(types.BatchUseReply.decode(replyBody));
+    // 2026-11-16 实包勘误：BatchUse 的 wire 格式是 f1=物品ID(varint)、f2=数量(varint)，
+    // 不是嵌套 Item——旧定义发出去服务器根本不认（化肥自动使用一直被 catch 吞掉失败）。
+    // 实测帧：{item_id:80031, count:60} → gained{7004, 216000}（罐头换牧草，1罐头=3600草）。
+    // 服务器一次只处理一个条目，多条目时逐条发送。
+    const results: any[] = [];
+    for (const it of (items || [])) {
+        const body: Uint8Array = types.BatchUseRequest.encode(types.BatchUseRequest.create({
+            item_id: toNum(it.itemId),
+            count: toNum(it.count || 1),
+        })).finish();
+        const { body: replyBody } = await sendMsgAsync('gamepb.itempb.ItemService', 'BatchUse', body);
+        const reply: any = types.BatchUseReply.decode(replyBody);
+        results.push({
+            used: reply.used ? { id: toNum(reply.used.item_id), count: String(toNum(reply.used.count)) } : null,
+            rewards: reply.gained ? [{
+                id: toNum(reply.gained.item_id),
+                count: String(toNum(reply.gained.count)),
+                name: getItemById(toNum(reply.gained.item_id))?.name || `物品${toNum(reply.gained.item_id)}`,
+            }] : [],
+        });
+    }
+    return results.length === 1 ? results[0] : results;
 }
 
 function isFruitItemId(id: number): boolean {
