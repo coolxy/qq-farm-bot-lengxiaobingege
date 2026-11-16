@@ -195,7 +195,8 @@
 
 - 每批改动前跑：`pnpm -C core test`、`pnpm typecheck`、`pnpm -C web build`（基线：360 项测试 359 通过 / 1 跳过）。
 - 写链路改动（B1/B2/B3）必须有真实账号跑一轮：报价 → 确认 → 结果与手动刷新一致 → 账本 `data/ranch-operations/*.json` 无残留 `pending`。
-- 回滚粒度：A 批整体回滚无副作用；B1 用配置开关 `ranch_incremental_snapshot`（默认关）灰度，出问题改配置即可，不必回滚代码。
+- 回滚粒度：A 批整体回滚无副作用；B1 的增量快照只作用于 `harvest`/`produce`/`clean`，拼接失败会自动退回全量读，
+  需要彻底关闭时把这三个动作从 `actions.ts` 的 `INCREMENTAL_ACTIONS` 移除即可，不必回滚整批。
 
 ## 七、实施记录（2026-11-16）
 
