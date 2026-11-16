@@ -320,6 +320,71 @@ const settings = defineModel<AutomationSettingsFormModel>({ required: true })
             到货提醒可单独开启；购买提醒需先打开自动购买。
           </p>
         </section>
+
+        <section class="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+          <div class="mb-3 flex items-center gap-3">
+            <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+              <span class="i-carbon-cattle text-xl" />
+            </div>
+            <div>
+              <h4 class="text-base text-gray-900 font-bold dark:text-gray-100">
+                牧场
+              </h4>
+              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                成熟即收、缺草即补、可喂即喂（内测活动）
+              </p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div class="automation-setting-item">
+              <BaseSwitch v-model="settings.automation.pasture" class="automation-setting-item" label="启用牧场自动化" />
+            </div>
+            <div class="automation-setting-item">
+              <BaseSwitch
+                v-model="settings.automation.pasture_harvest"
+                class="automation-setting-item"
+                label="收获产物 / 催产"
+                :disabled="!settings.automation.pasture"
+              />
+            </div>
+            <div class="automation-setting-item">
+              <BaseSwitch
+                v-model="settings.automation.pasture_feed"
+                class="automation-setting-item"
+                label="喂养动物"
+                :disabled="!settings.automation.pasture"
+              />
+            </div>
+            <div class="automation-setting-item">
+              <BaseSwitch
+                v-model="settings.automation.pasture_grass"
+                class="automation-setting-item"
+                label="牧草机补草"
+                :disabled="!settings.automation.pasture"
+              />
+            </div>
+            <div class="automation-setting-item">
+              <BaseSwitch
+                v-model="settings.automation.pasture_hazard"
+                class="automation-setting-item"
+                label="清理灾害"
+                :disabled="!settings.automation.pasture"
+              />
+            </div>
+            <div class="automation-setting-item">
+              <BaseSwitch
+                v-model="settings.automation.pasture_stroke"
+                class="automation-setting-item"
+                label="每日抚摸"
+                :disabled="!settings.automation.pasture"
+              />
+            </div>
+          </div>
+          <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
+            牧场数据来自 2026-11-16 实包抓取；抚摸为可选每日互动，默认关闭。需先在下方牧场页确认动物状态。
+          </p>
+        </section>
       </div>
     </div>
 

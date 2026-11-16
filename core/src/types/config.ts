@@ -45,6 +45,12 @@ export interface AutomationConfig {
   fertilizer_smart_seconds: number;
   skip_own_weed_bug: boolean;
   show_manual_fertilizer: boolean;
+  pasture: boolean;
+  pasture_harvest: boolean;
+  pasture_feed: boolean;
+  pasture_stroke: boolean;
+  pasture_hazard: boolean;
+  pasture_grass: boolean;
 }
 
 export interface IntervalConfig {

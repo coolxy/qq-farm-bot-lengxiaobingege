@@ -32,6 +32,12 @@ export interface AutomationConfig {
   mystery_shop_purchase_notify?: boolean
   skip_own_weed_bug?: boolean
   show_manual_fertilizer?: boolean
+  pasture?: boolean
+  pasture_harvest?: boolean
+  pasture_feed?: boolean
+  pasture_stroke?: boolean
+  pasture_hazard?: boolean
+  pasture_grass?: boolean
 }
 
 export interface IntervalsConfig {

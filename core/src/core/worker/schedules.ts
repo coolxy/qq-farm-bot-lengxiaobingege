@@ -11,6 +11,7 @@ const { performDailyMonthCardGift } = require('../../services/monthcard');
 const { buyFreeGifts, getFreeGiftDailyState } = require('../../services/mall');
 const { checkFarm, startFarmCheckLoop, stopFarmCheckLoop, refreshFarmCheckLoop, runFertilizerByConfig } = require('../../services/farm');
 const { checkFriends, startFriendCheckLoop, stopFriendCheckLoop, refreshFriendCheckLoop } = require('../../services/friend');
+const { checkPasture } = require('../../services/pasture');
 const { checkAndClaimTasks } = require('../../services/task');
 const { checkAndClaimActivityTasks } = require('../../services/activity-auto-task');
 const { openFertilizerGiftPacksSilently } = require('../../services/warehouse');
@@ -101,11 +102,13 @@ function resetUnifiedSchedule(): void {
     const now = Date.now();
     st.nextFarmRunAt = now + farmMs;
     st.nextFriendRunAt = now + friendMs;
+    st.nextPastureRunAt = now + randomIntervalMs(30000, 45000);
     st.businessBackoffMs.farm = 0;
     st.businessBackoffMs.friend = 0;
+    st.businessBackoffMs.pasture = 0;
 }
 
-const BUSINESS_TICK_LABEL: Record<string, string> = { farm: '农场定时任务', friend: '好友定时任务' };
+const BUSINESS_TICK_LABEL: Record<string, string> = { farm: '农场定时任务', friend: '好友定时任务', pasture: '牧场定时任务' };
 
 function describeGatewayStall(load: any): string {
     const parts: string[] = [];
@@ -222,17 +225,61 @@ async function runFriendTick(auto: any): Promise<void> {
     }
 }
 
+// ============ 牧场统一任务：收/喂/补草/清灾害/抚摸 ============
+async function runPastureTick(auto: any): Promise<void> {
+    if (st.pastureTaskRunning) return;
+    const generation = st.runtimeGeneration;
+    const pastureMs = randomIntervalMs(30000, 45000);
+    // pasture 总开关关闭时也要推进到期时间，避免调度器每秒空转。
+    if (!auto.pasture) {
+        st.nextPastureRunAt = Date.now() + pastureMs;
+        return;
+    }
+
+    const pastureDeferMs = nextBusinessTickDeferMs('pasture');
+    if (pastureDeferMs > 0) {
+        st.nextPastureRunAt = Date.now() + pastureDeferMs;
+        return;
+    }
+
+    st.pastureTaskRunning = true;
+    try {
+        await runWithRequestClass('pasture', async () => {
+            const result = await checkPasture({ external: true });
+            if (result && result.hadWork && result.actions && result.actions.length) {
+                log('牧场', `自动完成: ${result.actions.join('、')}`, {
+                    module: 'pasture', event: '牧场定时任务', result: 'ok',
+                    actions: result.actions,
+                });
+            }
+        });
+    } catch (e: any) {
+        log('牧场', `自动任务失败: ${e.message}`, { module: 'pasture', event: '牧场定时任务', result: 'error' });
+    } finally {
+        if (generation === st.runtimeGeneration) {
+            st.nextPastureRunAt = Date.now() + pastureMs;
+            st.pastureTaskRunning = false;
+        }
+    }
+}
+
 async function runUnifiedTick(): Promise<void> {
     if (!st.unifiedSchedulerRunning || !st.loginReady) return;
     const generation = st.runtimeGeneration;
     const now = Date.now();
     const dueFarm = now >= st.nextFarmRunAt;
     const dueFriend = now >= st.nextFriendRunAt;
-    if (!dueFarm && !dueFriend) return;
+    const duePasture = now >= st.nextPastureRunAt;
+    if (!dueFarm && !dueFriend && !duePasture) return;
 
     const auto = getAutomation();
     // 好友按单次访问持锁，等待间隔不阻塞后续农场巡查。
     if (dueFarm) await runExclusiveAutomationTask('farm_tick', () => runFarmTick(auto));
+    if (!st.unifiedSchedulerRunning || !st.loginReady || generation !== st.runtimeGeneration) return;
+    // 牧场排在好友之后，共用互斥锁避免与农场写操作叠发。
+    if (duePasture && !st.pastureTaskRunning) {
+        await runExclusiveAutomationTask('pasture_tick', () => runPastureTick(auto));
+    }
     if (!st.unifiedSchedulerRunning || !st.loginReady || generation !== st.runtimeGeneration) return;
     if (dueFriend && !st.friendTaskRunning) void runFriendTick(auto);
 }
@@ -245,7 +292,8 @@ function scheduleUnifiedNextTick(): void {
     const now = Date.now();
     const nextAt = Math.min(
         st.farmTaskRunning ? Number.POSITIVE_INFINITY : (Number(st.nextFarmRunAt) || (now + 1000)),
-        st.friendTaskRunning ? Number.POSITIVE_INFINITY : (Number(st.nextFriendRunAt) || (now + 1000))
+        st.friendTaskRunning ? Number.POSITIVE_INFINITY : (Number(st.nextFriendRunAt) || (now + 1000)),
+        st.pastureTaskRunning ? Number.POSITIVE_INFINITY : (Number(st.nextPastureRunAt) || (now + 1000))
     );
     if (!Number.isFinite(nextAt)) return;
     const delayMs = Math.max(1000, nextAt - now); // 最低 1 秒
@@ -270,6 +318,7 @@ function stopUnifiedScheduler(): void {
     st.unifiedSchedulerRunning = false;
     st.farmTaskRunning = false;
     st.friendTaskRunning = false;
+    st.pastureTaskRunning = false;
     st.workerScheduler.clear('unified_next_tick');
 }
 

@@ -23,8 +23,10 @@ const st = {
     nextFarmRunAt: 0,
     friendTaskRunning: false,
     nextFriendRunAt: 0,
-    // 网关卡住时两条定时任务各自的退避时长（毫秒），0 表示按正常间隔跑
-    businessBackoffMs: { farm: 0, friend: 0 },
+    pastureTaskRunning: false,
+    nextPastureRunAt: 0,
+    // 网关卡住时各条定时任务各自的退避时长（毫秒），0 表示按正常间隔跑
+    businessBackoffMs: { farm: 0, friend: 0, pasture: 0 },
     lastStatusHash: '',
     lastStatusSentAt: 0,
     onSellGain: null as ((deltaGold: any) => void) | null,

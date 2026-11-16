@@ -74,6 +74,12 @@ const localAutomationSettings = ref({
     fertilizer_land_types: [...defaultFertilizerLandTypes],
     fertilizer_smart_seconds: 300,
     show_manual_fertilizer: true,
+    pasture: false,
+    pasture_harvest: true,
+    pasture_feed: true,
+    pasture_stroke: false,
+    pasture_hazard: true,
+    pasture_grass: true,
   },
   fertilizerBuyOrganicCount: 10,
   fertilizerBuyOrganicThresholdHours: 10,
@@ -172,6 +178,12 @@ function syncLocalAutomationSettings() {
         fertilizer_land_types: [...allFertilizerLandTypes],
         fertilizer_smart_seconds: 300,
         show_manual_fertilizer: true,
+        pasture: false,
+        pasture_harvest: true,
+        pasture_feed: true,
+        pasture_stroke: false,
+        pasture_hazard: true,
+        pasture_grass: true,
       }
     }
     else {
@@ -205,6 +217,12 @@ function syncLocalAutomationSettings() {
         fertilizer_land_types: [...allFertilizerLandTypes],
         fertilizer_smart_seconds: 300,
         show_manual_fertilizer: true,
+        pasture: false,
+        pasture_harvest: true,
+        pasture_feed: true,
+        pasture_stroke: false,
+        pasture_hazard: true,
+        pasture_grass: true,
       }
       localAutomationSettings.value.automation = {
         ...defaults,
