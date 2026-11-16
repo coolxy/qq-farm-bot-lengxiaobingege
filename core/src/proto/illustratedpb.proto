@@ -100,3 +100,26 @@ message ClearNewUnlockedFruitsV2Request {
 message ClearNewUnlockedFruitsV2Reply {
     repeated int32 cleared_fruit_ids = 1;
 }
+
+// ============ 牧场等级 / 体重分（2026-11-16 16:57 实包）============
+// GetRanchWeightScoreV2 空请求；回包 f1=当前牧场等级（实测 10），f3=1，
+// f4 为等级配置表：f1=等级、f2=升级所需体重分、f3=奖励列表
+// （奖励 f1=1002 点券/物品ID、f2=数量；如 80023 罐头）。
+message GetRanchWeightScoreV2Request {}
+
+message RanchWeightLevelReward {
+    int64 item_id = 1;   // 实测 1002 / 80023
+    int64 count = 2;     // 实测 300 / 5
+}
+
+message RanchWeightLevel {
+    int32 level = 1;              // 实测 1..27
+    int32 required_score = 2;     // 实测 20/40/60...（升级所需体重分）
+    repeated RanchWeightLevelReward rewards = 3;
+}
+
+message GetRanchWeightScoreV2Reply {
+    int32 current_level = 1;      // 实测 10
+    int32 unknown_3 = 3;          // 实测 1
+    repeated RanchWeightLevel levels = 4;
+}

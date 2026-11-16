@@ -17,6 +17,8 @@ async function getPastureSnapshot(): Promise<any> {
     let cubShop: any = null;
     let cannedCount = 0;
     let bucketSeconds = 0;
+    let ranchLevel: any = null;
+    let mallGoods: any[] = [];
     try {
         quotas = await api.getRanchOpTimes();
     } catch { /* 配额接口失败不影响主快照 */ }
@@ -30,6 +32,12 @@ async function getPastureSnapshot(): Promise<any> {
         cannedCount = await api.getBagItemCount(analysis.CANNED_ITEM_ID);
         bucketSeconds = await api.getBagItemCount(analysis.BUCKET_ITEM_ID);
     } catch { /* 背包失败不影响主快照 */ }
+    try {
+        ranchLevel = await api.getRanchLevel();
+    } catch { /* 牧场等级失败不影响主快照 */ }
+    try {
+        mallGoods = await api.getMallSupplyGoods();
+    } catch { /* 商城补给失败不影响主快照 */ }
 
     const analyzed = ranch ? analysis.analyzeRanch(ranch, Date.now()) : {
         animals: [], harvestable: [], feedable: [], organicFeedable: [], normalFeedable: [], strokable: [],
@@ -56,12 +64,59 @@ async function getPastureSnapshot(): Promise<any> {
             name: facility.name,
             level: Number(facility.level),
             grass: Number(facility.grass && facility.grass.amount),
+            capacity: Number(facility.store && facility.store.num) || Number(facility.unknown_10) || 0,
+            ratePerHour: Number(facility.unknown_14) || 0,
+        } : null,
+        ranchLevel: ranchLevel ? {
+            current: Number(ranchLevel.current_level),
+            levels: ((ranchLevel.levels) || []).map((lv: any) => ({
+                level: Number(lv.level),
+                requiredScore: Number(lv.required_score),
+            })),
         } : null,
         cubShop: cubShop ? {
             shopId: cubShop.shopId,
             shopName: cubShop.shopName,
             cub: cubShop.cub,
         } : null,
+        // 商城「牧场补给」商品（slot_type=6, scene=2），罐头在这里购买。
+        // reward_items/price 是 corepb.Item（f1=id, f2=count），protobufjs 可能按 bytes 返回，需兼容两种形态。
+        mallGoods: (mallGoods || []).map((g: any) => {
+            const parseItem = (v: any): { id: number; count: number } => {
+                if (!v) return { id: 0, count: 0 };
+                if (typeof v === 'object' && !Buffer.isBuffer(v) && !(v instanceof Uint8Array)) {
+                    return { id: Number(v.id ?? v.item_id) || 0, count: Number(v.count) || 0 };
+                }
+                // bytes: 逐字段读 varint（f1=id, f2=count）
+                const buf: Buffer = Buffer.isBuffer(v) ? v : Buffer.from(v || []);
+                let idx = 0, id = 0, count = 0;
+                while (idx < buf.length) {
+                    const key = buf[idx++]; const field = key >> 3; const wire = key & 0x07;
+                    if (wire !== 0) break;
+                    let val = 0, shift = 0;
+                    while (idx < buf.length) { const b = buf[idx++]; val |= (b & 0x7f) << shift; if (!(b & 0x80)) break; shift += 7; }
+                    if (field === 1) id = val; else if (field === 2) count = val;
+                }
+                return { id, count };
+            };
+            const rewards = Array.isArray(g.reward_items) ? g.reward_items : [];
+            const reward = parseItem(rewards[0]);
+            const price = parseItem(g.price);
+            const limit = g.purchase_limit || {};
+            return {
+                goodsId: Number(g.goods_id),
+                name: g.name,
+                rewardItemId: reward.id,
+                rewardCount: reward.count,
+                priceCurrency: price.id,
+                price: price.count,
+                isFree: !!g.is_free,
+                available: g.is_available !== false,
+                bought: Number(limit.bought_count) || 0,
+                limit: Number(limit.limit_count) || 0,
+                discountText: g.discount_text || '',
+            };
+        }),
         cannedCount,
         bucketSeconds,
         lastCheckAt: lastState.lastCheckAt,
@@ -159,6 +214,14 @@ async function operatePasture(action: string, input: any = {}): Promise<any> {
             if (!goodsId || !price) throw new Error('无法获取幼崽商品与价格');
             const res = await api.buyCub(goodsId, num, price);
             return { ok: true, goodsId, price, num, result: res };
+        }
+        case 'buyMallGoods': {
+            // 从商城「牧场补给」购买罐头等道具，goodsId 来自快照 mallGoods
+            const goodsId = Number(input.goodsId) || 0;
+            const count = Math.max(1, Number(input.num || input.count) || 1);
+            if (!goodsId) throw new Error('缺少商城商品 ID');
+            const res = await api.purchaseMallGoods(goodsId, count);
+            return { ok: true, goodsId, count, result: res };
         }
         case 'refillBucket':
         case 'exchangeGrass': {

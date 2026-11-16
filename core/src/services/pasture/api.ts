@@ -217,6 +217,38 @@ async function getFacilityDetail(instId: number | string = 10002): Promise<any> 
     return reply && reply.facility;
 }
 
+/**
+ * 牧场等级 / 体重分（2026-11-16 16:57 实包）。
+ * IllustratedService.GetRanchWeightScoreV2 空请求；回包 f1=当前等级、f4=等级配置表。
+ */
+async function getRanchLevel(): Promise<any> {
+    return call('GetRanchWeightScoreV2Request', {},
+        'gamepb.illustratedpb.IllustratedService', 'GetRanchWeightScoreV2', 'GetRanchWeightScoreV2Reply');
+}
+
+/**
+ * 牧场补给商城（2026-11-16 16:57 实包 seq139）：
+ *   请求 body=080610001802 → {slot_type:6, is_manual_open:0, global_scene_id:2}。
+ * 注意 global_scene_id 必须是 2（牧场场景）；mall.ts 里写死为 1（农场/化肥），
+ * 直接用它拉不到罐头，所以这里按实包单独发。
+ * 罐头商品：2004→80031 有机罐头(1小时)/5金券、2008→80021 罐头(1小时)/4金券。
+ */
+async function getMallSupplyGoods(): Promise<any[]> {
+    await ensureProtoLoaded();
+    const Req = needType('GetMallListBySlotTypeRequest');
+    const Reply = needType('GetMallListBySlotTypeResponse');
+    const body = Req.encode(Req.create({ slot_type: 6, is_manual_open: false, global_scene_id: 2 })).finish();
+    const { body: replyBody } = await sendMsgAsync('gamepb.mallpb.MallService', 'GetMallListBySlotType', Buffer.from(body));
+    const reply = Reply.decode(replyBody);
+    return (reply && reply.goods_list) ? reply.goods_list : [];
+}
+
+/** 从商城购买商品（罐头 等），goodsId 来自 getMallSupplyGoods。 */
+async function purchaseMallGoods(goodsId: number, count: number = 1): Promise<any> {
+    const mall = require('../mall');
+    return mall.purchaseMallGoods(goodsId, count);
+}
+
 module.exports = {
     getRanchDetail,
     getRanchOpTimes,
@@ -238,4 +270,7 @@ module.exports = {
     cleanAllRanch,
     getRotationShopInfo,
     rotationBuyGoods,
+    getRanchLevel,
+    getMallSupplyGoods,
+    purchaseMallGoods,
 };

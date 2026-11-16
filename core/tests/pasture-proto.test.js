@@ -173,13 +173,40 @@ test('encodes rotation shop requests from live frames', async () => {
     assert.equal(Buffer.from(buyReq).toString('hex'), ROTATION_BUY_REQ_HEX);
 });
 
+test('decodes/encodes牧场等级 GetRanchWeightScoreV2（实包 f1=10 当前等级，f4 等级配置）', async () => {
+    await proto.ensureProtoLoaded();
+    // 按实包结构构造：f1=10、f3=1、f4=[{f1:1,f2:20,f3:[{f1:1002,f2:300},{f1:80023,f2:5}]}]
+    const T = proto.types.GetRanchWeightScoreV2Reply;
+    const encoded = T.encode(T.create({
+        current_level: 10,
+        unknown_3: 1,
+        levels: [{
+            level: 1, required_score: 20,
+            rewards: [
+                { item_id: 1002, count: 300 },
+                { item_id: 80023, count: 5 },
+            ],
+        }],
+    })).finish();
+    const reply = T.decode(Buffer.from(encoded));
+    assert.equal(reply.current_level, 10);
+    assert.equal(reply.levels.length, 1);
+    assert.equal(reply.levels[0].level, 1);
+    assert.equal(reply.levels[0].required_score, 20);
+    assert.equal(Number(reply.levels[0].rewards[0].item_id), 1002);
+    assert.equal(Number(reply.levels[0].rewards[0].count), 300);
+    const req = proto.types.GetRanchWeightScoreV2Request.encode(
+        proto.types.GetRanchWeightScoreV2Request.create({})).finish();
+    assert.equal(Buffer.from(req).toString('hex'), ''); // 空请求
+});
+
 test('every牧场 API 请求/回包类型都在运行时注册表中', async () => {
     await proto.ensureProtoLoaded();
     const apiSource = fs.readFileSync(path.join(__dirname, '../src/services/pasture/api.ts'), 'utf8');
     const names = new Set();
     for (const match of apiSource.matchAll(/call\(\s*['"]([\w.]+)['"]/g)) names.add(match[1]);
     // 直接按名字调用的请求也要覆盖（call 里写成变量时上面的正则抓不到）
-    for (const name of ['GetRanchDetailRequest', 'GetRanchOpTimesRequest', 'FeedAnimalRequest', 'HarvestRanchRequest', 'AddFeedRequest', 'EnterRequest', 'LeaveRequest', 'GetFacilityDetailRequest']) {
+    for (const name of ['GetRanchDetailRequest', 'GetRanchOpTimesRequest', 'FeedAnimalRequest', 'HarvestRanchRequest', 'AddFeedRequest', 'EnterRequest', 'LeaveRequest', 'GetFacilityDetailRequest', 'GetRanchWeightScoreV2Request', 'GetRanchWeightScoreV2Reply']) {
         names.add(name);
     }
     const missing = [...names].filter(name => typeof proto.types[name]?.encode !== 'function');

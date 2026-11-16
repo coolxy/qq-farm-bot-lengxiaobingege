@@ -26,6 +26,7 @@ const buyCount = ref(1)
 const canCount = ref(1)
 const selectedFriendGid = ref<number | string>('')
 const visitResult = ref('')
+const friendRanch = ref<any>(null)
 
 const animals = computed<any[]>(() => (data.value && Array.isArray(data.value.animals)) ? data.value.animals : [])
 const quotas = computed<any[]>(() => (data.value && Array.isArray(data.value.quotas)) ? data.value.quotas : [])
@@ -33,11 +34,52 @@ const grass = computed(() => Number(data.value?.grass) || 0)
 const capacity = computed(() => Number(data.value?.capacity) || 0)
 const animalCount = computed(() => Number(data.value?.animalCount) || animals.value.length)
 const facility = computed(() => data.value?.facility || null)
-const serverTime = computed(() => Number(data.value?.serverTime) || 0)
 const cubGoods = computed<any>(() => data.value?.cubShop?.cub || null)
 const cannedCount = computed(() => Number(data.value?.cannedCount) || 0)
 const bucketSeconds = computed(() => Number(data.value?.bucketSeconds) || 0)
 const lastActions = computed<string[]>(() => (data.value && Array.isArray(data.value.lastActions)) ? data.value.lastActions : [])
+const ranchLevel = computed(() => Number(data.value?.ranchLevel?.current) || 0)
+const mallGoods = computed<any[]>(() => (data.value && Array.isArray(data.value.mallGoods)) ? data.value.mallGoods : [])
+const cannedGoods = computed<any[]>(() => mallGoods.value.filter((g: any) => /罐头/.test(g.name || '')))
+const rotationGoods = ref<any[]>([])
+const rotationCategories = ref<any[]>([])
+const rotationLoaded = ref(false)
+const rotationDaySec = ref(0)
+
+function currencyLabel(currencyId: number): string {
+  return ({ 1002: '点券', 1004: '金券', 1007: '金券' } as any)[currencyId] || `货币${currencyId}`
+}
+
+async function buyMallItem(goodsId: number, name: string) {
+  await run('buyMallGoods', { goodsId, num: 1 })
+  if (!error.value) toast.success(`已购买 ${name}`)
+}
+
+async function loadRotationShop() {
+  if (!currentAccountId.value || !isConnected.value) {
+    toast.error('请先选择账号并确认已连接')
+    return
+  }
+  const ok = await pastureStore.operate(currentAccountId.value, 'rotationShopInfo', { shopId: 7 })
+  if (ok) {
+    const result: any = pastureStore.lastResult
+    rotationCategories.value = Array.isArray(result?.categories) ? result.categories : []
+    rotationGoods.value = Array.isArray(result?.goods) ? result.goods : []
+    rotationDaySec.value = Number(result?.rotationDaySec) || 0
+    rotationLoaded.value = true
+    toast.success('轮换商店已加载')
+  }
+  else {
+    toast.error(error.value || '加载失败')
+  }
+}
+
+async function buyRotationItem(goods: any) {
+  await run('rotationBuy', {
+    goodsId: goods.goodsId,
+    rotationDaySec: rotationDaySec.value || 1794758400,
+  })
+}
 const friendOptions = computed(() => friends.value
   .map((friend: any) => ({
     label: `${friend.name || friend.nick || '好友'} (${friend.gid})`,
@@ -108,6 +150,7 @@ async function visitFriend() {
     return
   }
   visitResult.value = ''
+  friendRanch.value = null
   const base = { ranchInstId: data.value?.ranchInstId, ownerGid: data.value?.ownerGid }
   const ok = await pastureStore.operate(currentAccountId.value!, 'visitFriend', {
     ...base,
@@ -118,10 +161,11 @@ async function visitFriend() {
   })
   if (ok) {
     const result: any = pastureStore.lastResult
+    friendRanch.value = result
     const interactions = Array.isArray(result?.interaction) ? result.interaction.join('、') : ''
     visitResult.value = interactions
-      ? `已访问 ${result.hostGid}，完成：${interactions}`
-      : `已访问 ${result?.hostGid || hostGid}，本次无可互动项`
+      ? `已完成：${interactions}`
+      : '本次无可互动项'
     toast.success('已访问好友牧场')
   }
   else {
@@ -191,18 +235,21 @@ onMounted(() => {
         </div>
         <div class="border border-gray-200 rounded-lg p-3 dark:border-gray-700">
           <div class="text-xs text-gray-500 dark:text-gray-400">
-            牧草机
+            牧场等级
           </div>
           <div class="mt-1 text-sm text-gray-900 font-bold dark:text-gray-100">
-            {{ facility ? `${facility.name} Lv.${facility.level}` : '—' }}
+            {{ ranchLevel ? `Lv.${ranchLevel}` : '—' }}
           </div>
         </div>
         <div class="border border-gray-200 rounded-lg p-3 dark:border-gray-700">
           <div class="text-xs text-gray-500 dark:text-gray-400">
-            快照时间
+            牧草机
           </div>
           <div class="mt-1 text-sm text-gray-900 font-bold dark:text-gray-100">
-            {{ formatClock(serverTime) }}
+            {{ facility ? `Lv.${facility.level}` : '—' }}
+          </div>
+          <div v-if="facility" class="mt-0.5 text-[10px] text-gray-400 dark:text-gray-500">
+            容量 {{ facility.capacity }} · 产 {{ facility.ratePerHour }}/h
           </div>
         </div>
         <div class="border border-gray-200 rounded-lg p-3 dark:border-gray-700">
@@ -264,9 +311,109 @@ onMounted(() => {
           访问并互动
         </NButton>
       </div>
-      <p v-if="visitResult" class="text-xs text-gray-500 dark:text-gray-400">
-        {{ visitResult }}
-      </p>
+      <section v-if="friendRanch" class="border border-sky-200 rounded-lg p-3 dark:border-sky-800">
+        <div class="mb-2 flex items-center justify-between">
+          <h4 class="text-sm text-sky-800 font-bold dark:text-sky-300">
+            好友牧场（{{ friendRanch.hostGid }}）
+          </h4>
+          <span v-if="visitResult" class="text-xs text-gray-500">{{ visitResult }}</span>
+        </div>
+        <div class="mb-2 text-xs text-gray-500 dark:text-gray-400">
+          动物 {{ (friendRanch.animals || []).length }} 只 · 牧草 {{ friendRanch.grass }}
+        </div>
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div
+            v-for="a in (friendRanch.animals || [])"
+            :key="a.animal_inst_id"
+            class="border border-gray-200 rounded-lg p-2 dark:border-gray-700"
+          >
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-gray-900 font-bold dark:text-gray-100">栏位 {{ a.slot_index }} · {{ a.animal_id }}</span>
+              <span class="text-[10px] text-gray-400">{{ stageLabel(a.stage) }}</span>
+            </div>
+            <div class="mt-1 flex flex-wrap gap-1">
+              <span v-if="a.canHarvest" class="rounded bg-green-50 px-1.5 py-0.5 text-[10px] text-green-700 dark:bg-green-900/30 dark:text-green-300">可收获</span>
+              <span v-if="a.canFeed" class="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">可喂</span>
+              <span v-if="a.canStroke" class="rounded bg-pink-50 px-1.5 py-0.5 text-[10px] text-pink-700 dark:bg-pink-900/30 dark:text-pink-300">可抚摸</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 商城补给：罐头在这里买（slot_type=6, 牧场场景） -->
+      <section>
+        <div class="mb-2 flex items-center justify-between">
+          <h4 class="text-sm text-gray-800 font-bold dark:text-gray-200">
+            牧场商店 · 罐头补给
+          </h4>
+          <span class="text-xs text-gray-400">当前有机罐头 {{ cannedCount }} 个</span>
+        </div>
+        <div v-if="cannedGoods.length === 0" class="border border-gray-300 rounded-lg border-dashed p-4 text-center text-xs text-gray-500 dark:border-gray-600">
+          暂无罐头商品（账号未连接或未加入内测）
+        </div>
+        <div v-else class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          <div
+            v-for="g in cannedGoods"
+            :key="g.goodsId"
+            class="border border-gray-200 rounded-lg p-2.5 dark:border-gray-700"
+          >
+            <div class="text-xs text-gray-900 font-medium dark:text-gray-100" :title="g.name">
+              {{ g.name }}
+            </div>
+            <div class="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+              {{ g.rewardCount }} 个 · {{ currencyLabel(g.priceCurrency) }} {{ g.price }}
+              <span v-if="g.discountText" class="ml-1 text-orange-500">{{ g.discountText }}</span>
+            </div>
+            <NButton
+              size="tiny"
+              type="primary"
+              class="mt-2 w-full"
+              :loading="operating === 'buyMallGoods'"
+              :disabled="!isConnected"
+              @click="buyMallItem(g.goodsId, g.name)"
+            >
+              购买
+            </NButton>
+          </div>
+        </div>
+      </section>
+
+      <!-- 轮换商店：仓鼠驿站，松果/便便货币 -->
+      <section>
+        <div class="mb-2 flex items-center justify-between">
+          <h4 class="text-sm text-gray-800 font-bold dark:text-gray-200">
+            轮换商店 · 仓鼠驿站
+          </h4>
+          <NButton size="tiny" :loading="operating === 'rotationShopInfo'" :disabled="!isConnected" @click="loadRotationShop">
+            {{ rotationLoaded ? '刷新' : '查看商品' }}
+          </NButton>
+        </div>
+        <div v-if="!rotationLoaded" class="border border-gray-300 rounded-lg border-dashed p-4 text-center text-xs text-gray-500 dark:border-gray-600">
+          点击查看本期轮换商品
+        </div>
+        <template v-else>
+          <div v-for="cat in rotationCategories" :key="cat.id" class="mb-2">
+            <div class="mb-1 text-xs text-gray-500 dark:text-gray-400">{{ cat.name }}</div>
+            <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <div
+                v-for="g in rotationGoods.filter((x:any)=>x.categoryId===cat.id)"
+                :key="`${cat.id}-${g.goodsId}`"
+                class="flex items-center justify-between border border-gray-200 rounded-lg px-2.5 py-2 dark:border-gray-700"
+              >
+                <span class="text-xs text-gray-800 dark:text-gray-200">商品 {{ g.goodsId }}</span>
+                <NButton
+                  size="tiny"
+                  :loading="operating === 'rotationBuy'"
+                  :disabled="!isConnected"
+                  @click="buyRotationItem(g)"
+                >
+                  购买
+                </NButton>
+              </div>
+            </div>
+          </div>
+        </template>
+      </section>
 
       <section v-if="lastActions.length">
         <h4 class="mb-2 text-sm text-gray-800 font-bold dark:text-gray-200">

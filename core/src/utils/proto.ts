@@ -228,6 +228,8 @@ async function loadProto(): Promise<void> {
     types.ClaimAllRewardsV2Reply = root.lookupType('gamepb.illustratedpb.ClaimAllRewardsV2Reply');
     types.ClearNewUnlockedFruitsV2Request = root.lookupType('gamepb.illustratedpb.ClearNewUnlockedFruitsV2Request');
     types.ClearNewUnlockedFruitsV2Reply = root.lookupType('gamepb.illustratedpb.ClearNewUnlockedFruitsV2Reply');
+    types.GetRanchWeightScoreV2Request = root.lookupType('gamepb.illustratedpb.GetRanchWeightScoreV2Request');
+    types.GetRanchWeightScoreV2Reply = root.lookupType('gamepb.illustratedpb.GetRanchWeightScoreV2Reply');
 
     // 好友
     types.GetAllFriendsRequest = root.lookupType('gamepb.friendpb.GetAllRequest');
