@@ -79,7 +79,16 @@ async function run(action: string, input: any = {}) {
   }
   const base = { ranchInstId: data.value?.ranchInstId, ownerGid: data.value?.ownerGid }
   const ok = await pastureStore.operate(currentAccountId.value, action, { ...base, ...input })
-  toast[ok ? 'success' : 'error'](ok ? '操作成功' : (error.value || '操作失败'))
+  if (ok) {
+    toast.success('操作成功')
+    return
+  }
+  const message = error.value || '操作失败'
+  // 「没有可收取的产物」「没有需要清理的」等是服务器正常业务态，不该显示为红色错误。
+  if (/没有可|不需要|没有需要|无需|已领取|已收获/.test(message))
+    toast.info(message)
+  else
+    toast.error(message)
 }
 
 async function buyCub() {

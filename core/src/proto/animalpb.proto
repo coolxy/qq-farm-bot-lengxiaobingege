@@ -207,6 +207,8 @@ message PutHazardReply {
 
 // 一键清理牧场（RanchService.CleanAllRanch，2026-11-16 16:57 实包）。
 // 请求 1200（f2 空消息，与 GetRanchDetail 一致）；回包 f1 是清理后的最新 RanchInfo。
+// 线上实测：无蚊子/便便时服务器回业务错误 1045233「这里没有需要清理的蚊子或便便」，
+// 说明该 RPC 的用途是一次性清完牧场里的蚊子与便便（与 PutHazard 的「清灾害」是不同玩法）。
 // 抓包中买了 4 只幼崽后调用，回包动物 stage/状态不变，extras(f8) 被清空。
 message CleanAllRanchRequest {
     bytes unknown_2 = 2;           // 实测空消息
