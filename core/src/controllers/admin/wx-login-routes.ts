@@ -9,7 +9,9 @@ export { };
 const { createAuthRequired } = require('./middleware');
 
 const TARGET_APP_ID = 'wx5306c5978fdb76e4';
-const TASK_TTL_MS = 110_000;
+// 扫码任务存活时间。原来只有 110 秒，用户从看到码到掏出手机扫，经常就过了这个点，
+// 任务被销毁后再扫码只会拿到 404，白扫一次。二维码本身在微信侧的有效期更长，放宽到 5 分钟。
+const TASK_TTL_MS = 300_000;
 type Status = ScanStatus | 'ready_for_code' | 'failed';
 interface Task { id: string; createdAt: number; status: Status; session: WxLoginSession; qr: Buffer; code?: string; loginBuffer?: string; credentials?: any; pending?: Promise<void>; }
 const tasks = new Map<string, Task>();
