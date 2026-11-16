@@ -24,8 +24,6 @@ const success = ref('')
 const loading = ref(false)
 const lockoutRemaining = ref(0)
 const rateLimitRemaining = ref(0)
-const showTotpField = ref(false)
-const totpCode = ref('')
 
 const usernameValid = computed(() => {
   const name = username.value
@@ -115,10 +113,6 @@ function validateForm(): boolean {
     error.value = '两次输入的密码不一致'
     return false
   }
-  if (showTotpField.value && !/^\d{6}$/.test(totpCode.value)) {
-    error.value = '请输入 6 位数字验证码'
-    return false
-  }
   return true
 }
 
@@ -164,22 +158,13 @@ async function handleSubmit() {
   success.value = ''
 
   try {
-    const result = await userStore.login(username.value, password.value, totpCode.value)
+    const result = await userStore.login(username.value, password.value)
     if (result.ok) {
       if (result.data?.mustChangePassword)
         success.value = '登录成功，请修改默认密码'
       setTimeout(() => {
         window.location.href = '/'
       }, 500)
-    }
-    else if (result.errorType === 'totp_required') {
-      showTotpField.value = true
-      error.value = ''
-      success.value = result.error || '该账号已启用两步验证，请输入验证码'
-    }
-    else if (result.errorType === 'invalid_totp') {
-      error.value = result.error || '两步验证码错误'
-      totpCode.value = ''
     }
     else if (result.errorType === 'rate_limit') {
       error.value = result.error || '请求过于频繁，请稍后重试'
@@ -310,26 +295,6 @@ onMounted(() => {
           />
           <p v-if="needsSetup" class="form-hint">
             账号固定为 admin；密码至少 8 位，且包含大写字母、小写字母、数字、特殊符号中的至少 3 类
-          </p>
-        </div>
-
-        <div v-if="showTotpField && !needsSetup" class="form-group">
-          <label class="form-label" for="totpCode">
-            <span class="i-carbon-smartphone" />
-            两步验证码
-          </label>
-          <BaseInput
-            id="totpCode"
-            v-model="totpCode"
-            type="text"
-            inputmode="numeric"
-            maxlength="6"
-            placeholder="6 位数字"
-            autocomplete="one-time-code"
-            required
-          />
-          <p class="form-hint">
-            请打开验证器 App（如 Google Authenticator）查看当前验证码
           </p>
         </div>
 

@@ -53,13 +53,13 @@ function mountAuthRoutes(app: Application, ctx: AdminContext): void {
     });
 
     app.post('/api/login', (req: Request, res: Response) => {
-        const { username, password, totpCode } = req.body || {};
+        const { username, password } = req.body || {};
         if (!username || !password) {
             return res.status(401).json({ ok: false, error: '请输入用户名和密码' });
         }
 
         const clientIp = getClientIp(req);
-        const result = adminStore.validateAdmin(String(username), String(password), clientIp, totpCode ? String(totpCode) : undefined);
+        const result = adminStore.validateAdmin(String(username), String(password), clientIp);
         if (result?.error) {
             const statusCode = result.error === 'rate_limit' ? 429 : result.error === 'locked' ? 423 : 401;
             adminLogger.warn('登录失败', { username, error: result.error, ip: clientIp });
@@ -96,46 +96,6 @@ function mountAuthRoutes(app: Application, ctx: AdminContext): void {
             ctx.tokens.clear();
             saveSessions(ctx.tokens);
         }
-        return res.json(result);
-    });
-
-    // ── 两步验证（TOTP）管理 ─────────────────────────────────
-    app.get('/api/user/totp/status', authRequired, (_req: Request, res: Response) => {
-        return res.json({ ok: true, data: adminStore.getTotpStatus() });
-    });
-
-    // 生成绑定密钥 + otpauth 链接（前端渲染二维码，验证器 App 扫码）
-    app.post('/api/user/totp/setup', authRequired, (req: Request, res: Response) => {
-        const clientIp = getClientIp(req);
-        const info = adminStore.getAdminInfo();
-        const result = adminStore.beginTotpSetup(info.username, 'QQ农场管家');
-        if (!result.ok) {
-            adminLogger.warn('TOTP 绑定失败', { ip: clientIp, error: result.error });
-            return res.status(400).json({ ok: false, error: result.error });
-        }
-        adminLogger.info('TOTP 绑定密钥已生成，等待激活', { ip: clientIp });
-        return res.json({ ok: true, data: { secret: result.secret, otpauthUrl: result.otpauthUrl } });
-    });
-
-    // 校验验证码并激活
-    app.post('/api/user/totp/activate', authRequired, (req: Request, res: Response) => {
-        const { code } = req.body || {};
-        if (!code) return res.status(400).json({ ok: false, error: '请输入验证器 App 显示的 6 位验证码' });
-        const clientIp = getClientIp(req);
-        const result = adminStore.activateTotp(String(code));
-        if (result.ok) adminLogger.info('两步验证已激活', { ip: clientIp });
-        else adminLogger.warn('TOTP 激活失败', { ip: clientIp, error: result.error });
-        return res.json(result);
-    });
-
-    // 关闭两步验证（需当前密码）
-    app.post('/api/user/totp/disable', authRequired, (req: Request, res: Response) => {
-        const { password } = req.body || {};
-        if (!password) return res.status(400).json({ ok: false, error: '请输入当前密码以关闭两步验证' });
-        const clientIp = getClientIp(req);
-        const result = adminStore.disableTotp(String(password));
-        if (result.ok) adminLogger.info('两步验证已关闭', { ip: clientIp });
-        else adminLogger.warn('TOTP 关闭失败', { ip: clientIp, error: result.error });
         return res.json(result);
     });
 
