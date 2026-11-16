@@ -187,6 +187,22 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
                 }));
             }
         } catch (error: any) {
+            // 刷新成功但取登录缓冲失败时，新 accessToken/refreshToken 挂在 error.credentials 上。
+            // 必须立刻落盘，否则又回到「手里只有过期 accessToken」的死循环（-109 无法自愈）。
+            const rotatedCredentials = error && typeof error === 'object' ? error.credentials : null;
+            if (rotatedCredentials && String(rotatedCredentials.accessToken || '').trim()) {
+                try {
+                    store.addOrUpdateAccount({ id, ...accountFieldsFromCredentials(loginBuffer, rotatedCredentials) });
+                    log('系统', `账号 ${name} 已保存刷新得到的新凭据（登录缓冲未取到，凭据不丢弃）`, {
+                        accountId: id, accountName: name,
+                        expiresAt: Number(rotatedCredentials.expiresAt || 0),
+                    });
+                } catch (persistError: any) {
+                    log('错误', `账号 ${name} 保存刷新凭据失败: ${persistError?.message || persistError}`, {
+                        accountId: id, accountName: name,
+                    });
+                }
+            }
             log('错误', `账号 ${name} 微信会话自动刷新失败: ${error?.message || error}`, {
                 accountId: id, accountName: name,
             });

@@ -49,6 +49,14 @@ async function refreshAccountWxLoginCode(options: {
         store.addOrUpdateAccount({ id, code, ...accountFieldsFromCredentials(nextBuffer, nextCredentials) });
         return { ok: true, accountName };
     } catch (error: any) {
+        // 刷新成功但取缓冲失败：新凭据挂在 error.credentials 上，先落盘再报失败，
+        // 避免把刚下发的 accessToken 丢掉、下轮只能用过期凭据换码（微信回 -109）。
+        const rotated = error && typeof error === 'object' ? error.credentials : null;
+        if (rotated && String(rotated.accessToken || '').trim()) {
+            try {
+                store.addOrUpdateAccount({ id, ...accountFieldsFromCredentials(loginBuffer, rotated) });
+            } catch { /* 落盘失败不影响返回给调用方的错误信息 */ }
+        }
         return {
             ok: false,
             needScan: true,

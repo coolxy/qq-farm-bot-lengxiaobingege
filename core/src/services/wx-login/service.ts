@@ -444,8 +444,20 @@ export class WxLoginService {
 
     async refreshLoginBuffer(credentials: WxLoginCredentials): Promise<WxLoginBufferResult> {
         const refreshed = await this.refreshCredentials(credentials);
-        const loginBuffer = await this.fetchLoginBuffer(refreshed);
-        return { loginBuffer, credentials: refreshed, refreshed: true };
+        try {
+            const loginBuffer = await this.fetchLoginBuffer(refreshed);
+            return { loginBuffer, credentials: refreshed, refreshed: true };
+        } catch (error: any) {
+            // 刷新已经成功、只是取登录缓冲这一跳失败（微信侧偶发 code!=0）。
+            // 此时新的 accessToken（以及轮换后的 refreshToken）已经下发，绝不能随着
+            // 这个异常一起丢掉：丢掉后手里只剩过期的 accessToken，下一次刷新会被
+            // 微信以 -109 RC_PARAMS_INVALID 拒绝，且再也恢复不了（只能重新扫码）。
+            // 把新凭据挂在错误对象上带出去，由调用方立即落盘。
+            if (error && typeof error === 'object' && !error.credentials) {
+                try { error.credentials = refreshed; } catch { /* 冻结对象等极端情况忽略 */ }
+            }
+            throw error;
+        }
     }
 
     async ensureLoginBuffer(loginBuffer: string, credentials?: WxLoginCredentials | null, aheadMs: number = REFRESH_AHEAD_MS): Promise<WxLoginBufferResult> {
