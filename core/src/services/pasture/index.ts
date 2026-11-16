@@ -14,6 +14,7 @@ async function getPastureSnapshot(): Promise<any> {
     const ranch = detail && detail.ranch;
     let quotas: any[] = [];
     let facility: any = null;
+    let nest: any = null;
     let cubShop: any = null;
     let cannedCount = 0;
     let bucketSeconds = 0;
@@ -25,6 +26,9 @@ async function getPastureSnapshot(): Promise<any> {
     try {
         facility = await api.getFacilityDetail(10002);
     } catch { /* 牧草机详情失败不影响主快照 */ }
+    try {
+        nest = await api.getFacilityDetail(10001);
+    } catch { /* 窝详情失败不影响主快照 */ }
     try {
         cubShop = await api.getCubShopGoods();
     } catch { /* 幼崽商店失败不影响主快照 */ }
@@ -59,13 +63,19 @@ async function getPastureSnapshot(): Promise<any> {
             used: Number(q.used_times),
             remaining: Number(q.remaining_times),
         })),
+        // 设施 DTO（字段语义按实框保守标注）：
+        // store={item 1007, num} 疑似升级花费；unknown_14 窝实测=4（=牧场格数），牧草机=100（=当前草量）。
         facility: facility ? {
             instId: Number(facility.inst_id),
             name: facility.name,
             level: Number(facility.level),
             grass: Number(facility.grass && facility.grass.amount),
-            capacity: Number(facility.store && facility.store.num) || Number(facility.unknown_10) || 0,
-            ratePerHour: Number(facility.unknown_14) || 0,
+        } : null,
+        nest: nest ? {
+            instId: Number(nest.inst_id),
+            name: nest.name,
+            level: Number(nest.level),
+            slots: Number(nest.unknown_14) || 0,
         } : null,
         ranchLevel: ranchLevel ? {
             current: Number(ranchLevel.current_level),
@@ -278,6 +288,10 @@ async function operatePasture(action: string, input: any = {}): Promise<any> {
         case 'leaveHomestead':
             await api.leaveHomestead(input.hostGid);
             return { ok: true };
+        case 'buildingList':
+            return { ok: true, reply: await api.getBuildingList() };
+        case 'facility':
+            return { ok: true, facility: await api.getFacilityDetail(input.instId || 10002) };
         default:
             throw new Error(`未知牧场操作: ${action}`);
     }

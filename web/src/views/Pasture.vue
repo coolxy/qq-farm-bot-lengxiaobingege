@@ -34,6 +34,7 @@ const grass = computed(() => Number(data.value?.grass) || 0)
 const capacity = computed(() => Number(data.value?.capacity) || 0)
 const animalCount = computed(() => Number(data.value?.animalCount) || animals.value.length)
 const facility = computed(() => data.value?.facility || null)
+const nest = computed<any>(() => data.value?.nest || null)
 const cubGoods = computed<any>(() => data.value?.cubShop?.cub || null)
 const cannedCount = computed(() => Number(data.value?.cannedCount) || 0)
 const bucketSeconds = computed(() => Number(data.value?.bucketSeconds) || 0)
@@ -249,7 +250,18 @@ onMounted(() => {
             {{ facility ? `Lv.${facility.level}` : '—' }}
           </div>
           <div v-if="facility" class="mt-0.5 text-[10px] text-gray-400 dark:text-gray-500">
-            容量 {{ facility.capacity }} · 产 {{ facility.ratePerHour }}/h
+            草量 {{ facility.grass }}
+          </div>
+        </div>
+        <div class="border border-gray-200 rounded-lg p-3 dark:border-gray-700">
+          <div class="text-xs text-gray-500 dark:text-gray-400">
+            窝
+          </div>
+          <div class="mt-1 text-sm text-gray-900 font-bold dark:text-gray-100">
+            {{ nest ? `Lv.${nest.level}` : '—' }}
+          </div>
+          <div v-if="nest" class="mt-0.5 text-[10px] text-gray-400 dark:text-gray-500">
+            {{ nest.slots }} 格
           </div>
         </div>
         <div class="border border-gray-200 rounded-lg p-3 dark:border-gray-700">

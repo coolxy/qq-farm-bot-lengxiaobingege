@@ -217,6 +217,13 @@ async function getFacilityDetail(instId: number | string = 10002): Promise<any> 
     return reply && reply.facility;
 }
 
+/** 家园建筑列表（窝等级的数据源之一；回包结构待实包确认，先原样返回） */
+async function getBuildingList(): Promise<any> {
+    const reply = await call('GetBuildingListRequest', {},
+        HOMESTEAD_SERVICE, 'GetBuildingList', 'GetBuildingListReply');
+    return reply;
+}
+
 /**
  * 牧场等级 / 体重分（2026-11-16 16:57 实包）。
  * IllustratedService.GetRanchWeightScoreV2 空请求；回包 f1=当前等级、f4=等级配置表。
@@ -267,6 +274,7 @@ module.exports = {
     enterHomestead,
     leaveHomestead,
     getFacilityDetail,
+    getBuildingList,
     cleanAllRanch,
     getRotationShopInfo,
     rotationBuyGoods,

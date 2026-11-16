@@ -113,6 +113,8 @@ async function loadProto(): Promise<void> {
     types.FacilityDetail = root.lookupType('gamepb.homesteadpb.FacilityDetail');
     types.GetFacilityDetailRequest = root.lookupType('gamepb.homesteadpb.GetFacilityDetailRequest');
     types.GetFacilityDetailReply = root.lookupType('gamepb.homesteadpb.GetFacilityDetailReply');
+    types.GetBuildingListRequest = root.lookupType('gamepb.homesteadpb.GetBuildingListRequest');
+    types.GetBuildingListReply = root.lookupType('gamepb.homesteadpb.GetBuildingListReply');
     types.AddFeedRequest = root.lookupType('gamepb.homesteadpb.AddFeedRequest');
     types.AddFeedReply = root.lookupType('gamepb.homesteadpb.AddFeedReply');
 
