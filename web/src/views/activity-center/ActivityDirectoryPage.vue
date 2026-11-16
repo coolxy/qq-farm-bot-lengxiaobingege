@@ -3,6 +3,7 @@ import type { ActivityDirectoryItemDto } from '@/stores/activity-center'
 import { NButton } from 'naive-ui/es/button'
 import { storeToRefs } from 'pinia'
 import { computed, ref } from 'vue'
+import ActivityRulesDialog from '@/components/activity/ActivityRulesDialog.vue'
 import { activityHasGameplay } from '@/components/activity/gameplays'
 import { useAccountStore } from '@/stores/account'
 import { useActivityCenterStore } from '@/stores/activity-center'
@@ -151,6 +152,10 @@ const editionCounts = computed(() => {
   return new Map([...periods].map(([name, set]) => [name, set.size]))
 })
 const pastOpen = ref(false)
+// 无专门玩法但有说明文本的活动，点击后弹出只读说明
+const manualRulesOpen = ref(false)
+const manualRulesTitle = ref('')
+const manualRulesLines = ref<string[]>([])
 const pickerSummary = computed(() => {
   if (!hasActivities.value)
     return '按当前账号读取活动'
@@ -193,11 +198,27 @@ function standingPeriod(activity: ActivityDirectoryItemDto) {
 function activityCanOpen(activity: ActivityDirectoryItemDto) {
   return activityHasGameplay(activity) && activityStatus(activity) === 'active'
 }
+/**
+ * 没有专门玩法、但服务端下发了活动说明的活动。
+ * 这类活动做不了一键操作，但说明文本（玩法、奖励、注意事项）本身是有价值的信息，
+ * 之前只显示「暂未支持详情」，把服务端已经给到手的说明整段丢掉了。
+ */
+function activityHasManualRules(activity: ActivityDirectoryItemDto) {
+  return !activityHasGameplay(activity) && (activity.rules || []).some(line => String(line || '').trim())
+    && activityStatus(activity) === 'active'
+}
+/** 目录里可点击（要么进玩法详情，要么看活动说明） */
+function activityClickable(activity: ActivityDirectoryItemDto) {
+  return activityCanOpen(activity) || activityHasManualRules(activity)
+}
 /** 未支持详情的活动至少给出玩法说明首句，避免只显示一个活动名 */
 function activityHint(activity: ActivityDirectoryItemDto): string {
   if (activityCanOpen(activity))
     return ''
-  const first = (activity.rules || []).map(line => line.replace(/\s+/g, ' ').trim()).find(Boolean)
+  // 跳过【小节标题】和紧跟其后的日期行：这两类不是玩法内容，拿来当前言没有信息量
+  const first = (activity.rules || [])
+    .map(line => line.replace(/\s+/g, ' ').trim())
+    .find(line => line && !/^【.+】$/.test(line) && !/^\d{4}年/.test(line))
   if (!first)
     return ''
   return first.length > 48 ? `${first.slice(0, 48)}…` : first
@@ -216,8 +237,22 @@ function formatActivityPeriod(activity: ActivityDirectoryItemDto) {
   return '活动时间待定'
 }
 function openActivity(activity: ActivityDirectoryItemDto) {
-  if (activityCanOpen(activity))
+  if (activityCanOpen(activity)) {
     emit('open', activity)
+    return
+  }
+  if (activityHasManualRules(activity)) {
+    manualRulesTitle.value = activityDisplayName(activity)
+    manualRulesLines.value = (activity.rules || []).map(line => String(line || '').trim()).filter(Boolean)
+    manualRulesOpen.value = true
+  }
+}
+/** 说明文本里的小节标题，形如「【活动时间】」 */
+function isRulesSectionTitle(line: string) {
+  return /^【.+】$/.test(line)
+}
+function rulesSectionText(line: string) {
+  return line.replace(/^【|】$/g, '')
 }
 </script>
 
@@ -269,7 +304,7 @@ function openActivity(activity: ActivityDirectoryItemDto) {
             type="button"
             class="activity-entry"
             :class="[`activity-entry--${activityStatus(activity)}`, { 'activity-entry--supported': activityCanOpen(activity) }]"
-            :disabled="!activityCanOpen(activity)"
+            :disabled="!activityClickable(activity)"
             @click="openActivity(activity)"
           >
             <span class="activity-entry__topline">
@@ -282,8 +317,9 @@ function openActivity(activity: ActivityDirectoryItemDto) {
             <span class="activity-entry__footer">
               <small>{{ activity.id }}</small>
               <span v-if="activityCanOpen(activity)">查看详情 <span class="i-carbon-arrow-right" /></span>
+              <span v-else-if="activityHasManualRules(activity)">查看说明 <span class="i-carbon-arrow-right" /></span>
               <span v-else-if="activityStatus(activity) === 'upcoming'">活动未开始 <span class="i-carbon-locked" /></span>
-              <span v-else>暂未支持详情 <span class="i-carbon-locked" /></span>
+              <span v-else>仅游戏内参与 <span class="i-carbon-locked" /></span>
             </span>
           </button>
         </div>
@@ -295,19 +331,19 @@ function openActivity(activity: ActivityDirectoryItemDto) {
         <div v-if="standingActivities.length" class="standing-strip" aria-label="常驻与福利">
           <span class="standing-strip__label">常驻</span>
           <component
-            :is="activityCanOpen(activity) ? 'button' : 'span'"
+            :is="activityClickable(activity) ? 'button' : 'span'"
             v-for="activity in standingActivities"
             :key="activity.id"
-            :type="activityCanOpen(activity) ? 'button' : undefined"
+            :type="activityClickable(activity) ? 'button' : undefined"
             class="standing-chip"
             :class="{ 'standing-chip--supported': activityCanOpen(activity) }"
-            @click="activityCanOpen(activity) && openActivity(activity)"
+            @click="activityClickable(activity) && openActivity(activity)"
           >
             <span class="standing-chip__icon" :class="isNewbieActivity(activity) ? 'i-carbon-gift' : 'i-carbon-calendar'" aria-hidden="true" />
             <strong>{{ activity.name }}</strong>
             <span class="standing-chip__desc">{{ standingDescription(activity) }}</span>
             <span class="standing-chip__meta">{{ standingPeriod(activity) }}<template v-if="isNewbieActivity(activity) && !activityCanOpen(activity)"> · 资格以游戏内为准</template></span>
-            <span v-if="activityCanOpen(activity)" class="i-carbon-arrow-right" aria-hidden="true" />
+            <span v-if="activityClickable(activity)" class="i-carbon-arrow-right" aria-hidden="true" />
           </component>
         </div>
       </section>
@@ -342,6 +378,26 @@ function openActivity(activity: ActivityDirectoryItemDto) {
         </div>
       </section>
     </div>
+
+    <ActivityRulesDialog
+      :open="manualRulesOpen"
+      :title="manualRulesTitle"
+      @close="manualRulesOpen = false"
+    >
+      <div class="directory-rules">
+        <template v-for="(line, index) in manualRulesLines" :key="index">
+          <h4 v-if="isRulesSectionTitle(line)" class="directory-rules__title">
+            {{ rulesSectionText(line) }}
+          </h4>
+          <p v-else class="directory-rules__line">
+            {{ line }}
+          </p>
+        </template>
+        <p class="directory-rules__foot">
+          该活动暂不支持一键操作，请在游戏内参与。
+        </p>
+      </div>
+    </ActivityRulesDialog>
   </section>
 </template>
 
@@ -826,5 +882,39 @@ function openActivity(activity: ActivityDirectoryItemDto) {
 .activity-entry__icon .activity-entry__pet {
   width: 26px;
   height: 26px;
+}
+
+/* 无专门玩法活动的只读说明 */
+.directory-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.directory-rules__title {
+  margin: 12px 0 2px;
+  color: var(--ui-ink);
+  font-size: 13px;
+  font-weight: var(--fw-650);
+}
+
+.directory-rules__title:first-child {
+  margin-top: 0;
+}
+
+.directory-rules__line {
+  margin: 0;
+  color: var(--ui-subtle);
+  word-break: break-word;
+}
+
+.directory-rules__foot {
+  margin: 14px 0 0;
+  padding-top: 10px;
+  border-top: 1px dashed var(--ui-border-strong);
+  color: var(--ui-subtle);
+  font-size: 12px;
 }
 </style>
