@@ -105,7 +105,7 @@
 
 资产单位：牧场概览的资产磁贴沿用农场 `formatAssetAmount` 口径（万/亿/兆缩写），与农场资产单位一致；`formatCount`（BigInt 千分位）仍用于经验、产物数量等精确字段。
 
-松果图标：松果（item id=1008）此前因图片目录缺 `1008.png` 在商城余额栏显示占位图；已从云端松果图标取形、按本游戏货币图标的卡通描边风格补上 `1008.png`（100×100 RGBA），`getItemImageById(1008)` 现可正确返回图片。
+松果图标：松果（item id=1008，`icon_res=gui/texture/icon/1008/spriteFrame`）此前因图片目录缺 `1008.png` 在商城余额栏显示占位图。已从 QQ 农场官方服务器资源中恢复原始 `1008.png`——该文件在牧场移植提交 `f607a3d` 中曾随官方素材带入（100×100 RGBA，金黄色松塔，与金券/点券/金豆豆/便便同一美术风格），后因目录整理丢失，现按官方原图（SHA-256 `349bd388…c00`）还原，非手绘/第三方图标。`getItemImageById(1008)` 可正确返回图片。资源站为 `cdn-resource.nqf.qq.com/release/remote/delayRes/`，路径经 Cocos manifest 映射为 uuid 后下载。
 
 ## 八、界面结构
 
