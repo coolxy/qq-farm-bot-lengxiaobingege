@@ -19,8 +19,8 @@ const { types } = require('../utils/proto');
 
 const MAX_DEPTH = 6;
 const MAX_NODES = 4000;
-const MAX_TEXT_LENGTH = 2048;
-const MAX_HEX_PREVIEW = 64;
+const MAX_TEXT_LENGTH = 16384;
+const MAX_HEX_PREVIEW = 256;
 // 字段号上限。真实业务字段远小于这个值，超出的基本是把文本误当成 message 读的结果
 const MAX_FIELD_NUMBER = 4096;
 
@@ -204,6 +204,8 @@ async function probeActivityGroup(groupId: unknown) {
         truncated: budget.truncated,
         fields,
         bodyFields: Object.values(collectFields(fields, 0, {})).sort((a, b) => a.field - b.field),
+        // 原始字节（base64）：诊断新活动时可在本地反复离线解析，避免为看完整 body 反复重启。
+        rawBase64: raw.toString('base64'),
     };
 }
 
