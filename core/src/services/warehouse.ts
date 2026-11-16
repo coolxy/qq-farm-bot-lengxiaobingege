@@ -143,15 +143,21 @@ function describeUseReply(reply: any): any {
 }
 
 async function batchUseItems(items: any[]): Promise<any> {
-    // 2026-11-16 实包勘误：BatchUse 的 wire 格式是 f1=物品ID(varint)、f2=数量(varint)，
-    // 不是嵌套 Item——旧定义发出去服务器根本不认（化肥自动使用一直被 catch 吞掉失败）。
-    // 实测帧：{item_id:80031, count:60} → gained{7004, 216000}（罐头换牧草，1罐头=3600草）。
+    // 2026-11-16 实包勘误：BatchUse 的 wire 是外层 f1=BatchUseItem，
+    // 直接平铺 item_id/count 会被服务器以 code=1000020 拒绝。
+    // 实测帧：{item:{80031,60,62478}, unknown_8:空} → gained{7004,216000}（1罐头=3600草）。
     // 服务器一次只处理一个条目，多条目时逐条发送。
     const results: any[] = [];
     for (const it of (items || [])) {
+        // 实包是外层包裹：f1=BatchUseItem{item_id,count,unknown_6}, f8=空 bytes。
+        // 平铺发送会被服务器以 code=1000020 请求参数错误拒绝。
         const body: Uint8Array = types.BatchUseRequest.encode(types.BatchUseRequest.create({
-            item_id: toNum(it.itemId),
-            count: toNum(it.count || 1),
+            item: {
+                item_id: toNum(it.itemId),
+                count: toNum(it.count || 1),
+                unknown_6: 62478,
+            },
+            unknown_8: Buffer.alloc(0),
         })).finish();
         const { body: replyBody } = await sendMsgAsync('gamepb.itempb.ItemService', 'BatchUse', body);
         const reply: any = types.BatchUseReply.decode(replyBody);

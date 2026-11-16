@@ -109,7 +109,10 @@ async function buyCub(goodsId: number, num: number, price: number): Promise<any>
 
 /** 批量使用道具（罐头换牧草：80031 罐头 → 7004 牧草，1 罐头=3600 草） */
 async function batchUse(itemId: number, count: number): Promise<any> {
-    return call('BatchUseRequest', { item_id: itemId, count }, ITEM_SERVICE, 'BatchUse', 'BatchUseReply');
+    return call('BatchUseRequest', {
+        item: { item_id: itemId, count, unknown_6: 62478 },
+        unknown_8: Buffer.alloc(0),
+    }, ITEM_SERVICE, 'BatchUse', 'BatchUseReply');
 }
 
 /** 进/出好友家园（回包 f1 是 BasicInfo） */

@@ -74,14 +74,21 @@ message UseSocialReward {
 
 // ============ 批量使用物品 ============
 
-// 2026-11-16 实包勘误：f1 是 varint 物品 ID，不是嵌套 Item——
-// 旧定义 repeated Item items=1 在真实帧上解码直接越界报错。
-// 实测帧（牧场草料补给）：BatchUse{80031(10小时有机罐头), 60}
+// 2026-11-16 实包勘误：请求体是外层包裹 f1=BatchUseItem，而不是平铺字段，
+// 也不是更早猜的 repeated Item items=1。实测帧（牧场草料补给）：
+//   {item:{item_id:80031, count:60, unknown_6:62478}, unknown_8:空}
 //   → reply.gained{7004(牧草), 216000}，即 1 罐头 = 3600 牧草。
-message BatchUseRequest {
+message BatchUseItem {
     uint32 item_id = 1;
     uint32 count = 2;
     uint64 unknown_6 = 6;   // 实测 62478，语义未知
+}
+
+// 实包外层还有一个包裹：0a0c<BatchUseItem>4200
+// 直接发平铺的 item_id/count 会被服务器以 code=1000020 请求参数错误拒绝。
+message BatchUseRequest {
+    BatchUseItem item = 1;
+    bytes unknown_8 = 8;    // 实测为空 bytes
 }
 
 message BatchUseEntry {
