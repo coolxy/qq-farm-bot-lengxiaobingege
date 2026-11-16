@@ -289,6 +289,9 @@ function buildActivityDirectory(windows: any[], season: any, shop: any, solarTer
         const name = shareInstance?.title || String(window?.name || '').trim() || `活动 ${id}`;
         const startTime = Number(window?.beginTime) || 0;
         const endTime = Number(window?.endTime) || 0;
+        const type = Number(window?.type) || 0;
+        const groupId = String(window?.groupId || '');
+        const rules: string[] = Array.isArray(window?.rules) ? window.rules : [];
         const group = groups.find((entry: any) => (
             (!shareInstance || entry.id === id)
             && (!shareRewardInstances.some(instance => entry.activityIds.includes(instance.activityId)) || entry.id === id)
@@ -301,6 +304,10 @@ function buildActivityDirectory(windows: any[], season: any, shop: any, solarTer
             group.startTime = group.startTime > 0 && startTime > 0 ? Math.min(group.startTime, startTime) : Math.max(group.startTime, startTime);
             group.endTime = Math.max(group.endTime, endTime);
             if (!group.id.endsWith('00') && id.endsWith('00')) group.id = id;
+            // 元数据取首个非空值：同一分组的子活动 type 相同，但 group_id 可能只在下发的那条上有
+            if (!group.type && type) group.type = type;
+            if (!group.groupId && groupId) group.groupId = groupId;
+            if (group.rules.length === 0 && rules.length > 0) group.rules = rules;
             continue;
         }
         groups.push({
@@ -309,6 +316,9 @@ function buildActivityDirectory(windows: any[], season: any, shop: any, solarTer
             startTime,
             endTime,
             activityIds: [id],
+            type,
+            groupId,
+            rules,
         });
     }
     return groups.map(group => ({

@@ -35,6 +35,8 @@ function eventDto(value: any, now: number) {
         rewards: rewards(value.rewards), questionRewards: rewards(value.question_rewards),
         canClaim: open && !value.direct_claimed,
         canAnswer: open && !!entry?.question && !value.quiz_claimed && !value.quiz_wrong_today,
+        // 窗口已开但题库没有这期题目：基础奖励照领，答题奖励拿不到，需要人工补题库
+        quizMissing: open && !entry?.question,
     };
 }
 async function getSolarCalendar() {

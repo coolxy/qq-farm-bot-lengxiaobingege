@@ -37,7 +37,12 @@ async function autoSolar(): Promise<AutoResult> {
 
         let claimed = 0;
         const done: string[] = [];
+        const quizMissing: string[] = [];
         for (const event of active) {
+            if (event.quizMissing) {
+                // 只在窗口内提示一次，避免每个 tick 刷屏；答案需要从游戏界面抄回题库
+                quizMissing.push(`节令「${event.name}」未收录题目`);
+            }
             if (event.canClaim) {
                 await operateSolarCalendar('claim', { id: event.id });
                 claimed += 1;
@@ -66,7 +71,10 @@ async function autoSolar(): Promise<AutoResult> {
                 await sleep(500);
             }
         }
-        return { claimed, message: done.length > 0 ? done.join('，') : (claimed > 0 ? `节令完成 ${claimed} 项` : '') };
+        const parts: string[] = [];
+        if (done.length > 0) parts.push(done.join('，'));
+        if (quizMissing.length > 0) parts.push(`${quizMissing.join('，')}，仅领取基础奖励`);
+        return { claimed, message: parts.length > 0 ? parts.join('，') : (claimed > 0 ? `节令完成 ${claimed} 项` : '') };
     } catch (e: any) {
         return { claimed: 0, message: logActivityError('solar', '节令日历', e) };
     }

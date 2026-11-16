@@ -17,6 +17,10 @@ export interface ActivityDirectoryItemDto {
   gameplayKey: ActivityGameplayKey | null
   gameplayTargets: ActivityTabKey[]
   detailTarget: ActivityTabKey | null
+  /** 服务端下发的活动类型，未支持详情时用于区分玩法 */
+  type?: number | null
+  /** 活动说明（ActivityContent.extra 的 tips.txt，已剥离标签） */
+  rules?: string[]
 }
 
 export interface ActivityItemDto {

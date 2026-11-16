@@ -3,6 +3,12 @@ export interface ActivityWindow {
     name?: string;
     beginTime: number;
     endTime: number;
+    /** 服务端下发的活动类型（ActivityContent.type），用于判断玩法归属 */
+    type?: number;
+    /** 活动分组 ID（ActivityContent.group_id），GetGroup 查询所需 */
+    groupId?: string;
+    /** 活动说明文本（ActivityContent.extra 里的 tips.txt，已剥离富文本标签） */
+    rules?: string[];
 }
 
 export interface SellConditionContext {

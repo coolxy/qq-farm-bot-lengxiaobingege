@@ -193,6 +193,15 @@ function standingPeriod(activity: ActivityDirectoryItemDto) {
 function activityCanOpen(activity: ActivityDirectoryItemDto) {
   return activityHasGameplay(activity) && activityStatus(activity) === 'active'
 }
+/** 未支持详情的活动至少给出玩法说明首句，避免只显示一个活动名 */
+function activityHint(activity: ActivityDirectoryItemDto): string {
+  if (activityCanOpen(activity))
+    return ''
+  const first = (activity.rules || []).map(line => line.replace(/\s+/g, ' ').trim()).find(Boolean)
+  if (!first)
+    return ''
+  return first.length > 48 ? `${first.slice(0, 48)}…` : first
+}
 function formatActivityPeriod(activity: ActivityDirectoryItemDto) {
   const startTime = validActivityTime(activity.startTime)
   const endTime = validActivityTime(activity.endTime)
@@ -269,6 +278,7 @@ function openActivity(activity: ActivityDirectoryItemDto) {
             </span>
             <strong>{{ activityDisplayName(activity) }}</strong>
             <span class="activity-entry__period">{{ formatActivityPeriod(activity) }}</span>
+            <span v-if="activityHint(activity)" class="activity-entry__hint">{{ activityHint(activity) }}</span>
             <span class="activity-entry__footer">
               <small>{{ activity.id }}</small>
               <span v-if="activityCanOpen(activity)">查看详情 <span class="i-carbon-arrow-right" /></span>
@@ -737,6 +747,18 @@ function openActivity(activity: ActivityDirectoryItemDto) {
   margin-top: 5px;
   color: var(--ui-muted);
   font-size: 11px;
+}
+
+.activity-entry__hint {
+  display: -webkit-box;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--ui-muted);
+  font-size: 11px;
+  line-height: 1.45;
+  opacity: 0.85;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .activity-entry__footer {
