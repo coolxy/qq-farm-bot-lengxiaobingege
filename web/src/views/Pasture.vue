@@ -221,7 +221,7 @@ onMounted(() => {
         <NButton size="small" :loading="operating === 'triggerProduce'" :disabled="!isConnected" @click="run('triggerProduce')">
           一键催产
         </NButton>
-        <NButton size="small" :loading="operating === 'feed'" :disabled="!isConnected" @click="run('feed')">
+        <NButton size="small" :loading="operating === 'feed'" :disabled="!isConnected" @click="run('feed', { feedType: bucketSeconds > 0 ? 1 : 2 })">
           喂一只
         </NButton>
         <NButton size="small" :loading="operating === 'addFeed'" :disabled="!isConnected" @click="run('addFeed', { instId: facility?.instId || 10002, count: 1 })">

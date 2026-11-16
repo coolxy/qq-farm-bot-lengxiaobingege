@@ -105,8 +105,9 @@ async function operatePasture(action: string, input: any = {}): Promise<any> {
             return { ok: true, ranch: res && res.ranch };
         }
         case 'feed': {
-            const ranch = await api.feedAnimal(input.ranchInstId, 1);
-            return { ok: true, ranch };
+            const feedType = Number(input.feedType) || 1;
+            const ranch = await api.feedAnimal(input.ranchInstId, feedType);
+            return { ok: true, feedType, ranch };
         }
         case 'addFeed': {
             const grass = await api.addFeed(input.instId || 10002, input.count || 1);

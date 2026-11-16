@@ -92,23 +92,9 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
             const hazardQuota = quotas.find((q: any) => toNum(q.op_id) === 11003);
             hazardRemaining = hazardQuota ? toNum(hazardQuota.remaining_times) : 0;
         }
-        // 喂养消耗的是「有机罐头容器」余额（item 7004，单位秒），不是牧场里的牧草。
+        // feed_type=1 消耗「有机罐头容器」余额（item 7004，单位秒）；
+        // feed_type=2 消耗牧场牧草，实测可用，优先用免费资源。
         lastBucketSeconds = (await safeStep('读取罐头桶余额', () => api.getBagItemCount(BUCKET_ITEM_ID))) || 0;
-        if (auto.pasture_feed && lastBucketSeconds <= 0) {
-            await safeStep('补充罐头桶', async () => {
-                const cans = (await api.getBagItemCount(CANNED_ITEM_ID)) || 0;
-                if (cans <= 0) return;
-                const used = Math.min(cans, Math.max(1, Math.ceil(3600 / CANNED_TO_BUCKET_SECONDS)));
-                const exchanged = await api.batchUse(CANNED_ITEM_ID, used);
-                const gained = toNum(exchanged && exchanged.gained && exchanged.gained.count);
-                if (gained > 0) {
-                    lastBucketSeconds += gained;
-                    actions.push(`补充罐头桶 ${gained} 秒（${used} 个罐头）`);
-                    recordOperation('牧场补充罐头', used);
-                    await sleep(400);
-                }
-            });
-        }
 
         // 0. 空栏自动补幼崽（买满到容量上限，单轮最多 3 只，价格从幼崽商店实包读取）
         if (auto.pasture_buy_cub) {
@@ -186,19 +172,36 @@ async function checkPasture(options: { external?: boolean } = {}): Promise<{ act
             });
         }
 
-        // 4. 可喂即喂（每轮只喂一只，避免请求风暴；牧草为 0 时跳过）
+        // 4. 可喂即喂（每轮只喂一只）：优先罐头桶，其次牧草，最后才消耗罐头道具补桶。
         if (auto.pasture_feed) {
             await safeStep('喂养动物', async () => {
                 const feedState = analyzeRanch(ranch, Date.now());
-                if (lastBucketSeconds > 0 && feedState.feedable.length > 0) {
-                    const target = feedState.feedable[0];
-                    const updated = await api.feedAnimal(toNum(ranch.ranch_inst_id), 1);
-                    if (updated) {
-                        ranch = updated;
-                        actions.push(`喂养栏位 ${target.slot_index}`);
-                        recordOperation('牧场喂养', 1);
-                        await sleep(500);
-                    }
+                if (feedState.feedable.length === 0) return;
+                let feedType = 2;
+                if (lastBucketSeconds > 0) {
+                    feedType = 1;
+                }
+                else if (feedState.grass <= 0) {
+                    // 两种免费口粮都没有，才把背包罐头转成有机罐头桶时长。
+                    const cans = (await api.getBagItemCount(CANNED_ITEM_ID)) || 0;
+                    if (cans <= 0) return;
+                    const used = Math.min(cans, Math.max(1, Math.ceil(3600 / CANNED_TO_BUCKET_SECONDS)));
+                    const exchanged = await api.batchUse(CANNED_ITEM_ID, used);
+                    const gained = toNum(exchanged && exchanged.gained && exchanged.gained.count);
+                    if (gained <= 0) return;
+                    lastBucketSeconds += gained;
+                    actions.push(`补充罐头桶 ${gained} 秒（${used} 个罐头）`);
+                    recordOperation('牧场补充罐头', used);
+                    feedType = 1;
+                    await sleep(400);
+                }
+                const target = feedState.feedable[0];
+                const updated = await api.feedAnimal(toNum(ranch.ranch_inst_id), feedType);
+                if (updated) {
+                    ranch = updated;
+                    actions.push(`喂养栏位 ${target.slot_index}（${feedType === 1 ? '罐头桶' : '牧草'}）`);
+                    recordOperation('牧场喂养', 1);
+                    await sleep(500);
                 }
             });
         }
