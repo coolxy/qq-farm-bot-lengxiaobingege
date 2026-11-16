@@ -33,6 +33,12 @@ interface WechatAutoReloginOptions {
     startWorker: (account: any, options?: { preserveAutoRelogin?: boolean }) => boolean;
     stopWorker: (accountId: string, options?: { preserveAutoRelogin?: boolean }) => void;
     waitForWorkerExit?: (accountId: string) => Promise<void>;
+    /**
+     * 账号此刻是否已有活跃 worker（非停止中）。
+     * 重登任务真正执行前必须复核：扫码登录成功会留下一个早已排好的定时任务，
+     * 若不复核，到点就会把刚上线的连接停掉，再用已作废的 refreshToken 换码失败。
+     */
+    isAccountRunning?: (accountId: string) => boolean;
     triggerEventNotify: (payload: any) => void;
     /** 走事件通知渠道发送自定义消息（每小时会话续期提醒） */
     sendPush?: (payload: { title: string; content: string; accountId?: string; accountName?: string; logLabel?: string }) => Promise<void> | void;
@@ -101,6 +107,7 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
         startWorker,
         stopWorker,
         waitForWorkerExit,
+        isAccountRunning,
         triggerEventNotify,
         sendPush,
         retryDelaysMs = DEFAULT_RETRY_DELAYS_MS,
@@ -366,6 +373,15 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
         const name = String(accountName || id);
         const account = findAccount(id);
         if (wasCancelled(id) || !isEnabled(account)) {
+            forget(id);
+            return;
+        }
+
+        // 定时任务是掉线那一刻排下的，执行前账号可能已被扫码或手动启动拉回在线。
+        // 此时必须放弃：不然会把刚建立的连接停掉，再用已作废的 refreshToken 换码，必然 -109。
+        if (typeof isAccountRunning === 'function' && isAccountRunning(id)) {
+            log('系统', `账号 ${name} 已在线，取消挂起的自动重新登录`, { accountId: id, accountName: name, reason });
+            addAccountLog('wx_auto_relogin_skipped_online', `账号 ${name} 已在线，取消挂起的自动重新登录`, id, name, { reason });
             forget(id);
             return;
         }

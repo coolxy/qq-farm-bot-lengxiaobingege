@@ -61,6 +61,7 @@ function createHarness(overrides = {}) {
             stopped.push({ accountId, options });
         },
         waitForWorkerExit: overrides.waitForWorkerExit || (() => Promise.resolve()),
+        isAccountRunning: overrides.isAccountRunning,
         triggerEventNotify(payload) {
             reminders.push(payload);
         },
@@ -259,6 +260,36 @@ test('skips auto relogin when the setting is disabled or loginBuffer is missing'
     assert.equal(missing.service.handleDisconnect('1', 'wx-user', 'kickout:test'), false);
     assert.equal(missing.tasks.size, 0);
     assert.equal(missing.accountLogs.some(entry => entry[0] === 'wx_auto_relogin_skipped'), true);
+});
+
+test('skips the scheduled relogin when the account is already back online', async () => {
+    let online = false;
+    const harness = createHarness({ isAccountRunning: () => online });
+
+    assert.equal(harness.service.handleDisconnect('1', 'wx-user', 'disconnect:ws_error:connecting:400'), true);
+    assert.equal(harness.tasks.size, 1);
+
+    // 定时器还没到点，用户扫码把账号拉回在线：此时重登必须放弃，
+    // 否则会停掉刚建立的连接，再用已作废的 refreshToken 换码（-109）。
+    online = true;
+    await [...harness.tasks.values()][0].fn();
+
+    assert.equal(harness.stopped.length, 0);
+    assert.equal(harness.issued.length, 0);
+    assert.equal(harness.started.length, 0);
+    assert.equal(harness.reminders.length, 0);
+    assert.equal(harness.accountLogs.some(entry => entry[0] === 'wx_auto_relogin_skipped_online'), true);
+});
+
+test('still relogs when the account is offline at fire time', async () => {
+    const harness = createHarness({ isAccountRunning: () => false });
+
+    assert.equal(harness.service.handleDisconnect('1', 'wx-user', 'disconnect:ws_error:connecting:400'), true);
+    await [...harness.tasks.values()][0].fn();
+
+    assert.equal(harness.stopped.length, 1);
+    assert.equal(harness.issued.length, 1);
+    assert.equal(harness.started.length, 1);
 });
 
 test('retries failed code refresh then sends an offline reminder', async () => {

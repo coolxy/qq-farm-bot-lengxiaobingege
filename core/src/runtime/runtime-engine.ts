@@ -120,6 +120,11 @@ function createRuntimeEngine(options: RuntimeEngineOptions = {}) {
             };
             check();
         }),
+        // 重登任务执行前复核：正在停止的 worker 不算在线（那是掉线流程自己停的）
+        isAccountRunning: (accountId: string) => {
+            const worker = workers[accountId];
+            return !!worker && !worker.stopping;
+        },
         triggerEventNotify,
         sendPush: sendConfiguredPush,
         getOfflineCycleState,
