@@ -359,9 +359,18 @@ async function operate(action: string, input: any = {}): Promise<any> {
             }
             if (plan.autoPlaceAnimalId) {
                 if (!after) unknown(action, '自动放养后的栏位状态未能读取');
-                const previous = new Set(before.cells.facilities.flatMap((f: any) => (f.ranch?.animals || []).map((animal: any) => `${quantity(f.instance_id)}:${animal.animal_inst_id}`)));
-                const placed = after.cells.facilities.flatMap((f: any) => (f.ranch?.animals || []).filter((animal: any) => !previous.has(`${quantity(f.instance_id)}:${animal.animal_inst_id}`)));
-                if (placed.length !== plan.payload.num || placed.some((animal: any) => Number(animal.animal_id) !== plan.autoPlaceAnimalId)) unknown(action, '自动放养的动物或数量不匹配');
+                // 自动放养的 BuyGoods 回包不带栏舍，只能读栏位确认幼崽是否到账。
+                // 旧实现用 animal_inst_id 精确集合比对「新增动物」，但 before 来自 20 秒缓存快照、
+                // after 是 fresh 全量读，两者 inst_id 会因缓存滞后/成长/并发写入而不同，
+                // 导致「动物其实已到账却判结果未知」→ 写入账本永久锁死该商品。
+                // 改为按 animal_id 统计该类动物的数量增量：只要求目标动物至少增加本次购买数即可，
+                // 对 inst_id 变化和缓存差异鲁棒；若数量没有增加才判结果未知（保留防重复扣款底线）。
+                const countOf = (raw: any, animalId: number) => (raw.cells.facilities || []).reduce((sum: number, f: any) =>
+                    sum + (f.ranch?.animals || []).filter((animal: any) => Number(animal.animal_id) === animalId).length, 0);
+                const targetId = Number(plan.autoPlaceAnimalId);
+                const beforeCount = countOf(before, targetId);
+                const afterCount = countOf(after, targetId);
+                if (afterCount - beforeCount < plan.payload.num) unknown(action, '自动放养的动物或数量不匹配');
             }
             if (['place', 'addGrass', 'useCan', 'exchange', 'buyCan'].includes(action)) {
                 if (!after) unknown(action, '操作后的库存未能读取');
