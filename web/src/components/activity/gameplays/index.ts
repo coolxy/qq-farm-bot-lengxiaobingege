@@ -17,8 +17,9 @@ function inferGameplayKey(activity: ActivityDirectoryItemDto): ActivityGameplayK
     return activity.detailTarget
   // 牧歌初启：详情入口为 muge，活动 id 以 20261117 开头；须在 stellar 兜底前命中。
   if (activity.detailTarget === 'muge' || activity.gameplayKey === 'muge'
-    || activity.activityIds.some(id => id.startsWith('20261117')))
+    || activity.activityIds.some(id => id.startsWith('20261117'))) {
     return 'muge'
+  }
   if (activity.gameplayKey)
     return activity.gameplayKey
   if (activity.detailTarget === 'pet' || activity.activityIds.some(id => ['2026090100', '2026090101', '2026090102', '2026090103'].includes(id)))

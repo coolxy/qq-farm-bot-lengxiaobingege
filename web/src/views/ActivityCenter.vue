@@ -12,8 +12,8 @@ import { useActivityCenterStore } from '@/stores/activity-center'
 import { useAppStore } from '@/stores/app'
 import ActivityDirectoryPage from './activity-center/ActivityDirectoryPage.vue'
 import MilkTeaPage from './activity-center/MilkTeaPage.vue'
-import PetDiaryPage from './activity-center/PetDiaryPage.vue'
 import MugePage from './activity-center/MugePage.vue'
+import PetDiaryPage from './activity-center/PetDiaryPage.vue'
 import StellarActivityPage from './activity-center/StellarActivityPage.vue'
 
 const router = useRouter()
