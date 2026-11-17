@@ -2,6 +2,7 @@
 import { NButton } from 'naive-ui/es/button'
 import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { formatDuration, useRanchActions, useRanchClock, useRanchLoader } from '@/components/ranch/ranch-shared'
 import RanchGate from '@/components/ranch/RanchGate.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -15,6 +16,15 @@ const { state, loading } = storeToRefs(useRanchStore())
 const { refresh } = useRanchLoader('activities')
 const { serverNow, remainingSeconds } = useRanchClock()
 const { request, disabled } = useRanchActions()
+const router = useRouter()
+
+/** 牧歌初启有独立详情页（含奖励进度与人格测试），从牧场活动卡片跳转过去。 */
+function openMuge() {
+  router.push({ name: 'activity-center', query: { activity: 'muge' } })
+}
+function hasMugeDetail(activity: any) {
+  return String(activity?.id) === '2026111700' && phase(activity).tone !== 'ended'
+}
 
 const activities = computed<any[]>(() => state.value?.activities || [])
 const dailyShare = computed<any>(() => state.value?.dailyShare || null)
@@ -127,6 +137,9 @@ const shareActionText = computed(() => {
             <span class="act__range">{{ range(item) }}</span>
             <span v-if="countdown(item)" class="act__countdown">{{ countdown(item) }}</span>
           </div>
+          <NButton v-if="hasMugeDetail(item)" size="small" type="primary" secondary class="act__detail" @click="openMuge">
+            查看活动详情
+          </NButton>
           <details v-if="item.rules?.length" class="act__rules" :open="openByDefault(item) || undefined">
             <summary>活动说明</summary>
             <ul>
@@ -366,6 +379,10 @@ const shareActionText = computed(() => {
 .act__countdown {
   color: var(--ui-muted);
   font-weight: var(--fw-600);
+}
+
+.act__detail {
+  margin-top: 10px;
 }
 
 .act.is-soon .act__countdown {

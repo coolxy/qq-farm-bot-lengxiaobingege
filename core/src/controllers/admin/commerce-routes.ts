@@ -54,6 +54,10 @@ function mountCommerceRoutes(app: Application, ctx: AdminContext): void {
     app.get('/api/activities/milk-tea', withAccount((accountId: string, req: Request) => ctx.provider.getMilkTeaActivity(accountId, req.query.page || 'shop', req.query)));
     app.post('/api/activities/milk-tea/:action', withAccount((accountId: string, req: Request) => ctx.provider.operateMilkTeaActivity(accountId, req.params.action, req.body)));
 
+    // 牧歌初启（2026-11-17 牧场限时活动）数据读取与领奖/人格测试操作。
+    app.get('/api/activities/muge', withAccount((accountId: string) => ctx.provider.getMugeActivity(accountId)));
+    app.post('/api/activities/muge/:action', withAccount((accountId: string, req: Request) => ctx.provider.operateMugeActivity(accountId, req.params.action, req.body)));
+
     app.get('/api/activities/share-reward/:activityId', withAccount((accountId: string, req: Request) => (
         ctx.provider.getShareRewardActivity(accountId, req.params.activityId)
     )));

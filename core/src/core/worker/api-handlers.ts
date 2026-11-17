@@ -256,6 +256,12 @@ async function handleApiCall(msg: any): Promise<void> {
             case 'probeActivityGroup':
                 result = await require('../../services/activity-probe').probeActivityGroup(args[0]);
                 break;
+            case 'getMugeActivity':
+                result = await require('../../services/muge-activity').getMugeActivity();
+                break;
+            case 'operateMugeActivity':
+                result = await require('../../services/muge-activity').operateMugeActivity(args[0], args[1]);
+                break;
             case 'operateShareRewardActivity':
                 result = await require('../../services/share-reward-activity').operateShareRewardActivity(args[0], args[1], args[2]);
                 break;

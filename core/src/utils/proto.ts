@@ -50,6 +50,7 @@ async function loadProto(): Promise<void> {
         getResourcePath('proto', 'interactpb.proto'),
         getResourcePath('proto', 'ranchv2.proto'),
         getResourcePath('proto', 'activitypb.proto'),
+        getResourcePath('proto', 'muge.proto'),
         getResourcePath('proto', 'seasonpb.proto'),
         getResourcePath('proto', 'solartermspb.proto'),
         getResourcePath('proto', 'randomdroppb.proto'),
@@ -76,6 +77,10 @@ async function loadProto(): Promise<void> {
     types.EventMessage = root.lookupType('gatepb.EventMessage');
 
     types.AutumnOperateRequest = root.lookupType('gamepb.activitypb.AutumnOperateRequest');
+    // 牧歌初启（2026-11-17 牧场活动）：专属列表/操作协议。
+    for (const name of ['MugeListReply', 'MugeOperateRequest', 'MugeOperateReply']) {
+        types[name] = root.lookupType(`gamepb.activitypb.${name}`);
+    }
 
     types.MilkTeaOperateReply = root.lookupType('gamepb.activitypb.MilkTeaOperateReply');
     types.MilkTeaGetGroupReply = root.lookupType('gamepb.activitypb.MilkTeaGetGroupReply');

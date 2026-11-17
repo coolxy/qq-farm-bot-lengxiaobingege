@@ -13,6 +13,7 @@ import { useAppStore } from '@/stores/app'
 import ActivityDirectoryPage from './activity-center/ActivityDirectoryPage.vue'
 import MilkTeaPage from './activity-center/MilkTeaPage.vue'
 import PetDiaryPage from './activity-center/PetDiaryPage.vue'
+import MugePage from './activity-center/MugePage.vue'
 import StellarActivityPage from './activity-center/StellarActivityPage.vue'
 
 const router = useRouter()
@@ -43,7 +44,7 @@ async function openActivity(activity: ActivityDirectoryItemDto) {
 
   selectedActivity.value = gameplay.module.key
   selectedInstanceId.value = activity.instanceId || activity.activityIds.find(id => ['2026110104'].includes(id)) || ''
-  if (['pet', 'happy', 'milk'].includes(gameplay.module.key))
+  if (['pet', 'happy', 'milk', 'muge'].includes(gameplay.module.key))
     return
   await activityStore.loadDetails(accountId(), gameplay.module.key)
 }
@@ -95,6 +96,9 @@ watch(stellarDetailsAvailable, (available) => {
 
 onMounted(() => {
   activityStore.refresh(accountId())
+  // 牧场活动页等外部入口可通过 ?activity=muge 直接打开牧歌初启详情页
+  if (router.currentRoute.value.query.activity === 'muge')
+    selectedActivity.value = 'muge'
 })
 onUnmounted(() => {
   appStore.activityDetailOpen = false
@@ -115,6 +119,7 @@ onUnmounted(() => {
     @back="goBack"
   />
   <PetDiaryPage v-else-if="selectedActivity === 'pet'" @back="goBack" />
+  <MugePage v-else-if="selectedActivity === 'muge'" @back="goBack" />
 </template>
 
 <style>

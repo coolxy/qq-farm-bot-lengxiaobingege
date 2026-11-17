@@ -5,6 +5,7 @@ export {};
  * - milk-tea-auto.ts  奶茶热销中（2026110100）
  * - happy-auto.ts     快乐不独享（2026110104）
  * - solar-auto.ts     节令日历（节令开始当天执行一次）
+ * - muge-auto.ts      牧歌初启（2026111700，牧场限时活动，自动领可领奖励）
  */
 
 import type { AutoPushMessage, AutoResult } from './shared';
@@ -13,6 +14,7 @@ const { log } = require('../../utils/utils');
 const { autoMilkTea } = require('./milk-tea-auto');
 const { autoHappy } = require('./happy-auto');
 const { autoSolar } = require('./solar-auto');
+const { autoMuge } = require('./muge-auto');
 
 interface ActivityTaskResult {
     /** 需要推送给用户的提醒，由调度层转交主进程发送 */
@@ -34,6 +36,7 @@ async function checkAndClaimActivityTasks(): Promise<ActivityTaskResult> {
     await run(autoMilkTea);
     await run(autoHappy);
     await run(autoSolar);
+    await run(autoMuge);
 
     if (messages.length > 0) {
         log('活动任务', messages.join('，'), { module: 'activity_task', event: 'activity_task_tick', result: 'ok' });
@@ -46,4 +49,5 @@ module.exports = {
     autoMilkTea,
     autoHappy,
     autoSolar,
+    autoMuge,
 };

@@ -2,8 +2,8 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import api from '@/api'
 
-export type ActivityTabKey = 'travel' | 'constellation' | 'shop' | 'solar' | 'pet' | 'happy' | 'milk'
-export type ActivityGameplayKey = 'stellar' | 'pet' | 'happy' | 'milk'
+export type ActivityTabKey = 'travel' | 'constellation' | 'shop' | 'solar' | 'pet' | 'happy' | 'milk' | 'muge'
+export type ActivityGameplayKey = 'stellar' | 'pet' | 'happy' | 'milk' | 'muge'
 export type ActivityVariant = 'blue' | 'violet' | 'gold' | 'green'
 export type ActivityRecord = Record<string, unknown>
 
@@ -625,13 +625,13 @@ function normalizeSolarTerms(value: unknown): SolarTermsDto | null {
 function normalizeActivityDirectory(value: unknown): ActivityDirectoryItemDto[] {
   return records(value).map((entry) => {
     const detailTarget = text(entry.detailTarget, entry.detail_target)
-    const normalizedDetailTarget = ['travel', 'constellation', 'shop', 'solar', 'pet', 'happy', 'milk'].includes(detailTarget)
+    const normalizedDetailTarget = ['travel', 'constellation', 'shop', 'solar', 'pet', 'happy', 'milk', 'muge'].includes(detailTarget)
       ? detailTarget as ActivityTabKey
       : null
     const gameplayKey = text(entry.gameplayKey, entry.gameplay_key)
     const rawGameplayTargets = first(entry.gameplayTargets, entry.gameplay_targets)
     const gameplayTargets = Array.isArray(rawGameplayTargets)
-      ? rawGameplayTargets.map(value => text(value)).filter((value): value is ActivityTabKey => ['travel', 'constellation', 'shop', 'solar', 'pet', 'happy', 'milk'].includes(value))
+      ? rawGameplayTargets.map(value => text(value)).filter((value): value is ActivityTabKey => ['travel', 'constellation', 'shop', 'solar', 'pet', 'happy', 'milk', 'muge'].includes(value))
       : []
     const id = text(entry.id, entry.activityId, entry.activity_id)
     const rawActivityIds = first(entry.activityIds, entry.activity_ids)
@@ -655,8 +655,10 @@ function normalizeActivityDirectory(value: unknown): ActivityDirectoryItemDto[] 
       instanceId: text(entry.instanceId, entry.instance_id) || null,
       type,
       rules,
-      gameplayKey: gameplayKey === 'milk' || normalizedDetailTarget === 'milk'
-        ? 'milk' as const
+      gameplayKey: gameplayKey === 'muge' || normalizedDetailTarget === 'muge'
+        ? 'muge' as const
+        : gameplayKey === 'milk' || normalizedDetailTarget === 'milk'
+          ? 'milk' as const
         : gameplayKey === 'happy' || normalizedDetailTarget === 'happy'
           ? 'happy' as const
           : gameplayKey === 'pet' || normalizedDetailTarget === 'pet'
