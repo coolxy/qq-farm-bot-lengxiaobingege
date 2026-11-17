@@ -178,6 +178,9 @@ function handleNotify(msg: any): void {
                         } else if (delta !== 0) {
                             S.user.coupon = Math.max(0, Number(S.user.coupon || 0) + delta);
                         }
+                    } else if (id === 7002 && delta > 0) {
+                        // 便便增加即唤醒牧场兑换例程，按最新余额判断是否达到门槛。
+                        S.events.emit('ranchMarketStockReady', { id, count, delta });
                     } else if (id === 1005) {
                         if (count > 0) {
                             S.user.goldBean = count;

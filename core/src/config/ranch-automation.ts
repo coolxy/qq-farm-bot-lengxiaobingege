@@ -6,6 +6,7 @@ export const RANCH_AUTOMATION_DEFAULTS = {
     ranch_buy: false,
     ranch_upgrade: false,
     ranch_sell: false,
+    ranch_market_organic: false,
     ranch_grass: false,
     ranch_grass_buy: false,
     ranch_fill_cans: false,

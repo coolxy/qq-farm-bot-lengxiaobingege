@@ -46,6 +46,7 @@ const ranchSwitches = [
   { key: 'ranch_buy', label: '自动补栏（金券）' },
   { key: 'ranch_upgrade', label: '自动升级设施（金券）' },
   { key: 'ranch_sell', label: '自动出售牧场产物' },
+  { key: 'ranch_market_organic', label: '仓鼠集市兑换有机化肥（便便）' },
   { key: 'ranch_clean', label: '自动清理灾害' },
   { key: 'ranch_grass', label: '自动补充牧草' },
   { key: 'ranch_grass_buy', label: '牧草不足时购买（金券）' },

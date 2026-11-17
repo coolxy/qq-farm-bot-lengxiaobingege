@@ -31,6 +31,7 @@ const st = {
     lastStatusSentAt: 0,
     onSellGain: null as ((deltaGold: any) => void) | null,
     onFarmHarvested: null as (() => Promise<void>) | null,
+    onRanchMarketStockReady: null as (() => void) | null,
     onDogSkillGiftPending: null as ((count: any) => void) | null,
     harvestSellRunning: false,
     onWsError: null as ((payload: any) => void) | null,

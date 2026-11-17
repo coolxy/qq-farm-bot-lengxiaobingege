@@ -296,6 +296,13 @@ async function runUnifiedTick(): Promise<void> {
     if (dueFriend && !st.friendTaskRunning) void runFriendTick(auto);
 }
 
+/** 集市货币到账时唤醒牧场兑换例程，无需等待六小时兜底检查。 */
+function wakeRanchMarketExchange(): void {
+    if (!st.loginReady || getAutomation().ranch_market_organic !== true) return;
+    if (typeof ranchAutomation.resetMarketSchedule === 'function') ranchAutomation.resetMarketSchedule();
+    scheduleUnifiedNextTick();
+}
+
 function scheduleUnifiedNextTick(): void {
     if (!st.unifiedSchedulerRunning) return;
     st.workerScheduler.clear('unified_next_tick');
@@ -375,6 +382,7 @@ module.exports = {
     normalizeIntervalRangeSec, applyIntervalsToRuntime, randomIntervalMs,
     resetUnifiedSchedule, describeGatewayStall, nextBusinessTickDeferMs,
     runFarmTick, runFriendTick, runUnifiedTick, scheduleUnifiedNextTick,
+    wakeRanchMarketExchange,
     startUnifiedScheduler, stopUnifiedScheduler, stopMysteryShopTimer,
     runMysteryShopTick, startMysteryShopTimer,
 };
