@@ -364,9 +364,9 @@ onMounted(async () => {
           </p>
         </section>
 
-        <section class="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+        <section class="border border-gray-200 rounded-xl p-4 dark:border-gray-700">
           <div class="mb-3 flex items-center gap-3">
-            <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+            <div class="h-9 w-9 flex items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
               <span class="i-tabler-horse text-xl" />
             </div>
             <div>
@@ -407,7 +407,7 @@ onMounted(async () => {
             </div>
           </div>
 
-          <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div class="grid grid-cols-1 mt-4 gap-3 sm:grid-cols-2">
             <BaseSelect v-model="settings.automation.ranch_strategy" label="养殖策略" :options="RANCH_STRATEGIES" />
             <BaseSelect
               v-if="settings.automation.ranch_strategy === 'bag_priority'"

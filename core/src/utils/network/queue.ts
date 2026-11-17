@@ -1,3 +1,5 @@
+import type { PendingRequest, QueuedRequest, RequestClass } from './types';
+
 export {};
 const stateMod: typeof import('./state') = require('./state');
 const codecMod: typeof import('./codec') = require('./codec');
@@ -6,8 +8,6 @@ const requestPriorityMod = require('../request-priority');
 const requestPressureMod = require('../request-pressure');
 const utilsMod = require('../utils');
 const { S, isCurrentConnection } = stateMod;
-
-import type { PendingRequest, QueuedRequest, RequestClass } from './types';
 
 const MAX_DESCRIBED_PENDING_REQUESTS = 6;
 
@@ -205,4 +205,4 @@ function logRequestPressure(): void {
     utilsMod.logWarn('系统', `Gateway 请求压力: pending=${S.pending.size}, queued=${S.queue.length}, active=${describePendingRequests()}, queuedMethods=${describeQueuedRequests()}`);
 }
 
-export { settleQueuedRequest, drainRequestQueue, rejectAllQueuedRequests, rejectAllPendingRequests, describePendingRequests, describeQueuedRequests, logRequestPressure, getGatewayLoad, isGatewayIdleForBackground, waitForGatewayIdle };
+export { describePendingRequests, describeQueuedRequests, drainRequestQueue, getGatewayLoad, isGatewayIdleForBackground, logRequestPressure, rejectAllPendingRequests, rejectAllQueuedRequests, settleQueuedRequest, waitForGatewayIdle };

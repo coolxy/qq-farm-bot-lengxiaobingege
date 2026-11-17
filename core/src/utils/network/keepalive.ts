@@ -1,3 +1,5 @@
+import type { ConnectionContext } from './types';
+
 export {};
 const stateMod: typeof import('./state') = require('./state');
 const queueMod: typeof import('./queue') = require('./queue');
@@ -14,8 +16,6 @@ const configMod = require('../../config/config');
 const forecastMod = require('../../services/level-forecast');
 const cryptoWasm = require('../crypto-wasm');
 const { S } = stateMod;
-
-import type { ConnectionContext } from './types';
 
 // ============ 心跳 ============
 const HEARTBEAT_REQUEST_TIMEOUT = 20000;
@@ -150,4 +150,4 @@ function finalizeConnection(context: ConnectionContext, details: DisconnectDetai
     });
 }
 
-export { buildHeartbeatBody, startHeartbeat, getConnectionDiagnostics, finalizeConnection, clearNetworkRuntime };
+export { buildHeartbeatBody, clearNetworkRuntime, finalizeConnection, getConnectionDiagnostics, startHeartbeat };

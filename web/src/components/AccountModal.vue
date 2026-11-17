@@ -90,11 +90,11 @@ async function addQrAccount(platform: 'wx' | 'qq', code: string, nickname: strin
   const name = form.name.trim() || nickname
   wxPendingCode = code
 
-    if (!name) {
-      wxStatus.value = '登录授权已完成，等待填写账号备注'
-      wxError.value = '未获取到微信昵称，请填写账号备注'
-      return
-    }
+  if (!name) {
+    wxStatus.value = '登录授权已完成，等待填写账号备注'
+    wxError.value = '未获取到微信昵称，请填写账号备注'
+    return
+  }
 
   form.name = name
   await submitPendingQrAccount(platform)
@@ -463,7 +463,9 @@ onBeforeUnmount(() => {
             class="farm-input"
           />
 
-          <div class="text-sm opacity-60">仅支持微信小程序 Code 登录</div>
+          <div class="text-sm opacity-60">
+            仅支持微信小程序 Code 登录
+          </div>
 
           <div class="flex justify-end gap-2 pt-4">
             <BaseButton variant="outline" @click="close">

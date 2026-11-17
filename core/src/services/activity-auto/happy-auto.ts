@@ -1,4 +1,3 @@
-export {};
 /**
  * 快乐不独享自动化（当前场次 2026110104，挂奶茶活动分组下，10-15 ~ 11-16）
  * 职责：领取每日快乐值、每日首次分享、领取可用档位奖励
@@ -6,6 +5,7 @@ export {};
  */
 
 import type { AutoResult } from './shared';
+export {};
 const { isAutomationOn } = require('../../models/store');
 const { log, sleep } = require('../../utils/utils');
 const { getShareRewardActivity, operateShareRewardActivity } = require('../share-reward-activity');

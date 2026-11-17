@@ -52,7 +52,7 @@ test('白名单来源回显 ACAO 与 credentials，并设置 Vary: Origin', () =
     assert.equal(ok, true);
     assert.equal(res.headers['Access-Control-Allow-Origin'], 'http://localhost:5173');
     assert.equal(res.headers['Access-Control-Allow-Credentials'], 'true');
-    assert.equal(res.headers['Vary'], 'Origin');
+    assert.equal(res.headers.Vary, 'Origin');
 });
 
 test('非白名单跨域来源不回显 ACAO / credentials，请求由浏览器侧拦截', () => {

@@ -225,7 +225,6 @@ export interface ActivityActionsDto {
   exchange: ActivityActionDto
 }
 
-
 export interface ActivityCenterSnapshotDto {
   serverTime: number | null
   activities: ActivityDirectoryItemDto[]
@@ -659,19 +658,18 @@ function normalizeActivityDirectory(value: unknown): ActivityDirectoryItemDto[] 
         ? 'muge' as const
         : gameplayKey === 'milk' || normalizedDetailTarget === 'milk'
           ? 'milk' as const
-        : gameplayKey === 'happy' || normalizedDetailTarget === 'happy'
-          ? 'happy' as const
-          : gameplayKey === 'pet' || normalizedDetailTarget === 'pet'
-            ? 'pet' as const
-            : gameplayKey === 'stellar' || normalizedDetailTarget
-              ? 'stellar' as const
-              : null,
+          : gameplayKey === 'happy' || normalizedDetailTarget === 'happy'
+            ? 'happy' as const
+            : gameplayKey === 'pet' || normalizedDetailTarget === 'pet'
+              ? 'pet' as const
+              : gameplayKey === 'stellar' || normalizedDetailTarget
+                ? 'stellar' as const
+                : null,
       gameplayTargets: gameplayTargets.length > 0 ? gameplayTargets : normalizedDetailTarget ? [normalizedDetailTarget] : [],
       detailTarget: normalizedDetailTarget,
     }
   }).filter(entry => entry.id)
 }
-
 
 function findAction(source: ActivityRecord, aliases: string[]): unknown {
   for (const alias of aliases) {
@@ -876,7 +874,7 @@ export const useActivityCenterStore = defineStore('activity-center', () => {
     error.value = ''
     try {
       let detail: unknown
-      let detailKey: 'season' | null = null
+      const detailKey: 'season' | null = null
       {
         const response = await api.get('/api/activity-center/stellar', { headers: { 'x-account-id': requestedAccountId }, skipErrorToast: true } as any)
         detail = responsePayload(response.data)

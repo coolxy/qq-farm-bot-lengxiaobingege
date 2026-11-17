@@ -1,3 +1,4 @@
+
 export {};
 const stateMod: typeof import('./state') = require('./state');
 const typesMod: typeof import('./types') = require('./types');
@@ -11,8 +12,6 @@ const forecastMod = require('../../services/level-forecast');
 const utilsMod = require('../utils');
 const ignoreErrorMod = require('../ignore-error');
 const { S } = stateMod;
-
-import type { ConnectionContext } from './types';
 
 function hasOwn(obj: any, key: string): boolean {
     return !!obj && Object.hasOwn(obj, key);

@@ -21,13 +21,13 @@ const { S } = stateMod;
 const networkEvents = S.events;
 
 export {
-    connect, cleanup, getWs,
-    buildLoginBody, buildHeartbeatBody,
-    sendMsgAsync, sendMsgNoReply,
-    getGatewayLoad, isGatewayIdleForBackground, waitForGatewayIdle,
-    GatewayError, GatewayBusyError,
-    getUserState,
-    loginGameScene, invalidateGameScene, applyShareInfos, getDailyShareInfo,
-    getWsErrorState,
-    networkEvents,
+    applyShareInfos, buildHeartbeatBody, buildLoginBody,
+    cleanup, connect,
+    GatewayBusyError, GatewayError,
+    getDailyShareInfo, getGatewayLoad, getUserState,
+    getWs, getWsErrorState,
+    invalidateGameScene,
+    isGatewayIdleForBackground, loginGameScene, networkEvents, sendMsgAsync,
+    sendMsgNoReply,
+    waitForGatewayIdle,
 };

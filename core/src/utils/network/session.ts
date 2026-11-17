@@ -1,11 +1,10 @@
+
 export {};
 const stateMod: typeof import('./state') = require('./state');
 const { types } = require('../proto');
 const utilsMod = require('../utils');
 
 const { S } = stateMod;
-
-import type { ConnectionContext } from './types';
 
 function getUserState() { return S.user; }
 function getWsErrorState() { return { ...S.wsError }; }
@@ -32,4 +31,4 @@ async function fetchUserSettings(): Promise<void> {
     }
 }
 
-export { getUserState, getWsErrorState, setWsErrorState, clearWsErrorState, fetchUserSettings };
+export { clearWsErrorState, fetchUserSettings, getUserState, getWsErrorState, setWsErrorState };

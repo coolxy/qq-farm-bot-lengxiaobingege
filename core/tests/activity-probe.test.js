@@ -6,8 +6,8 @@ const { scanMessage, annotate, decodeText } = require('../dist/services/activity
 function varint(value) {
     const bytes = [];
     let rest = value >>> 0;
-    while (rest > 0x7f) {
-        bytes.push((rest & 0x7f) | 0x80);
+    while (rest > 0x7F) {
+        bytes.push((rest & 0x7F) | 0x80);
         rest >>>= 7;
     }
     bytes.push(rest);
@@ -59,7 +59,7 @@ test('expands nested messages instead of dumping hex', () => {
 
 test('reports incomplete instead of throwing on a truncated buffer', () => {
     // 声明长度 16，实际只有 1 个字节
-    const buf = Buffer.from([0x0a, 0x10, 0x61]);
+    const buf = Buffer.from([0x0A, 0x10, 0x61]);
     const result = scan(buf);
     assert.equal(result.complete, false);
     assert.equal(result.nodes.length, 0);

@@ -58,7 +58,7 @@ function deriveBackupKey(): Buffer | null {
         // 全新环境可能还没有密钥文件，先确保其存在（复用 secret-crypto 的生成逻辑）
         require('../utils/secret-crypto').readOrCreateKey();
         const keyHex = fs.readFileSync(getDataFile('.secret.key'), 'utf8').trim();
-        if (!/^[0-9a-fA-F]{64}$/.test(keyHex)) return null;
+        if (!/^[0-9a-f]{64}$/i.test(keyHex)) return null;
         // 与业务加密密钥隔离：scrypt 派生独立子密钥（盐随每次备份随机）
         return keyHex ? crypto.createHash('sha256').update(Buffer.from(keyHex, 'hex')).digest() : null;
     } catch {

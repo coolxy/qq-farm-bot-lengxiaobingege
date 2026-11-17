@@ -139,6 +139,7 @@ function getAccountAvatar(account: any) {
 
 // 服务器偶尔返回带控制字符的昵称（如 \x7f），直接显示会出现 "(名字)" 这样的空括号
 function cleanAccountNick(account: any): string {
+  // eslint-disable-next-line no-control-regex -- 有意匹配 C0/C1 控制字符并清除
   const nick = String(account?.nick || '').replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim()
   // 只剩标点/空白视为无效昵称
   return /[\p{L}\p{N}]/u.test(nick) ? nick : ''
@@ -241,6 +242,7 @@ const displayName = computed(() => {
 
   // 1. 优先显示实时状态中的昵称 (如果有且不是未登录)
   const liveName = String(status.value?.status?.name || '')
+    // eslint-disable-next-line no-control-regex -- 有意匹配 C0/C1 控制字符并清除
     .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
     .trim()
   if (liveName && liveName !== '未登录') {

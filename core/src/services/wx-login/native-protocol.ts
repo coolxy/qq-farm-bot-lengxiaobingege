@@ -1,6 +1,6 @@
-const { ignoreError } = require('../../utils/ignore-error');
 import crypto from 'node:crypto';
 import net from 'node:net';
+const { ignoreError } = require('../../utils/ignore-error');
 
 type Target = { ip: string; port: number };
 type Session = { sendKey: Buffer; recvKey: Buffer; f9: Buffer; uin: bigint; deviceId: Buffer; hostAppId: Buffer; psk: Buffer; ticket: Buffer };

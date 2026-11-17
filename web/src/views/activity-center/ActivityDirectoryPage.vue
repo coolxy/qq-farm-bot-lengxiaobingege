@@ -49,16 +49,16 @@ const displayActivities = computed<ActivityDirectoryItemDto[]>(() => {
 
   const statusRank: Record<ActivityStatus, number> = { active: 0, upcoming: 1, ended: 2 }
   return entries
-    .filter((activity) => activityStatus(activity) !== 'ended')
+    .filter(activity => activityStatus(activity) !== 'ended')
     .sort((left, right) => {
-    const leftStatus = activityStatus(left)
-    const rightStatus = activityStatus(right)
-    if (leftStatus !== rightStatus)
-      return statusRank[leftStatus] - statusRank[rightStatus]
-    if (leftStatus === 'ended')
-      return (right.endTime || 0) - (left.endTime || 0)
-    return (left.startTime || 0) - (right.startTime || 0)
-  })
+      const leftStatus = activityStatus(left)
+      const rightStatus = activityStatus(right)
+      if (leftStatus !== rightStatus)
+        return statusRank[leftStatus] - statusRank[rightStatus]
+      if (leftStatus === 'ended')
+        return (right.endTime || 0) - (left.endTime || 0)
+      return (left.startTime || 0) - (right.startTime || 0)
+    })
 })
 const hasActivities = computed(() => displayActivities.value.length > 0)
 

@@ -1,3 +1,5 @@
+import type { ConnectionContext } from './types';
+
 export {};
 const stateMod: typeof import('./state') = require('./state');
 const sessionMod: typeof import('./session') = require('./session');
@@ -13,8 +15,6 @@ const ignoreErrorMod = require('../ignore-error');
 const statusMod = require('../../services/status');
 const cryptoWasm = require('../crypto-wasm');
 const { S } = stateMod;
-
-import type { ConnectionContext } from './types';
 
 // ============ 登录 ============
 // QQ and WeChat 1.15 both authenticate the player before entering a farm scene.
@@ -159,4 +159,4 @@ async function sendLogin(context: ConnectionContext, onLoginSuccess?: () => void
     });
 }
 
-export { usesPlayerSceneLogin, buildLoginBody, sendLogin };
+export { buildLoginBody, sendLogin, usesPlayerSceneLogin };

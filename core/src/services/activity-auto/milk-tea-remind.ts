@@ -1,4 +1,3 @@
-export {};
 /**
  * 奶茶结算期提醒
  *
@@ -11,6 +10,7 @@ export {};
  */
 
 import type { AutoPushMessage } from './shared';
+export {};
 
 const path = require('node:path');
 const { readJsonFile, writeJsonFileAtomic } = require('../json-db');

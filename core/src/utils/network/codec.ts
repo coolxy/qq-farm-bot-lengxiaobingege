@@ -1,3 +1,12 @@
+import type {
+    ConnectionContext,
+    CriticalLane,
+    PendingRequest,
+    QueuedRequest,
+    RequestClass,
+    SendMsgOptions,
+} from './types';
+
 export {};
 const stateMod: typeof import('./state') = require('./state');
 const typesMod: typeof import('./types') = require('./types');
@@ -10,15 +19,6 @@ const requestContextMod = require('../request-context');
 const requestPriorityMod = require('../request-priority');
 const utilsMod = require('../utils');
 const { S, isCurrentConnection } = stateMod;
-
-import type {
-    ConnectionContext,
-    CriticalLane,
-    PendingRequest,
-    QueuedRequest,
-    RequestClass,
-    SendMsgOptions,
-} from './types';
 
 // ============ 消息编解码 ============
 async function encodeMsg(serviceName: string, methodName: string, bodyBytes: Buffer, clientSeqValue: number): Promise<Buffer> {

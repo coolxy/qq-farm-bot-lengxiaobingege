@@ -344,11 +344,16 @@ function getExpPercent(p: any) {
 
 function formatAssetAmount(value: unknown) {
   const n = Math.trunc(Number(value) || 0)
-  if (!Number.isFinite(n) || n < 0) return '0'
-  if (n === 0) return '0'
-  if (n < 10000) return String(n)
-  if (n < 100000000) return `${(n / 10000).toFixed(2)}万`
-  if (n < 1000000000000) return `${(n / 100000000).toFixed(2)}亿`
+  if (!Number.isFinite(n) || n < 0)
+    return '0'
+  if (n === 0)
+    return '0'
+  if (n < 10000)
+    return String(n)
+  if (n < 100000000)
+    return `${(n / 10000).toFixed(2)}万`
+  if (n < 1000000000000)
+    return `${(n / 100000000).toFixed(2)}亿`
   return `${(n / 1000000000000).toFixed(2)}兆`
 }
 

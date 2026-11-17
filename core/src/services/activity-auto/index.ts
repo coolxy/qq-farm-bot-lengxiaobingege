@@ -1,4 +1,3 @@
-export {};
 /**
  * 活动任务自动化编排入口：每个活动一个独立文件，这里只负责按顺序执行并汇总日志
  *
@@ -9,6 +8,7 @@ export {};
  */
 
 import type { AutoPushMessage, AutoResult } from './shared';
+export {};
 const { isAutomationOn } = require('../../models/store');
 const { log } = require('../../utils/utils');
 const { autoMilkTea } = require('./milk-tea-auto');

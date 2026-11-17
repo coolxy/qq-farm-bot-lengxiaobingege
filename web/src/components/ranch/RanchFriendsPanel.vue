@@ -310,7 +310,9 @@ async function reloadList() {
   box-shadow:
     inset 0 1px 0 var(--glass-highlight),
     var(--ui-shadow-sm);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 /* 展开的牧场详情要跨满整行，不然卡片墙会把详情挤成一条 */

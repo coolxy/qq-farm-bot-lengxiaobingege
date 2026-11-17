@@ -1,6 +1,6 @@
-const { ignoreError } = require('../../utils/ignore-error');
 import crypto from 'node:crypto';
 import { getNativeWxLoginCode } from './native-protocol';
+const { ignoreError } = require('../../utils/ignore-error');
 
 const QR_CONNECT_URL = 'https://open.weixin.qq.com/connect/qrconnect';
 const QR_IMAGE_BASE = 'https://open.weixin.qq.com/connect/qrcode/';

@@ -1,4 +1,3 @@
-export {};
 /**
  * 奶茶热销中自动化（2026110100，营业期 10-15 ~ 11-16）
  * 职责：领取收银台收益/员工工资、阶梯雇佣（24h→12h→4h，有多少花多少）、
@@ -6,6 +5,7 @@ export {};
  */
 
 import type { AutoPushMessage, AutoResult } from './shared';
+export {};
 const { isAutomationOn } = require('../../models/store');
 const { getServerTimeSec, toNum, log, sleep } = require('../../utils/utils');
 const { getMilkTeaActivity, operateMilkTeaActivity } = require('../milk-tea');
@@ -219,6 +219,8 @@ async function autoMilkTea(): Promise<AutoResult> {
 
         // 雇佣员工（按等级工位上限补满所有空位，直到满员或无可用员工；奶茶券不足则放弃雇佣这一轮）
         let hireSkipped = false;
+        // settling 由外层任务状态控制，循环内通过 break 提前退出，并非在循环条件里自修改
+        // eslint-disable-next-line no-unmodified-loop-condition
         while (!settling && toNum(shopState.summary.shop_open_at) > 0 && !hireSkipped) {
             const nowTs = getServerTimeSec();
             const slots = Array.isArray(shopState.shop?.slots) ? shopState.shop.slots : [];

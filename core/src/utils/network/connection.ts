@@ -1,3 +1,5 @@
+import type { ConnectionContext } from './types';
+
 export {};
 const stateMod: typeof import('./state') = require('./state');
 const sessionMod: typeof import('./session') = require('./session');
@@ -10,8 +12,6 @@ const profileMod = require('../client-profile');
 const utilsMod = require('../utils');
 const ignoreErrorMod = require('../ignore-error');
 const { S } = stateMod;
-
-import type { ConnectionContext } from './types';
 
 // 可注入的 socket 工厂：默认用 ws，测试可替换 S.createSocket 注入假 socket。
 if (!S.createSocket) {
@@ -115,4 +115,4 @@ function cleanup(reason = '网络清理'): void {
 
 function getWs(): WebSocket | null { return S.ws; }
 
-export { connect, cleanup, getWs };
+export { cleanup, connect, getWs };

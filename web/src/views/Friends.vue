@@ -679,10 +679,14 @@ function formatFriendGold(value: unknown) {
   const gold = Number.parseInt(String(value ?? ''), 10)
   if (!Number.isFinite(gold) || gold < 0)
     return '0'
-  if (gold === 0) return '0'
-  if (gold < 10000) return String(gold)
-  if (gold < 100000000) return `${(gold / 10000).toFixed(2)}万`
-  if (gold < 1000000000000) return `${(gold / 100000000).toFixed(2)}亿`
+  if (gold === 0)
+    return '0'
+  if (gold < 10000)
+    return String(gold)
+  if (gold < 100000000)
+    return `${(gold / 10000).toFixed(2)}万`
+  if (gold < 1000000000000)
+    return `${(gold / 100000000).toFixed(2)}亿`
   return `${(gold / 1000000000000).toFixed(2)}兆`
 }
 

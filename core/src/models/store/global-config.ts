@@ -1,4 +1,4 @@
-import type { GlobalConfig, LoginSettings, EventNotify, SystemConfig, UIConfig } from '../../types/config';
+import type { EventNotify, GlobalConfig, LoginSettings, SystemConfig, UIConfig } from '../../types/config';
 export {};
 
 const { DEFAULT_CLIENT_VERSION, DEFAULT_WX_CLIENT_VERSION, DEFAULT_TIME_ZONE, normalizeTimeZone, resolveClientVersionUpdatedAt } = require('../../config/config');

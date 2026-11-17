@@ -195,7 +195,10 @@ function selectTab(key: string) {
   font: inherit;
   font-size: 13px;
   cursor: pointer;
-  transition: color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+  transition:
+    color 0.16s ease,
+    background-color 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
 .ranch-nav__section:hover:not(:disabled) {
@@ -204,7 +207,9 @@ function selectTab(key: string) {
 
 .ranch-nav__section.is-active {
   background: var(--ui-surface);
-  box-shadow: 0 1px 2px rgba(38, 74, 52, 0.12), inset 0 0 0 1px color-mix(in srgb, var(--ui-primary) 22%, transparent);
+  box-shadow:
+    0 1px 2px rgba(38, 74, 52, 0.12),
+    inset 0 0 0 1px color-mix(in srgb, var(--ui-primary) 22%, transparent);
   color: var(--ui-primary);
   font-weight: var(--fw-600);
 }
@@ -243,7 +248,9 @@ function selectTab(key: string) {
   font: inherit;
   font-size: 13px;
   cursor: pointer;
-  transition: color 0.16s ease, background-color 0.16s ease;
+  transition:
+    color 0.16s ease,
+    background-color 0.16s ease;
 }
 
 .ranch-nav__tab:hover:not(:disabled) {

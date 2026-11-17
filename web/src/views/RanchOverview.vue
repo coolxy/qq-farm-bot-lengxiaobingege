@@ -503,7 +503,10 @@ function openAnimals() {
   color: inherit;
   font: inherit;
   cursor: pointer;
-  transition: border-color 0.16s ease, transform 0.16s ease, background-color 0.16s ease;
+  transition:
+    border-color 0.16s ease,
+    transform 0.16s ease,
+    background-color 0.16s ease;
 }
 
 .ov-animal:hover {
@@ -680,7 +683,9 @@ function openAnimals() {
   font-variant-numeric: tabular-nums;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.16s ease, background-color 0.16s ease;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease;
 }
 
 .ranch-todo:not(:disabled):hover {

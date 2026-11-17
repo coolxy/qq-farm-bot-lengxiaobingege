@@ -1,4 +1,3 @@
-export {};
 /**
  * 节令日历自动化
  * - 节令开始（开放窗口内）才执行操作；窗口外不打扰、不写日志
@@ -7,6 +6,7 @@ export {};
  */
 
 import type { AutoResult } from './shared';
+export {};
 const { isAutomationOn } = require('../../models/store');
 const { getServerTimeSec, toNum, log, sleep } = require('../../utils/utils');
 const { getSolarCalendar, operateSolarCalendar } = require('../solar-calendar');

@@ -1,14 +1,14 @@
+import type {
+    ConnectionContext,
+    PendingRequest,
+    QueuedRequest,
+} from './types';
+
 export {};
 const { EventEmitter } = require('node:events');
 const { performance } = require('node:perf_hooks');
 const schedulerMod = require('../../services/scheduler');
 const gatewayTokenMod = require('../gateway-token');
-
-import type {
-    ConnectionContext,
-    QueuedRequest,
-    PendingRequest,
-} from './types';
 
 /**
  * 网络层的全部模块级可变状态。
@@ -59,4 +59,4 @@ function isCurrentConnection(context: ConnectionContext): boolean {
     return S.connection === context && S.ws === context.socket && !context.finalized;
 }
 
-export { S, isCurrentConnection };
+export { isCurrentConnection, S };

@@ -22,7 +22,7 @@ let cachedKey: Buffer | null = null;
 
 function parseKey(raw: string): Buffer | null {
     const text = String(raw || '').trim();
-    if (!/^[0-9a-fA-F]{64}$/.test(text)) return null;
+    if (!/^[0-9a-f]{64}$/i.test(text)) return null;
     return Buffer.from(text, 'hex');
 }
 

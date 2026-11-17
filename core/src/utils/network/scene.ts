@@ -84,4 +84,4 @@ function resetSceneState(): void {
     shareInfoState.clear();
 }
 
-export { loginGameScene, invalidateGameScene, applyShareInfos, getDailyShareInfo, resetSceneState };
+export { applyShareInfos, getDailyShareInfo, invalidateGameScene, loginGameScene, resetSceneState };

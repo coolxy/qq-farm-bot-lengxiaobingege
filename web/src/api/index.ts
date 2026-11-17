@@ -15,6 +15,8 @@ export function normalizeApiErrorMessage(raw: unknown): string {
   if (!text)
     return ''
 
+  // 仅解析内部短日志行（code=xxx 后跟描述），输入长度有限，无回溯攻击面
+  // eslint-disable-next-line regexp/no-super-linear-backtracking
   const codeMatch = text.match(/\bcode=\d+\b\s*(.*)$/)
   const codeIndex = codeMatch?.index ?? -1
   if (codeMatch?.[1] && codeIndex >= 0 && text.slice(0, codeIndex).includes('.'))

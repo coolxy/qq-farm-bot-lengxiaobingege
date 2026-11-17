@@ -227,7 +227,10 @@ function target(animal: any) {
   font: inherit;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
-  transition: border-color 0.16s ease, color 0.16s ease, background-color 0.16s ease;
+  transition:
+    border-color 0.16s ease,
+    color 0.16s ease,
+    background-color 0.16s ease;
 }
 
 .ranch-state:not(:disabled):hover {
