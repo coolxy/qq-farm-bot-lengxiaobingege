@@ -323,9 +323,7 @@ message CollectWeatherRequest {
     WeatherCollectOperateParams weather_collect_operate = 107;
 }
 
-// Compatibility aliases used by the upstream activity-center implementation.
-// The verified wire selectors remain field 107 for friend collection and
-// field 140 for weather research.
+// 活动中心兼容别名。实测有效的 wire 选择器：好友领取为字段 107，天气调研为字段 140。
 message WeatherResearchOperateRequest {
     int64 activity_id = 1;
     int64 operate_type = 2;

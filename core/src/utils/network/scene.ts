@@ -57,7 +57,7 @@ function applyShareInfos(infos: Record<string, any>): void {
     for (const [key, info] of Object.entries(infos || {})) {
         if (!info) continue;
         const id = /^\d+$/.test(key) ? key : protobufUtil.longFromHash(key, false).toString();
-        // 本地 userpb 的 ShareInfo 是 {status, count}，上游是 {share_count, is_claimed}，
+        // ShareInfo 存在两种字段命名（{status, count} 与 {share_count, is_claimed}），
         // 两种解码结果都接受，避免因字段名差异把「已领取」判反。
         const shareCount = info.share_count !== undefined ? info.share_count : info.status;
         const claimed = info.is_claimed !== undefined ? info.is_claimed : info.count;

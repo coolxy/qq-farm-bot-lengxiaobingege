@@ -374,7 +374,7 @@ onMounted(async () => {
                 牧场
               </h4>
               <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                收获、催产、补草、喂养、清理与好友互动（移植自上游 ranch 模块）
+                收获、催产、补草、喂养、清理与好友互动
               </p>
             </div>
           </div>

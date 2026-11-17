@@ -348,7 +348,7 @@ function mountFarmRoutes(app: Application, ctx: AdminContext): void {
         }
     });
 
-    // ============ 牧场（services/ranch，移植自上游 liyangpengs/qq-farm-bot） ============
+    // ============ 牧场（services/ranch） ============
     app.get('/api/ranch/automation-options', (_req: Request, res: Response) => {
         res.json({ ok: true, data: require('../../config/ranch-automation').RANCH_ANIMAL_OPTIONS });
     });

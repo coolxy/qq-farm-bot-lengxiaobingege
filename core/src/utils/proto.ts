@@ -91,9 +91,8 @@ async function loadProto(): Promise<void> {
     types.PlayerSceneLoginReply = root.lookupType('gamepb.globalscenepb.PlayerSceneLoginReply');
     types.GlobalSceneUnlockNotify = root.lookupType('gamepb.globalscenepb.GlobalSceneUnlockNotify');
 
-    // 牧场 v2（移植自上游 liyangpengs/qq-farm-bot 的 ranch 模块）：
-    // 全部消息都在独立包 gamepb.ranchv2 中，统一以 Ranch<名字> 注册。
-    // 例如 gamepb.ranchv2.HarvestRanchRequest -> types.RanchHarvestRanchRequest。
+    // 牧场 v2：全部消息都在独立包 gamepb.ranchv2 中，统一以 Ranch<名字> 注册，
+    // 与农场既有 proto 完全隔离。例如 gamepb.ranchv2.HarvestRanchRequest -> types.RanchHarvestRanchRequest。
     const ranchV2 = root.lookup('gamepb.ranchv2') as protobuf.Namespace;
     for (const definition of ranchV2.nestedArray) {
         if (definition instanceof protobufModule.Type) {
@@ -254,7 +253,7 @@ async function loadProto(): Promise<void> {
     types.BatchClaimTaskRewardReply = root.lookupType('gamepb.taskpb.BatchClaimTaskRewardReply');
     types.ClaimDailyRewardRequest = root.lookupType('gamepb.taskpb.ClaimDailyRewardRequest');
     types.ClaimDailyRewardReply = root.lookupType('gamepb.taskpb.ClaimDailyRewardReply');
-    // 牧场任务进度上报（移植自上游 ranch 模块，此前未注册）
+    // 牧场任务进度上报
     types.ClientReportProgressRequest = root.lookupType('gamepb.taskpb.ClientReportProgressRequest');
     types.ClientReportProgressReply = root.lookupType('gamepb.taskpb.ClientReportProgressReply');
 

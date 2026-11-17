@@ -74,7 +74,7 @@ function forCurrentAccount() {
             throw cause;
         }
     }
-    // 调用方已持有上游自动操作锁，整个报价与写入共用同一串行任务。
+    // 调用方已持有自动操作锁，整个报价与写入共用同一串行任务。
     return { withLock: <T>(run: () => Promise<T>) => run(), spend, reserved, pending, acknowledge };
 }
 

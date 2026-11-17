@@ -75,7 +75,7 @@ const DEFAULT_ACCOUNT_CONFIG: AccountConfig = {
         fertilizer_smart_seconds: 300,
         skip_own_weed_bug: true,
         show_manual_fertilizer: true,
-        // 牧场（上游 ranch 模块）：默认只开「收产物」，其余按需在设置里打开。
+        // 牧场：默认只开「收产物」，其余按需在设置里打开。
         ranch_harvest: true,
         ranch_produce: true,
         ranch_buy: false,

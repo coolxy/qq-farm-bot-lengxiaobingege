@@ -45,7 +45,7 @@ export interface AutomationConfig {
   fertilizer_smart_seconds: number;
   skip_own_weed_bug: boolean;
   show_manual_fertilizer: boolean;
-  // 牧场自动化（services/ranch，移植自上游 liyangpengs/qq-farm-bot）
+  // 牧场自动化（services/ranch）
   ranch_harvest: boolean;
   ranch_produce: boolean;
   ranch_buy: boolean;

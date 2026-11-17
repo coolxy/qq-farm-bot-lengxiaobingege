@@ -32,8 +32,8 @@ const growthDone = computed(() => growthTasks.value.filter(task => task.claimed)
  * 牧场「我的任务」：任务进度来自牧场自己的 TaskInfo（task_type 4/5），
  * 分享礼包状态来自牧场快照 dailyShare；邮箱/会员/月卡与农场共用。
  *
- * 说明：上游这里还会读取 /api/daily-gifts 返回的 ranch.gifts（服务端汇总的牧场每日状态），
- * 本地 daily-gifts 接口目前只汇总农场侧，因此牧场两项自己算，其余沿用共享礼包。
+ * 说明：/api/daily-gifts 返回的 ranch.gifts（服务端汇总的牧场每日状态）暂未接入，
+ * 该接口目前只汇总农场侧，因此牧场两项自己算，其余沿用共享礼包。
  */
 const overview = computed(() => {
   const shared = (key: string) => dailyGifts.value?.gifts?.find((gift: any) => gift.key === key)

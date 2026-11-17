@@ -146,7 +146,7 @@ const seedToPlant = new Map<number, PlantItem>();
 const fruitToPlant = new Map<number, PlantItem>();
 let itemInfoConfig: ItemInfo[] | null = null;
 const itemInfoMap = new Map<number, ItemInfo>();
-// 商店商品配置（牧场补栏/升级要用商品的解锁条件与售价，移植自上游 ranch 模块）。
+// 商店商品配置（牧场补栏/升级要用商品的解锁条件与售价）。
 // 与其它配置一致走 runtime-paths 读取，避免 dist 目录下找不到 json。
 const shopGoodsMap = new Map<number, any>();
 const seedItemMap = new Map<number, ItemInfo>();

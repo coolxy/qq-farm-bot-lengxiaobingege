@@ -9,7 +9,7 @@ export {};
  *
  * 不做：牧场人格测试 / 分享（主观操作且涉及社交分享，交由用户手动）。
  *
- * 安全性：所有领取都先读状态、只领 status=2（可领取）的项；上游 muge-activity 的
+ * 安全性：所有领取都先读状态、只领 status=2（可领取）的项；muge-activity 的
  * perform 有严格回包确认 + 串行的 mutationTail 防重复提交；这里再逐类 sleep 串行，
  * 单步失败通过 safeStep 隔离，不影响后续步骤。
  */

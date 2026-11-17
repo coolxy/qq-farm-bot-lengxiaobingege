@@ -1,5 +1,5 @@
 > **归档文档（2026-11-16）：旧版 `services/pasture` 及其 `/api/pasture` 接口、`animalpb.proto`/`homesteadpb.proto`
-> 已随隔离审计全部删除，牧场现统一使用上游 ranch 模块（见 [`docs/ranch.md`](./ranch.md)）。**
+> 已随隔离审计全部删除，牧场现统一使用 ranch 模块（见 [`docs/ranch.md`](./ranch.md)）。**
 > 本文档仅作为协议勘误过程的历史记录保留，文中提到的源码路径均已不存在，请勿据此改代码。
 
 # 牧场协议实测记录（2026-11-16）

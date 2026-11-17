@@ -1,12 +1,12 @@
 # 牧场优化方案
 
 > 状态：**A / B / C 三批均已实施**（2026-11-16），实施记录见文末第七节
-> 基线提交：`bb9b6f5`（牧场整体移植上游 liyangpengs/qq-farm-bot）
+> 基线提交：`bb9b6f5`（牧场模块成型）
 > 范围：只涉及 `core/src/services/ranch/**`、`web/src/components/ranch/**`、`web/src/views/RanchOverview.vue`、`web/src/components/RunLogCard.vue`，不触碰 proto 与游戏协议。
 
 ## 一、结论
 
-功能已对齐上游，剩下的是**体感与效率**问题，共 9 项。按风险分三批：
+功能已稳定，剩下的是**体感与效率**问题，共 9 项。按风险分三批：
 
 | 批次 | 内容 | 后端改动 | 风险 | 建议时机 |
 | --- | --- | --- | --- | --- |

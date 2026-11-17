@@ -42,7 +42,7 @@ const emit = defineEmits<{
 
 const land = computed(() => props.land)
 
-// 上游资源已统一按变异 ID 命名；仍保留加载失败回退，兼容尚无 PNG 的变异。
+// 资源已统一按变异 ID 命名；仍保留加载失败回退，兼容尚无 PNG 的变异。
 const failedMutantIcons = ref(new Set<string>())
 
 const mutantEffects = computed(() => {

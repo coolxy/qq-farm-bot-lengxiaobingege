@@ -4,10 +4,10 @@ package gamepb.ranchv2;
 // 牧场（大农场，global_scene_id=2）协议的独立命名空间。
 //
 // 为什么单独建包：本地 core/src/proto/animalpb.proto 与 homesteadpb.proto 里的
-// HarvestRanch / FeedAnimal / GetRanchDetail 等消息是按我们自己抓包手写的字段编号，
-// 与上游（liyangpengs/qq-farm-bot）从官方定义整理出的版本字段语义不同。
-// 牧场模块整体移植自上游，若复用同名消息会被本地定义覆盖，导致解码错位。
-// 因此这里把上游三份 proto（animalpb / homesteadpb / ranchpb）合并为一个
+// HarvestRanch / FeedAnimal / GetRanchDetail 等消息是按本地抓包手写的字段编号，
+// 与按官方定义整理的牧场版本字段语义不同。
+// 若复用同名消息会被本地定义覆盖，导致解码错位。
+// 因此这里把牧场三份协议（animalpb / homesteadpb / ranchpb）合并为一个
 // 自包含的包，加载后在 proto.ts 里以 Ranch<消息名> 注册，供 services/ranch 使用。
 //
 // 命名替换：corepb.Item -> Item, corepb.ItemEntry -> ItemEntry,
@@ -918,8 +918,8 @@ message ClaimAllRewardsV2Reply {
     repeated Item next_level_rewards = 4;
 }
 
-// ==================== 补充：上游从其它包 import 的类型（此处自包含定义） ====================
-// userpb.ShareInfo：分享次数与领取状态（上游 userpb 版本，与本地 userpb 同名消息字段不同）
+// ==================== 补充：从其它包 import 的类型（此处自包含定义） ====================
+// userpb.ShareInfo：分享次数与领取状态（牧场版本字段，与本地 userpb 同名消息字段不同）
 message ShareInfo {
     int64 share_count = 1;
     bool is_claimed = 2;

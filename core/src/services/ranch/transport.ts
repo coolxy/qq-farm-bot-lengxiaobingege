@@ -168,12 +168,12 @@ function isSceneLocked(err: any): boolean {
 /**
  * 在牧场场景内执行一组操作。
  *
- * 上游实现是「先切到场景 2，再发写请求」。实测本账号 PlayerSceneLogin(2) 会回
+ * 标准做法是「先切到场景 2，再发写请求」。实测部分账号 PlayerSceneLogin(2) 会回
  * 1045002 该场景还未解锁，但 AllCells / GetRanchDetail / GetBag(global_scene_id=2)
  * 在场景 1 里都能正常返回牧场数据，所以这里做了降级：
  *   1) 场景 2 能进 → 切进去，用回包里的 homestead_cells；
  *   2) 场景 2 未解锁 → 不切场景，直接用 AllCells 读当前场景的牧场格子。
- * 写请求的字段与上游完全一致，是否被接受由服务端判定。
+ * 写请求按牧场 v2 协议字段构造，是否被接受由服务端判定。
  */
 function inScene(run: (cells: any) => Promise<any>, options: { fresh?: boolean } = {}): Promise<any> {
     return runExclusiveAutomationTask('ranch.scene', async () => {

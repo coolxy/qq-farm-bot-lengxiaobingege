@@ -226,7 +226,7 @@ async function runFriendTick(auto: any): Promise<void> {
 }
 
 // ============ 牧场统一任务（services/ranch：收获/催产/喂养/补草/清灾害/好友互动/每日任务） ============
-// 说明：牧场实现已整体换成上游 liyangpengs/qq-farm-bot 的 ranch 模块。
+// 说明：牧场由 services/ranch 模块统一实现。
 // 该模块内部的自动化会自己判断每个动作的开关与到期时间，这里只负责按间隔把它唤醒；
 // 它的写操作全部包裹在 transport.inScene(2) 里（切到牧场场景再发），这是之前牧场
 // 收获/喂养一直失败的根本原因。
