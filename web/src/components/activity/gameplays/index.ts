@@ -8,11 +8,17 @@ const gameplayModules: Record<ActivityGameplayKey, ActivityGameplayModule> = {
   milk: { key: 'milk', defaultTab: 'milk', tabs: ['milk'] },
   happy: { key: 'happy', defaultTab: 'happy', tabs: ['happy'] },
   stellar: stellarGameplay,
+  // 牧歌初启（牧场专属活动）：详情页由 MugePage.vue 承载，这里补一个模块让类型与推断闭环。
+  muge: { key: 'muge', defaultTab: 'muge', tabs: ['muge'] },
 }
 
 function inferGameplayKey(activity: ActivityDirectoryItemDto): ActivityGameplayKey | null {
   if (activity.detailTarget === 'happy')
     return activity.detailTarget
+  // 牧歌初启：详情入口为 muge，活动 id 以 20261117 开头；须在 stellar 兜底前命中。
+  if (activity.detailTarget === 'muge' || activity.gameplayKey === 'muge'
+    || activity.activityIds.some(id => id.startsWith('20261117')))
+    return 'muge'
   if (activity.gameplayKey)
     return activity.gameplayKey
   if (activity.detailTarget === 'pet' || activity.activityIds.some(id => ['2026090100', '2026090101', '2026090102', '2026090103'].includes(id)))

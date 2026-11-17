@@ -28,7 +28,10 @@ export const RANCH_AUTOMATION_DEFAULTS = {
 };
 
 export type RanchAutomationConfig = typeof RANCH_AUTOMATION_DEFAULTS;
-export const RANCH_SWITCH_KEYS = Object.keys(RANCH_AUTOMATION_DEFAULTS).filter(key => typeof RANCH_AUTOMATION_DEFAULTS[key as keyof RanchAutomationConfig] === 'boolean');
+// ranch_dry_run 是执行模式修饰位（只报价不写），不是「启用自动化」开关；
+// 若算进开关，关闭全部真实动作、只留演练时空转唤醒会一直发生，故在此剔除。
+export const RANCH_SWITCH_KEYS = Object.keys(RANCH_AUTOMATION_DEFAULTS)
+    .filter(key => key !== 'ranch_dry_run' && typeof RANCH_AUTOMATION_DEFAULTS[key as keyof RanchAutomationConfig] === 'boolean');
 export const RANCH_ANIMAL_OPTIONS = animals.filter(animal => animal.enable_flag).map(animal => ({ value: animal.id, label: animal.name, kind: animal.husbandry_type }));
 
 export function normalizeRanchSetting(key: string, value: unknown): boolean | number | string {

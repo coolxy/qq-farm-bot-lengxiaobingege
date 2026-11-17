@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { computed, defineAsyncComponent } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { provideRanchActions, useRanchUnmountReset } from '@/components/ranch/ranch-shared'
 import RanchQuoteModal from '@/components/ranch/RanchQuoteModal.vue'
@@ -56,6 +56,25 @@ const SECTION_NAV: Array<{ key: Section, label: string, icon: string, name: stri
 
 const route = useRoute()
 const router = useRouter()
+
+// 牧场自带吸顶分区导航，而面板内工具栏也用 .panel-sticky 锚定 top:0、z-index:6，
+// 滚动时会盖住分区导航。这里测量导航实际高度写入 --sticky-top，让次级工具栏吸附在导航下方。
+const navRef = ref<HTMLElement | null>(null)
+const pageRef = ref<HTMLElement | null>(null)
+let navObserver: ResizeObserver | undefined
+function syncStickyTop() {
+  const height = Math.ceil(navRef.value?.getBoundingClientRect().height || 0)
+  pageRef.value?.style.setProperty('--sticky-top', `${height}px`)
+}
+onMounted(() => {
+  syncStickyTop()
+  if (navRef.value && typeof ResizeObserver !== 'undefined') {
+    navObserver = new ResizeObserver(syncStickyTop)
+    navObserver.observe(navRef.value)
+  }
+})
+onBeforeUnmount(() => navObserver?.disconnect())
+
 const { currentAccountId } = storeToRefs(useAccountStore())
 const { pending } = provideRanchActions()
 const { busy } = storeToRefs(useRanchStore())
@@ -81,9 +100,9 @@ function selectTab(key: string) {
 </script>
 
 <template>
-  <div class="page-stack ranch-page">
+  <div ref="pageRef" class="page-stack ranch-page">
     <!-- 牧场主导航：分区在上、子页签在下，滚动时整体吸顶 -->
-    <div class="ranch-nav">
+    <div ref="navRef" class="ranch-nav">
       <nav class="ranch-nav__sections" aria-label="牧场分区">
         <button
           v-for="item in SECTION_NAV"
@@ -136,7 +155,7 @@ function selectTab(key: string) {
 .ranch-nav {
   position: sticky;
   top: 0;
-  z-index: 6;
+  z-index: 7;
   display: flex;
   flex-wrap: wrap;
   align-items: center;

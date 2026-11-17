@@ -2,7 +2,7 @@
 import { NButton } from 'naive-ui/es/button'
 import { storeToRefs } from 'pinia'
 import { computed, ref } from 'vue'
-import { BUCKETS, formatCount, formatDuration, formatHours, RANCH_IMAGE, useRanchActions, useRanchClock, useRanchLoader } from '@/components/ranch/ranch-shared'
+import { BUCKETS, formatCount, formatDuration, formatHours, RANCH_IMAGE, RANCH_TODO_TONES, useRanchActions, useRanchClock, useRanchLoader } from '@/components/ranch/ranch-shared'
 import RanchAnimalCard from '@/components/ranch/RanchAnimalCard.vue'
 import RanchGate from '@/components/ranch/RanchGate.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -43,10 +43,10 @@ const canProduce = computed(() => animals.value.some(({ animal }) => animal.canP
 const canHarvest = computed(() => animals.value.some(({ animal }) => animal.canHarvest) || shelves.value.length > 0)
 
 const summary = computed(() => [
-  { key: 'harvest' as const, label: '可收获', icon: 'i-carbon-wheat text-amber-600 dark:text-amber-400', value: animals.value.filter(({ animal }) => animal.canHarvest).length },
-  { key: 'produce' as const, label: '可生产', icon: 'i-carbon-circle-dash text-green-600 dark:text-green-400', value: animals.value.filter(({ animal }) => animal.canProduce).length },
-  { key: 'blocked' as const, label: '缺草', icon: 'i-carbon-warning-alt text-amber-600 dark:text-amber-400', value: animals.value.filter(({ animal }) => animal.grassBlocked).length },
-  { key: 'clean' as const, label: '待清理', icon: 'i-carbon-clean text-violet-500 dark:text-violet-300', value: hazards.value },
+  { key: 'harvest' as const, label: '可收获', icon: RANCH_TODO_TONES.harvest, value: animals.value.filter(({ animal }) => animal.canHarvest).length },
+  { key: 'produce' as const, label: '可生产', icon: RANCH_TODO_TONES.produce, value: animals.value.filter(({ animal }) => animal.canProduce).length },
+  { key: 'blocked' as const, label: '缺草', icon: RANCH_TODO_TONES.blocked, value: animals.value.filter(({ animal }) => animal.grassBlocked).length },
+  { key: 'clean' as const, label: '待清理', icon: RANCH_TODO_TONES.clean, value: hazards.value },
 ])
 const stock = computed(() => [
   { key: 'grass', label: '牧草', image: RANCH_IMAGE(7001), value: formatCount(state.value?.grass ?? 0) },

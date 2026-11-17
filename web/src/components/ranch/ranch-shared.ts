@@ -181,6 +181,14 @@ export function formatCount(value: unknown) {
   }
 }
 
+/** 待处理状态的图标与色阶：概览与动物页共用，避免切页签时同一状态色阶跳变。 */
+export const RANCH_TODO_TONES = {
+  harvest: 'i-carbon-wheat text-amber-600 dark:text-amber-400',
+  produce: 'i-carbon-circle-dash text-green-600 dark:text-green-400',
+  blocked: 'i-carbon-warning-alt text-amber-600 dark:text-amber-400',
+  clean: 'i-carbon-clean text-violet-500 dark:text-violet-300',
+} as const
+
 /** 资产数额沿用农场概览的缩写口径（万/亿/兆），与农场资产单位保持一致。 */
 export function formatAssetAmount(value: unknown) {
   const n = Math.trunc(Number(value) || 0)

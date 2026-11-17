@@ -41,7 +41,9 @@ function answersDto(answers: Record<string, any>): Record<string, number> {
 }
 
 async function getMugeActivity() {
-    const body = types.ActivityListRequest.encode({ game_scene_id: 1 }).finish();
+    // ActivityListRequest 是空消息（见 activitypb.proto），ActivityList 为场景无关的全站流；
+    // 此前写入的 game_scene_id 会被 protobufjs 静默丢弃，移除以免误以为做了场景隔离。
+    const body = types.ActivityListRequest.encode({}).finish();
     const response = await sendMsgAsync('gamepb.activitypb.ActivityService', 'List', body);
     const group = types.MugeListReply.decode(response.body).groups.find((group: any) => String(group.head?.id) === GROUP_ID);
     if (String(group?.head?.id) !== GROUP_ID) fail('MUGE_UNAVAILABLE', '牧歌初启活动数据暂不可用');

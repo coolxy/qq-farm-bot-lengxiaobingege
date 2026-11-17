@@ -145,8 +145,8 @@ async function reloadList() {
           </div>
 
           <div v-if="selected === friend.gid" class="friend-shelves">
-            <div v-if="loading && !detail" class="flex justify-center py-6">
-              <span class="i-svg-spinners-90-ring-with-bg text-2xl text-green-600" />
+            <div v-if="loading && !detail" class="friends__loading friends__loading--inline">
+              <span class="i-svg-spinners-90-ring-with-bg" />
             </div>
             <template v-else-if="detail">
               <p v-if="detail.notice" class="friend-shelves__notice" role="alert">
@@ -288,6 +288,12 @@ async function reloadList() {
   place-items: center;
   color: var(--ui-primary);
   font-size: 28px;
+}
+
+/* 好友详情内联加载：沿用统一 spinner 尺寸/主题色，但不占整块列表高度。 */
+.friends__loading--inline {
+  min-height: 0;
+  padding-block: 24px;
 }
 
 .friends__list {

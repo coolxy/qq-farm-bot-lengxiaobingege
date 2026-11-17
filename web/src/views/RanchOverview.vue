@@ -3,7 +3,7 @@ import { NButton } from 'naive-ui/es/button'
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { BUCKETS, formatAssetAmount, formatCount, formatDuration, formatHours, RANCH_IMAGE, useRanchActions, useRanchClock, useRanchLoader, useRanchUnmountReset } from '@/components/ranch/ranch-shared'
+import { BUCKETS, formatAssetAmount, formatCount, formatDuration, formatHours, RANCH_IMAGE, RANCH_TODO_TONES, useRanchActions, useRanchClock, useRanchLoader, useRanchUnmountReset } from '@/components/ranch/ranch-shared'
 import RanchGate from '@/components/ranch/RanchGate.vue'
 import RunLogCard from '@/components/RunLogCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -86,14 +86,14 @@ const todo = computed(() => [
   {
     key: 'harvest',
     label: '可收获',
-    icon: 'i-carbon-wheat text-amber-500',
+    icon: RANCH_TODO_TONES.harvest,
     value: animals.value.filter(({ animal }) => animal.canHarvest).length + shelvesReady.value,
     go: () => request('harvest', { all: true }),
   },
   {
     key: 'produce',
     label: '可生产',
-    icon: 'i-carbon-circle-dash text-green-500',
+    icon: RANCH_TODO_TONES.produce,
     value: animals.value.filter(({ animal }) => animal.canProduce).length,
     go: () => request('produce', { all: true }),
   },
@@ -108,7 +108,7 @@ const todo = computed(() => [
   {
     key: 'clean',
     label: '待清理',
-    icon: 'i-carbon-clean text-violet-400',
+    icon: RANCH_TODO_TONES.clean,
     value: hazards.value,
     go: () => request('clean'),
   },
@@ -808,7 +808,19 @@ function openAnimals() {
   flex: none;
 }
 
+/* RunLogCard 在 >=768px 给外层设 min-height:480px 供绝对定位卡片铺满，
+   而牧场把卡片压到 220/240px。外层高度须与卡片一致，否则底部空一大截。 */
+@media (min-width: 768px) {
+  .ov-log :deep(.dash-logs) {
+    min-height: 240px;
+  }
+}
+
 @media (min-width: 1180px) {
+  .ov-log :deep(.dash-logs) {
+    min-height: 220px;
+  }
+
   .ov-log :deep(.dash-logs__card) {
     height: 220px;
   }
