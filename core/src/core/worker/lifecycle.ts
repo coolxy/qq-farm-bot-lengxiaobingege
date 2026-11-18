@@ -35,6 +35,10 @@ function detachRuntimeListeners(): void {
         networkEvents.off('ranchMarketStockReady', st.onRanchMarketStockReady);
         st.onRanchMarketStockReady = null;
     }
+    if (st.onRanchMarketVisitChanged) {
+        networkEvents.off('ranchMarketVisitChanged', st.onRanchMarketVisitChanged);
+        st.onRanchMarketVisitChanged = null;
+    }
     if (st.onDogSkillGiftPending) {
         networkEvents.off('dogSkillGiftPending', st.onDogSkillGiftPending);
         st.onDogSkillGiftPending = null;

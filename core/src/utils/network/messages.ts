@@ -149,6 +149,19 @@ function handleNotify(msg: any): void {
             return;
         }
 
+        // 集市到访场次变化：排队一次兑换检查（本地协议可能不含该消息，缺失时安全跳过）
+        if (type.includes('RotationShopNotify')) {
+            try {
+                const NotifyType = types.RotationShopNotify || types.RanchRotationShopNotify;
+                if (NotifyType) {
+                    const shops = NotifyType.decode(eventBody).shops || [];
+                    const rotation = shops.find((shop: any) => utilsMod.toNum(shop.shop_id) === 7);
+                    if (rotation) S.events.emit('ranchMarketVisitChanged', rotation);
+                }
+            } catch (err) { ignoreErrorMod.ignoreError('core/src/utils/network.ts:rotationShopNotify', err); }
+            return;
+        }
+
         // 物品变化通知
         if (type.includes('ItemNotify')) {
             try {

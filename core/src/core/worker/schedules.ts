@@ -299,8 +299,14 @@ async function runUnifiedTick(): Promise<void> {
 /** 集市货币到账时唤醒牧场兑换例程，无需等待六小时兜底检查。 */
 function wakeRanchMarketExchange(): void {
     if (!st.loginReady || getAutomation().ranch_market_organic !== true) return;
-    if (typeof ranchAutomation.resetMarketSchedule === 'function') ranchAutomation.resetMarketSchedule();
+    if (typeof ranchAutomation.requestMarketCheck === 'function') ranchAutomation.requestMarketCheck();
     scheduleUnifiedNextTick();
+}
+
+/** 集市到访场次变化时排队一次兑换检查。 */
+function onRanchMarketVisitChanged(rotation: any): void {
+    if (!st.loginReady || getAutomation().ranch_market_organic !== true) return;
+    if (typeof ranchAutomation.noteMarketVisit === 'function' && ranchAutomation.noteMarketVisit(rotation)) scheduleUnifiedNextTick();
 }
 
 function scheduleUnifiedNextTick(): void {
@@ -382,7 +388,7 @@ module.exports = {
     normalizeIntervalRangeSec, applyIntervalsToRuntime, randomIntervalMs,
     resetUnifiedSchedule, describeGatewayStall, nextBusinessTickDeferMs,
     runFarmTick, runFriendTick, runUnifiedTick, scheduleUnifiedNextTick,
-    wakeRanchMarketExchange,
+    wakeRanchMarketExchange, onRanchMarketVisitChanged,
     startUnifiedScheduler, stopUnifiedScheduler, stopMysteryShopTimer,
     runMysteryShopTick, startMysteryShopTimer,
 };

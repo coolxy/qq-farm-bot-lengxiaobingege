@@ -32,6 +32,7 @@ const st = {
     onSellGain: null as ((deltaGold: any) => void) | null,
     onFarmHarvested: null as (() => Promise<void>) | null,
     onRanchMarketStockReady: null as (() => void) | null,
+    onRanchMarketVisitChanged: null as ((rotation: any) => void) | null,
     onDogSkillGiftPending: null as ((count: any) => void) | null,
     harvestSellRunning: false,
     onWsError: null as ((payload: any) => void) | null,

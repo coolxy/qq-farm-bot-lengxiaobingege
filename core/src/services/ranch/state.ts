@@ -3,6 +3,7 @@ export {};
 const { rpc, inScene, isUnlocked, cacheGet, cacheSet, sceneStatus } = require('./transport');
 const { animalMap, mutationMap, cubMap, canMap, facilityMap, itemMap, taskMap, itemDto, quantity, levelInfo, error } = require('./model');
 const { getServerTimeSec } = require('../../utils/utils');
+const { types } = require('../../utils/proto');
 
 function bagItems(bag: any): any[] {
     return [...bag.physical_items, ...bag.virtual_items];
@@ -177,6 +178,12 @@ async function catalog(raw: any, shopId: number): Promise<any> {
     }) };
 }
 
+async function readMarketRotation(): Promise<any> {
+    const reply = await rpc('shopProfiles', { global_scene_id: 2 });
+    const profile = reply.shop_profiles.find((shop: any) => Number(shop.shop_id) === 7);
+    return profile?.rotation_state.length ? types.RanchRotationShopState.decode(profile.rotation_state) : null;
+}
+
 async function market(raw: any): Promise<any> {
     const reply = await rpc('market', { shop_id: 7 });
     const now = getServerTimeSec();
@@ -301,4 +308,4 @@ async function resourceBalances(keys: string[]): Promise<any[]> {
     }, { fresh: true });
 }
 
-module.exports = { getState, loadRaw, loadBag, mergeRanches, snapshot, balance, bagItems, inventory, taskList, catalog, market, canCatalog, resourceBalance, isRanchResource, resourceBalances, animalDto };
+module.exports = { getState, loadRaw, loadBag, mergeRanches, snapshot, balance, bagItems, inventory, taskList, catalog, market, readMarketRotation, canCatalog, resourceBalance, isRanchResource, resourceBalances, animalDto };

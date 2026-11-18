@@ -42,7 +42,7 @@ const { WX_FARM_APP_ID, WxLoginService, credentialsFromAccount } = require('../s
 
 const { st } = require('./worker/state');
 const { sendToMaster, onMasterMessage } = require('./worker/channel');
-const { runDailyRoutines, startUnifiedScheduler, startDailyRoutineTimer, startMysteryShopTimer, wakeRanchMarketExchange } = require('./worker/schedules');
+const { runDailyRoutines, startUnifiedScheduler, startDailyRoutineTimer, startMysteryShopTimer, wakeRanchMarketExchange, onRanchMarketVisitChanged } = require('./worker/schedules');
 const { applyRuntimeConfig } = require('./worker/runtime-config');
 const { attemptAutoLogin } = require('./worker/auto-login');
 const { detachRuntimeListeners, quiesceBot, stopBot, handleTerminalDisconnect, onKickout } = require('./worker/lifecycle');
@@ -230,6 +230,9 @@ async function startBot(config: any): Promise<void> {
         if (st.onRanchMarketStockReady) networkEvents.off('ranchMarketStockReady', st.onRanchMarketStockReady);
         st.onRanchMarketStockReady = wakeRanchMarketExchange;
         networkEvents.on('ranchMarketStockReady', st.onRanchMarketStockReady);
+        if (st.onRanchMarketVisitChanged) networkEvents.off('ranchMarketVisitChanged', st.onRanchMarketVisitChanged);
+        st.onRanchMarketVisitChanged = onRanchMarketVisitChanged;
+        networkEvents.on('ranchMarketVisitChanged', st.onRanchMarketVisitChanged);
 
         if (st.onDogSkillGiftPending) {
             networkEvents.off('dogSkillGiftPending', st.onDogSkillGiftPending);

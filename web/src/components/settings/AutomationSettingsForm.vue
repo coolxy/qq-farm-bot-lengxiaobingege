@@ -392,7 +392,7 @@ onMounted(async () => {
               />
             </div>
             <div class="col-span-full text-xs text-gray-500 dark:text-gray-400">
-              松果按 8 小时、4 小时、1 小时兑换，便便按 4 小时、1 小时兑换。每 6 小时检查，松果或便便到账后提前检查。
+              松果按 8 小时、4 小时、1 小时兑换，便便按 4 小时、1 小时兑换。到访或货币到账后排队，登录、重连和日常巡查时核对集市状态。
             </div>
             <div class="automation-setting-item">
               <NInputNumber v-model:value="settings.automation.ranch_check_minutes" :min="1" :max="60" :step="1" class="w-full">
