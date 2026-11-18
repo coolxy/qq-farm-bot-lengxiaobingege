@@ -3,7 +3,7 @@ import { NButton } from 'naive-ui/es/button'
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { BUCKETS, formatAssetAmount, formatCount, formatDuration, formatHours, RANCH_IMAGE, RANCH_TODO_TONES, useRanchActions, useRanchClock, useRanchLoader, useRanchUnmountReset } from '@/components/ranch/ranch-shared'
+import { BUCKETS, formatAssetAmount, formatCount, formatDuration, formatHours, RANCH_IMAGE, RANCH_TODO_TONES, sortFacilities, useRanchActions, useRanchClock, useRanchLoader, useRanchUnmountReset } from '@/components/ranch/ranch-shared'
 import RanchGate from '@/components/ranch/RanchGate.vue'
 import RunLogCard from '@/components/RunLogCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -22,7 +22,7 @@ const { request, disabled: actionsDisabled } = useRanchActions()
 const router = useRouter()
 useRanchUnmountReset()
 
-const facilities = computed<any[]>(() => state.value?.facilities || [])
+const facilities = computed<any[]>(() => sortFacilities(state.value?.facilities || []))
 const pens = computed(() => facilities.value.filter(f => f.ranch))
 const animals = computed(() => pens.value.flatMap(f => (f.ranch.animals || []).map((animal: any) => ({ animal, pen: f.name }))))
 const capacity = computed(() => pens.value.reduce((sum, f) => sum + (Number(f.ranch.capacity) || 0), 0))

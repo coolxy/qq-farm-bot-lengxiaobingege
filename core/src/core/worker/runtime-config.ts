@@ -59,7 +59,7 @@ function applyRuntimeConfig(snapshot: any, syncNow: boolean = false): number {
 
             // 牧场（ranch 模块）开关/策略/间隔变化时重置它的内部排期，避免沿用旧一轮的等待。
             const ranchChanged = Object.keys(nextAuto).some((key: string) => key.startsWith('ranch_')
-                && (nextAuto as any)[key] !== (prevAuto as any)[key]);
+                && JSON.stringify((nextAuto as any)[key]) !== JSON.stringify((prevAuto as any)[key]));
             if (ranchChanged) {
                 try {
                     require('../../services/ranch/automation').resetSchedule();

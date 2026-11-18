@@ -71,6 +71,8 @@ export interface AutomationConfig {
   ranch_bag_fallback: 'level' | 'preferred';
   ranch_coop_animal: number;
   ranch_shed_animal: number;
+  ranch_coop_cub_priority: number[];
+  ranch_shed_cub_priority: number[];
 }
 
 export interface IntervalConfig {

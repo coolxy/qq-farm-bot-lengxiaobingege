@@ -99,6 +99,8 @@ const DEFAULT_ACCOUNT_CONFIG: AccountConfig = {
         ranch_bag_fallback: 'level',
         ranch_coop_animal: 0,
         ranch_shed_animal: 0,
+        ranch_coop_cub_priority: [],
+        ranch_shed_cub_priority: [],
     },
     plantingStrategy: 'max_exp',
     preferredSeedId: 0,
@@ -303,6 +305,11 @@ function cloneAccountConfig(base: Partial<AccountConfig> = DEFAULT_ACCOUNT_CONFI
     for (const key of Object.keys(automation) as Array<keyof AutomationConfig>) {
         if (key === 'fertilizer_land_types') {
             automation[key] = normalizeFertilizerLandTypes(srcAutomation[key], DEFAULT_FERTILIZER_LAND_TYPES);
+            continue;
+        }
+        if (key === 'ranch_coop_cub_priority' || key === 'ranch_shed_cub_priority') {
+            const priority = srcAutomation[key] ?? automation[key];
+            (automation as any)[key] = Array.isArray(priority) ? [...priority] : [];
             continue;
         }
         if (srcAutomation[key] !== undefined) (automation as any)[key] = (srcAutomation as any)[key];

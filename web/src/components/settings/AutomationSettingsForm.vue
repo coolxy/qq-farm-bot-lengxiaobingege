@@ -8,6 +8,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
+import RanchCubPriority from './RanchCubPriority.vue'
 
 export type AutomationSettingsFormModel = Pick<
   SettingsState,
@@ -24,11 +25,13 @@ export type AutomationSettingsFormModel = Pick<
   | 'autoAcceptHarvestStealSteal'
 >
 
-defineProps<{
+withDefaults(defineProps<{
+  accountId?: string
+  connected?: boolean
   saving: boolean
   fertilizerLandTypeOptions: Array<{ label: string, value: string }>
   fertilizerOptions: Array<{ label: string, value: string }>
-}>()
+}>(), { accountId: '', connected: false })
 
 const emit = defineEmits<{
   save: []
@@ -428,6 +431,13 @@ onMounted(async () => {
               />
             </template>
           </div>
+          <RanchCubPriority
+            v-if="settings.automation.ranch_strategy === 'bag_priority'"
+            v-model="settings.automation"
+            :account-id="accountId"
+            :connected="connected"
+            class="mt-4"
+          />
           <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
             牧场自动化会把收获/喂养等写操作切到牧场场景再执行；未解锁场景 2 的账号会自动降级为当前场景读取，无需额外设置。
           </p>
