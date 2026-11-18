@@ -7,7 +7,7 @@ export {};
  * 现在改为：仅允许显式白名单或与当前 Host 同源的来源，其余跨域请求直接 403。
  *
  * 白名单来源（合并去重）：
- *   - 内置本地开发地址（Vite 5173/5174、面板 3000/3007）
+ *   - 内置面板本地地址（3000 公网入口、3007 后端直连）
  *   - CONFIG.ALLOWED_ORIGINS（若配置）
  *   - 环境变量 CORS_ALLOWED_ORIGINS，逗号分隔，用于自定义域名
  */
@@ -15,10 +15,6 @@ const { URL } = require('node:url');
 const { CONFIG } = require('../../config/config');
 
 const DEFAULT_LOCAL_ORIGINS: string[] = [
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'http://127.0.0.1:5173',
-    'http://127.0.0.1:5174',
     'http://localhost:3000',
     'http://127.0.0.1:3000',
     'http://localhost:3007',

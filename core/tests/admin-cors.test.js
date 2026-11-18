@@ -27,11 +27,13 @@ function mockReq({ origin, host = '127.0.0.1:3000', method = 'GET' } = {}) {
     return { headers, method };
 }
 
-test('默认白名单包含本地开发地址，且不含通配符', () => {
+test('默认白名单包含面板本地地址，且不含通配符', () => {
     const list = getAllowedOrigins();
-    assert.ok(list.includes('http://localhost:5173'));
-    assert.ok(list.includes('http://127.0.0.1:5173'));
+    assert.ok(list.includes('http://localhost:3000'));
+    assert.ok(list.includes('http://127.0.0.1:3000'));
+    assert.ok(list.includes('http://localhost:3007'));
     assert.ok(!list.includes('*'));
+    assert.ok(!list.some(origin => origin.includes('5173') || origin.includes('5174')));
 });
 
 test('同源来源自动放行（无需配置白名单）', () => {
@@ -48,9 +50,9 @@ test('同源来源自动放行（无需配置白名单）', () => {
 
 test('白名单来源回显 ACAO 与 credentials，并设置 Vary: Origin', () => {
     const res = mockRes();
-    const ok = applyCors(mockReq({ origin: 'http://localhost:5173' }), res);
+    const ok = applyCors(mockReq({ origin: 'http://localhost:3000' }), res);
     assert.equal(ok, true);
-    assert.equal(res.headers['Access-Control-Allow-Origin'], 'http://localhost:5173');
+    assert.equal(res.headers['Access-Control-Allow-Origin'], 'http://localhost:3000');
     assert.equal(res.headers['Access-Control-Allow-Credentials'], 'true');
     assert.equal(res.headers.Vary, 'Origin');
 });

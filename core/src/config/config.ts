@@ -223,7 +223,9 @@ const CONFIG: RuntimeConfig = {
     farmCheckIntervalMax: 5000,
     friendCheckIntervalMin: 12000,
     friendCheckIntervalMax: 15000,
-    adminPort: Number(process.env.ADMIN_PORT || process.env.PORT || 3007),
+    // 与 client.ts 的防重复实例探测端口保持同一套逻辑：Number 后再 || 兜底，
+    // 这样非法 PORT（如 'abc' → NaN）也能回退到 3007，不会得到 NaN 端口。
+    adminPort: Number(process.env.ADMIN_PORT || process.env.PORT) || 3007,
     adminPassword: process.env.ADMIN_PASSWORD,
 };
 

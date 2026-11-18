@@ -206,10 +206,12 @@ if [[ -s "$LOG_FILE" ]]; then
     mv -f "$LOG_FILE" "${LOG_FILE}.prev"
 fi
 : > "$LOG_FILE"
+# 显式放行前台终端守卫：标准启动虽经 nohup setsid 脱离终端（stdin 非 TTY），
+# 这里再带一次标记，确保某些 setsid/stdin 行为异常的宿主环境也不会误伤正规实例。
 if command -v setsid >/dev/null 2>&1; then
-    nohup setsid node "$SCRIPT_DIR/core/client.js" >> "$LOG_FILE" 2>&1 &
+    nohup setsid env QQ_FARM_ALLOW_TTY=1 node "$SCRIPT_DIR/core/client.js" >> "$LOG_FILE" 2>&1 &
 else
-    nohup node "$SCRIPT_DIR/core/client.js" >> "$LOG_FILE" 2>&1 &
+    nohup env QQ_FARM_ALLOW_TTY=1 node "$SCRIPT_DIR/core/client.js" >> "$LOG_FILE" 2>&1 &
 fi
 
 app_pid="$!"
