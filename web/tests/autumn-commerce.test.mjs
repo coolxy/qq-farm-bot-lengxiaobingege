@@ -5,22 +5,22 @@ import test from 'node:test'
 const require = createRequire(import.meta.url)
 const { createPinia, disposePinia } = require('pinia')
 const ts = require('typescript')
-function store(t, name, api, account = 'a') {
+function store(t, api, account = 'a') {
   const pinia = createPinia()
   t.after(() => disposePinia(pinia))
   let current = account
   const previous = globalThis.localStorage
   globalThis.localStorage = { getItem: () => current }
   t.after(() => { globalThis.localStorage = previous })
-  const source = readFileSync(new URL(`../src/stores/${name}.ts`, import.meta.url), 'utf8')
+  const source = readFileSync(new URL('../src/stores/commerce.ts', import.meta.url), 'utf8')
   const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } })
   const module = { exports: {} }
   new Function('require', 'module', 'exports', outputText)(id => id === '@/api' ? { __esModule: true, default: api, getApiErrorMessage: value => value?.message || 'error' } : require(id), module, module.exports)
-  return { value: module.exports[name === 'commerce' ? 'useCommerceStore' : 'useActivityCenterStore'](pinia), select: id => current = id }
+  return { value: module.exports.useCommerceStore(pinia), select: id => current = id }
 }
 test('switching mall tabs or accounts clears stale catalog and ignores delayed replies', async (t) => {
   const requests = []
-  const { value, select } = store(t, 'commerce', { get: (_url, options) => new Promise(resolve => requests.push({ options, resolve })) })
+  const { value, select } = store(t, { get: (_url, options) => new Promise(resolve => requests.push({ options, resolve })) })
   const reply = (index, slot, marker) => requests[index].resolve({ data: { ok: true, data: { slotType: slot, currencies: [], goods: [], marker } } })
   const initial = value.fetchMall('a', 1); reply(0, 1, 'normal'); await initial
   const svip = value.fetchMall('a', 4)
@@ -36,7 +36,7 @@ test('switching mall tabs or accounts clears stale catalog and ignores delayed r
 
 test('switching between merchant and mall ignores delayed replies and clears inactive loading', async (t) => {
   const requests = []
-  const { value } = store(t, 'commerce', { get: url => new Promise(resolve => requests.push({ url, resolve })) })
+  const { value } = store(t, { get: url => new Promise(resolve => requests.push({ url, resolve })) })
   const merchant = value.fetchMystery('a')
   const mall = value.fetchMall('a', 1)
   assert.equal(value.mysteryLoading, false)
@@ -61,7 +61,7 @@ test('switching between merchant and mall ignores delayed replies and clears ina
 
 test('merchant clears previous account goods and invalidates pending loads on reset', async (t) => {
   const requests = []
-  const { value, select } = store(t, 'commerce', { get: () => new Promise(resolve => requests.push(resolve)) })
+  const { value, select } = store(t, { get: () => new Promise(resolve => requests.push(resolve)) })
   const initial = value.fetchMystery('a')
   requests[0]({ data: { ok: true, data: { active: true, npc: { id: 1 } } } })
   await initial
@@ -103,7 +103,7 @@ test('mall actions distinguish stock, entitlement and current currency balances'
 
 test('delayed diamond balance cannot leak across accounts or an account round trip', async (t) => {
   const requests = []
-  const { value, select } = store(t, 'commerce', { get: (url, options) => new Promise(resolve => requests.push({ url, options, resolve })) })
+  const { value, select } = store(t, { get: (url, options) => new Promise(resolve => requests.push({ url, options, resolve })) })
   const catalog = () => ({ slotType: 1, currencies: [{ id: 1004, count: 0, balanceKnown: false }], goods: [{ id: 1007, purchasable: true, price: { id: 1004, count: 5, balance: null } }] })
   const reply = (index, data) => requests[index].resolve({ data: { ok: true, data } })
   const oldA = value.fetchMall('a'); reply(0, catalog()); await Promise.resolve()
