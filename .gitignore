@@ -69,5 +69,13 @@ core/store.json
 open-api-config/
 .monkeycode/
 
+# Login QR code artifacts (generated on demand, contain session QR images)
+login-qr.html
+login-qr.jpg
+login-qr.png
+
+# Local agent memory (session conventions and internal ops notes, not project source)
+CODEBUDDY.md
+
 # Local environment (may contain local-only settings)
 .env
