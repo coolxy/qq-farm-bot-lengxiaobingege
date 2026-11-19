@@ -187,7 +187,7 @@ async function scrollToNext() {
           <BookTile
             v-for="entry in visible"
             :key="entry.id"
-            :name="isGiant ? `巨大${entry.name}` : entry.name"
+            :name="entry.name"
             :image="entry.image"
             :state="owned(entry) ? 'owned' : 'missing'"
             :meta="tileMeta(entry)"
