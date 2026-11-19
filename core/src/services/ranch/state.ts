@@ -249,6 +249,29 @@ async function canCatalog(raw: any, slotType = 6): Promise<any> {
 }
 
 /**
+ * 同一个活动在 ActivityList 里常对应多条 window：主活动 + 子活动（不同 id）、
+ * 甚至按阶段拆出的多个时间段，它们的 name/uid/起止时间相同。按 id 前缀过滤后
+ * 会全部命中，前端若不去重就会出现「牧歌初启」重复出现好几次。
+ * 以活动身份（uid，缺失时用 name+起止时间）去重，每条活动只保留一条。
+ */
+function dedupeRanchActivities(rows: any[]): any[] {
+    const seen = new Set<string>();
+    const result: any[] = [];
+    for (const row of rows) {
+        // 两条身份信号命中任意一条即视为同一活动：uid 相同，或 name+起止时间相同。
+        // 子活动往往拿不到 uid，但 name/时间与主活动一致；主活动有 uid 时两个键都登记，
+        // 这样无 uid 的子活动也能被 name+时间键命中并合并。
+        const uidKey = String(row.uid || '').trim() ? `uid:${String(row.uid).trim()}` : '';
+        const ntKey = `nt:${String(row.name || '').trim()}|${row.startTime}|${row.endTime}`;
+        if ((uidKey && seen.has(uidKey)) || seen.has(ntKey)) continue;
+        if (uidKey) seen.add(uidKey);
+        seen.add(ntKey);
+        result.push(row);
+    }
+    return result;
+}
+
+/**
  * 牧场活动：ActivityList 是全局列表，这里按 extra.uid / 已确认活动 id 只留牧场场景的活动。
  * 农场活动中心用 isGlobalActivity 反向过滤，只留全站/农场活动，两边互不串台。
  */
@@ -281,9 +304,11 @@ async function ranchActivities(): Promise<any[]> {
             if (!row.uid && extra.uid) row.uid = extra.uid;
         } catch { /* 说明拉不到不影响活动时间与状态展示 */ }
     }
-    const started = rows.filter(row => row.startTime <= nowSec * 1000)
+    // 先按活动身份去重（此时 uid 已由上面的 GetGroup 补全），再分进行中/即将开始排序。
+    const unique = dedupeRanchActivities(rows);
+    const started = unique.filter(row => row.startTime <= nowSec * 1000)
         .sort((left, right) => (left.endTime || Infinity) - (right.endTime || Infinity));
-    const upcoming = rows.filter(row => row.startTime > nowSec * 1000)
+    const upcoming = unique.filter(row => row.startTime > nowSec * 1000)
         .sort((left, right) => left.startTime - right.startTime);
     return [...started, ...upcoming];
 }
@@ -330,4 +355,4 @@ async function resourceBalances(keys: string[]): Promise<any[]> {
     }, { fresh: true });
 }
 
-module.exports = { getState, loadRaw, loadBag, mergeRanches, shedAwaitingActivation, snapshot, balance, bagItems, inventory, salePrices, taskList, catalog, market, readMarketRotation, canCatalog, resourceBalance, isRanchResource, resourceBalances, animalDto };
+module.exports = { getState, loadRaw, loadBag, mergeRanches, shedAwaitingActivation, snapshot, balance, bagItems, inventory, salePrices, taskList, catalog, market, readMarketRotation, canCatalog, resourceBalance, isRanchResource, resourceBalances, animalDto, dedupeRanchActivities };

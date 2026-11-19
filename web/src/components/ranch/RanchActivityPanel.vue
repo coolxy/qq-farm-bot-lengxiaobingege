@@ -27,7 +27,21 @@ function hasMugeDetail(activity: any) {
   return String(activity?.id) === '2026111700' && phase(activity).tone !== 'ended'
 }
 
-const activities = computed<any[]>(() => state.value?.activities || [])
+/** 后端已按活动身份去重；这里再兜一层，避免旧缓存里同一活动（相同 uid 或 name+时间）重复渲染。 */
+const activities = computed<any[]>(() => {
+  const rows: any[] = state.value?.activities || []
+  const seen = new Set<string>()
+  return rows.filter((item) => {
+    const uidKey = String(item?.uid || '').trim() ? `uid:${String(item.uid).trim()}` : ''
+    const ntKey = `nt:${String(item?.name || '').trim()}|${item?.startTime}|${item?.endTime}`
+    if ((uidKey && seen.has(uidKey)) || seen.has(ntKey))
+      return false
+    if (uidKey)
+      seen.add(uidKey)
+    seen.add(ntKey)
+    return true
+  })
+})
 const dailyShare = computed<any>(() => state.value?.dailyShare || null)
 
 function phase(activity: any) {

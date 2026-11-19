@@ -14,7 +14,9 @@ import { useStatusStore } from '@/stores/status'
  * 牧场“我的任务”：与农场同一套展示，奖励由每日例程自动领取，这里只显示状态。
  * 每日任务、分享礼包是牧场自己的；邮箱、会员、月卡按账号与农场共用。
  */
-const SHARED_GIFTS = ['email_rewards', 'vip_daily_gift', 'month_card_gift']
+// 账号级共用的礼包（后端 daily-gifts 按账号汇总，非场景隔离）：邮箱、商城免费礼包、月卡。
+// vip_daily_gift 后端从不产出，是早期的死 key，已移除。
+const SHARED_GIFTS = ['email_rewards', 'mall_free_gifts', 'month_card_gift']
 
 const statusStore = useStatusStore()
 const { dailyGifts, dailyGiftsLoading, currentAccountConnected: isConnected } = storeToRefs(statusStore)
@@ -57,10 +59,10 @@ const overview = computed(() => {
     completedCount: shareState.claimed ? 1 : 0,
     totalCount: 1,
   }
-  const [email, vip, month] = SHARED_GIFTS.map(shared)
+  const [email, mallFree, month] = SHARED_GIFTS.map(shared)
   return {
     timeZone: (dailyGifts.value as any)?.timeZone,
-    gifts: [taskGift, email, shareGift, vip, month].filter(Boolean),
+    gifts: [taskGift, email, mallFree, shareGift, month].filter(Boolean),
   }
 })
 
