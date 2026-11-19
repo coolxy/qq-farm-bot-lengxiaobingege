@@ -21,9 +21,10 @@ let cache: (RosterScope & { friends: RanchFriend[]; expiresAt: number }) | null 
 let sync: (RosterScope & { offset: number; friends: Map<number, RanchFriend> }) | null = null;
 
 // 调用方持有牧场场景任务。同步分批保留进度，让路后从下一批继续。
+// 好友名单请求（GetGameFriends/GetAllFriends）自带 global_scene_id=2，不依赖连接当前场景；
+// 因此场景 2 未解锁、走「当前场景读牧场」降级的账号也能同步好友，不再硬性要求 globalSceneId===2。
 export async function getRanchFriendList(checkpoint?: (completedBatch: boolean) => void): Promise<RanchFriend[]> {
     const state = getUserState();
-    if (state.globalSceneId !== 2) throw error('RANCH_SCENE_REQUIRED', '同步好友需要先进入牧场场景');
     const self = toNum(state.gid);
     const socket = getWs();
     const gids: number[] = CONFIG.platform === 'qq' ? getKnownFriendGids().filter((gid: number) => gid !== self) : [];
@@ -39,8 +40,9 @@ export async function getRanchFriendList(checkpoint?: (completedBatch: boolean) 
         const rows = batch.length
             ? await fetchFriendsByGids(batch, 2)
             : extractReplyFriends(await fetchAllFriendsForScene(2));
-        if (getWs() !== socket || getUserState().globalSceneId !== 2) {
-            throw error('RANCH_FRIEND_SESSION_CHANGED', '牧场好友同步期间连接或场景已变化');
+        // 只校验连接未变；不再要求 globalSceneId===2（降级账号在场景 1 同步好友名单）。
+        if (getWs() !== socket) {
+            throw error('RANCH_FRIEND_SESSION_CHANGED', '牧场好友同步期间连接已变化');
         }
         const requested = new Set(batch);
         for (const friend of rows) {

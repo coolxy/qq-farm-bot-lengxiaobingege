@@ -84,6 +84,9 @@ function ensureAccountConfig(accountId: unknown, options: { persist?: boolean } 
 function getAutomation(accountId?: unknown): AutomationConfig {
     const automation = { ...getAccountConfigSnapshot(accountId).automation };
     automation.fertilizer_land_types = normalizeFertilizerLandTypes(automation.fertilizer_land_types);
+    // 新增的幼崽优先级字段可能不在旧账号快照里，兜底成数组，避免下游 .map 崩溃。
+    if (!Array.isArray(automation.ranch_coop_cub_priority)) automation.ranch_coop_cub_priority = [];
+    if (!Array.isArray(automation.ranch_shed_cub_priority)) automation.ranch_shed_cub_priority = [];
     return automation;
 }
 

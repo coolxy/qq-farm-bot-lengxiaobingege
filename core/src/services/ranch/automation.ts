@@ -327,7 +327,9 @@ async function run(options: { farmDeadline?: () => number, canContinue?: () => b
                 async function placeCubs(pen: any, animalId?: number): Promise<boolean> {
                     const ranchId = quantity(pen.instance_id);
                     const isCoop = pen.ranch.husbandry_type === 1;
-                    const ordered = isCoop ? auto.ranch_coop_cub_priority : auto.ranch_shed_cub_priority;
+                    const configured = isCoop ? auto.ranch_coop_cub_priority : auto.ranch_shed_cub_priority;
+                    // 旧账号配置可能缺这个新字段或存成非数组，兜底为空数组避免 .map 崩溃。
+                    const ordered: number[] = Array.isArray(configured) ? configured : [];
                     const ranks = new Map(ordered.map((id, index) => [id, index]));
                     const stock = inventory(raw).filter((item: any) => !item.locked && item.animalId && BigInt(item.count) > 0n
                         && cubMap.get(item.id).husbandry_type === (isCoop ? '窝' : '棚') && (bagFirst || item.animalId === animalId));
