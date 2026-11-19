@@ -9,6 +9,8 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import CareerHarvestSteal from '@/components/CareerHarvestSteal.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
+import EntityPanelCard from '@/components/EntityPanelCard.vue'
+import EntityStateChip from '@/components/EntityStateChip.vue'
 import LandCard from '@/components/FarmLandCard.vue'
 import LandDetailModal from '@/components/LandDetailModal.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
@@ -605,113 +607,119 @@ onUnmounted(() => {
 
 <template>
   <div class="personal-panel">
-    <div class="personal-panel__card cartoon-card farm-card rounded-2xl bg-white shadow-lg dark:bg-gray-800 !p-0">
+    <EntityPanelCard>
       <!-- Header with Title and Actions -->
-      <div class="farm-head panel-sticky flex shrink-0 flex-col gap-3 border-b border-gray-100 p-4 lg:flex-row lg:items-center lg:justify-between dark:border-gray-700 sm:p-5" :class="{ 'is-selecting': selecting }">
-        <div class="farm-heading flex items-center justify-between gap-3">
-          <h3 class="flex items-center gap-2 text-lg font-bold">
-            <span class="i-carbon-sprout text-green-600" /> 土地详情
-          </h3>
-          <div class="farm-mobile-actions">
-            <NButton size="small" :type="selecting ? 'default' : 'primary'" :secondary="!selecting" :disabled="selectionBusy || !currentAccountRunning || !loaded || !!error" @click="selecting ? exitSelecting() : enterSelecting()">
+      <template #head>
+        <div class="farm-head panel-sticky flex shrink-0 flex-col gap-3 border-b border-gray-100 p-4 lg:flex-row lg:items-center lg:justify-between dark:border-gray-700 sm:p-5" :class="{ 'is-selecting': selecting }">
+          <div class="farm-heading flex items-center justify-between gap-3">
+            <h3 class="flex items-center gap-2 text-lg font-bold">
+              <span class="i-carbon-sprout text-green-600" /> 土地详情
+            </h3>
+            <div class="farm-mobile-actions">
+              <NButton size="small" :type="selecting ? 'default' : 'primary'" :secondary="!selecting" :disabled="selectionBusy || !currentAccountRunning || !loaded || !!error" @click="selecting ? exitSelecting() : enterSelecting()">
+                {{ selecting ? '退出选择' : '批量操作' }}
+              </NButton>
+              <NPopover v-if="!selecting" trigger="click" placement="bottom-end" :show-arrow="false">
+                <template #trigger>
+                  <NButton size="small" circle quaternary title="土地概况与操作" aria-label="土地概况与操作">
+                    <template #icon>
+                      <span class="i-carbon-overflow-menu-horizontal" />
+                    </template>
+                  </NButton>
+                </template>
+                <div class="w-60 space-y-3">
+                  <div class="grid grid-cols-2 gap-2 text-xs text-gray-500">
+                    <span>可收 {{ loaded && !error ? (summary?.harvestable || 0) : '--' }}</span>
+                    <span>生长 {{ loaded && !error ? (summary?.growing || 0) : '--' }}</span>
+                    <span>空闲 {{ loaded && !error ? (summary?.empty || 0) : '--' }}</span>
+                    <span>枯萎 {{ loaded && !error ? (summary?.dead || 0) : '--' }}</span>
+                  </div>
+                  <div v-if="loaded && !error && career" class="flex flex-col gap-2 border-t border-gray-100 pt-3 text-xs dark:border-gray-700">
+                    <CareerHarvestSteal :career="career" compact />
+                  </div>
+                  <div class="grid grid-cols-2 gap-2 border-t border-gray-100 pt-3 dark:border-gray-700">
+                    <NButton size="small" :disabled="operating || fertilizePending || farmingLandId !== null || !currentAccountRunning || !loaded || !!error || !lands.some(isFertilizeCandidate)" @click="fertilizerConfirmVisible = true">
+                      一键施肥
+                    </NButton>
+                    <NButton v-for="op in operations" :key="op.type" size="small" :disabled="operating || fertilizePending || farmingLandId !== null || !currentAccountRunning" @click="handleOperate(op.type)">
+                      {{ op.label }}
+                    </NButton>
+                  </div>
+                </div>
+              </NPopover>
+            </div>
+            <NButton
+              circle
+              quaternary
+              title="刷新土地"
+              aria-label="刷新土地"
+              :loading="manualRefreshing"
+              :disabled="selectionBusy || !currentAccountId || !currentAccountRunning"
+              @click="refreshFarm"
+            >
+              <template #icon>
+                <span class="i-carbon-renew" />
+              </template>
+            </NButton>
+          </div>
+          <div class="farm-actions" :class="{ 'is-selecting': selecting }">
+            <NButton :type="selecting ? 'default' : 'primary'" :secondary="!selecting" :disabled="selectionBusy || !currentAccountRunning || !loaded || !!error" @click="selecting ? exitSelecting() : enterSelecting()">
+              <span class="i-carbon-checkbox-checked" />
               {{ selecting ? '退出选择' : '批量操作' }}
             </NButton>
-            <NPopover v-if="!selecting" trigger="click" placement="bottom-end" :show-arrow="false">
-              <template #trigger>
-                <NButton size="small" circle quaternary title="土地概况与操作" aria-label="土地概况与操作">
-                  <template #icon>
-                    <span class="i-carbon-overflow-menu-horizontal" />
-                  </template>
-                </NButton>
-              </template>
-              <div class="w-60 space-y-3">
-                <div class="grid grid-cols-2 gap-2 text-xs text-gray-500">
-                  <span>可收 {{ loaded && !error ? (summary?.harvestable || 0) : '--' }}</span>
-                  <span>生长 {{ loaded && !error ? (summary?.growing || 0) : '--' }}</span>
-                  <span>空闲 {{ loaded && !error ? (summary?.empty || 0) : '--' }}</span>
-                  <span>枯萎 {{ loaded && !error ? (summary?.dead || 0) : '--' }}</span>
-                </div>
-                <div v-if="loaded && !error && career" class="flex flex-col gap-2 border-t border-gray-100 pt-3 text-xs dark:border-gray-700">
-                  <CareerHarvestSteal :career="career" compact />
-                </div>
-                <div class="grid grid-cols-2 gap-2 border-t border-gray-100 pt-3 dark:border-gray-700">
-                  <NButton size="small" :disabled="operating || fertilizePending || farmingLandId !== null || !currentAccountRunning || !loaded || !!error || !lands.some(isFertilizeCandidate)" @click="fertilizerConfirmVisible = true">
-                    一键施肥
-                  </NButton>
-                  <NButton v-for="op in operations" :key="op.type" size="small" :disabled="operating || fertilizePending || farmingLandId !== null || !currentAccountRunning" @click="handleOperate(op.type)">
-                    {{ op.label }}
-                  </NButton>
-                </div>
-              </div>
-            </NPopover>
+            <NButton
+              v-if="!selecting"
+              :disabled="operating || fertilizePending || farmingLandId !== null || !currentAccountRunning || !loaded || !!error || !lands.some(isFertilizeCandidate)"
+              @click="fertilizerConfirmVisible = true"
+            >
+              <span class="i-carbon-soil-moisture" />
+              一键施肥
+            </NButton>
+            <NButton
+              v-for="op in (selecting ? [] : operations)"
+              :key="op.type"
+              :type="op.buttonType"
+              :disabled="operating || fertilizePending || farmingLandId !== null || !currentAccountRunning"
+              @click="handleOperate(op.type)"
+            >
+              <span :class="op.icon" />
+              {{ op.label }}
+            </NButton>
           </div>
-          <NButton
-            circle
-            quaternary
-            title="刷新土地"
-            aria-label="刷新土地"
-            :loading="manualRefreshing"
-            :disabled="selectionBusy || !currentAccountId || !currentAccountRunning"
-            @click="refreshFarm"
-          >
-            <template #icon>
-              <span class="i-carbon-renew" />
-            </template>
-          </NButton>
         </div>
-        <div class="farm-actions" :class="{ 'is-selecting': selecting }">
-          <NButton :type="selecting ? 'default' : 'primary'" :secondary="!selecting" :disabled="selectionBusy || !currentAccountRunning || !loaded || !!error" @click="selecting ? exitSelecting() : enterSelecting()">
-            <span class="i-carbon-checkbox-checked" />
-            {{ selecting ? '退出选择' : '批量操作' }}
-          </NButton>
-          <NButton
-            v-if="!selecting"
-            :disabled="operating || fertilizePending || farmingLandId !== null || !currentAccountRunning || !loaded || !!error || !lands.some(isFertilizeCandidate)"
-            @click="fertilizerConfirmVisible = true"
-          >
-            <span class="i-carbon-soil-moisture" />
-            一键施肥
-          </NButton>
-          <NButton
-            v-for="op in (selecting ? [] : operations)"
-            :key="op.type"
-            :type="op.buttonType"
-            :disabled="operating || fertilizePending || farmingLandId !== null || !currentAccountRunning"
-            @click="handleOperate(op.type)"
-          >
-            <span :class="op.icon" />
-            {{ op.label }}
-          </NButton>
-        </div>
-      </div>
+      </template>
 
       <!-- Summary：左侧是当前土地状态，右侧是生涯数据；颜色只留给图标 -->
-      <div class="farm-summary shrink-0 border-b border-gray-100 px-4 py-3 dark:border-gray-700 sm:px-5">
-        <div class="farm-summary__states">
-          <span v-for="item in summaryItems" :key="item.key" class="farm-state" :class="{ 'is-zero': item.value === 0 }">
-            <svg v-if="item.path" :class="item.icon" class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path :d="item.path" />
-            </svg>
-            <span v-else :class="item.icon" aria-hidden="true" />
-            {{ item.label }}<b>{{ loaded && !error ? item.value : '--' }}</b>
-          </span>
-        </div>
-        <template v-if="loaded && !error && career">
-          <div class="farm-summary__career">
-            <CareerHarvestSteal :career="career" compact />
+      <template #summary>
+        <div class="farm-summary shrink-0 border-b border-gray-100 px-4 py-3 dark:border-gray-700 sm:px-5">
+          <div class="farm-summary__states">
+            <EntityStateChip
+              v-for="item in summaryItems"
+              :key="item.key"
+              :label="item.label"
+              :value="loaded && !error ? item.value : '--'"
+              :icon="item.icon"
+              :path="item.path"
+              :zero="item.value === 0"
+            />
           </div>
-          <NPopover trigger="click" placement="bottom-end" :show-arrow="false">
-            <template #trigger>
-              <button type="button" class="farm-summary__career-toggle" aria-label="查看生涯统计">
-                <span class="i-carbon-chart-relationship" />生涯
-              </button>
-            </template>
-            <div class="flex flex-col gap-2 text-sm">
+          <template v-if="loaded && !error && career">
+            <div class="farm-summary__career">
               <CareerHarvestSteal :career="career" compact />
             </div>
-          </NPopover>
-        </template>
-      </div>
+            <NPopover trigger="click" placement="bottom-end" :show-arrow="false">
+              <template #trigger>
+                <button type="button" class="farm-summary__career-toggle" aria-label="查看生涯统计">
+                  <span class="i-carbon-chart-relationship" />生涯
+                </button>
+              </template>
+              <div class="flex flex-col gap-2 text-sm">
+                <CareerHarvestSteal :career="career" compact />
+              </div>
+            </NPopover>
+          </template>
+        </div>
+      </template>
 
       <!-- Grid -->
       <div class="personal-panel__card p-4 sm:p-5">
@@ -808,7 +816,7 @@ onUnmounted(() => {
           </div>
         </div>
       </div>
-    </div>
+    </EntityPanelCard>
 
     <LandDetailModal :land="detailLand" :player="status?.status" :connected="currentAccountConnected" @close="detailLandId = null" />
 
@@ -1046,27 +1054,6 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-}
-
-.farm-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 10px 3px 8px;
-  border-radius: 999px;
-  color: var(--ui-muted);
-  background: var(--ui-surface-soft);
-  font-variant-numeric: tabular-nums;
-}
-
-.farm-state b {
-  margin-left: 2px;
-  color: var(--ui-ink);
-  font-weight: var(--fw-650);
-}
-
-.farm-state.is-zero {
-  opacity: 0.65;
 }
 
 .farm-summary__career {

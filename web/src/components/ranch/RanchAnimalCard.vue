@@ -2,6 +2,7 @@
 import { NButton } from 'naive-ui/es/button'
 import { NDropdown } from 'naive-ui/es/dropdown'
 import { computed, ref, watch } from 'vue'
+import EntityCard from '@/components/EntityCard.vue'
 
 /** 单只动物：与农场土地卡同一套结构（顶部标签 / 图 / 名称 / 状态 / 进度条），可选底部操作。 */
 const props = withDefaults(defineProps<{
@@ -45,33 +46,36 @@ const feedOptions = computed(() => [
 </script>
 
 <template>
-  <article class="pen" :class="[status ? `pen--${status.kind}` : '', { 'pen--giant': giant }]" :title="animal.name">
-    <header class="pen__top">
+  <EntityCard class="pen" :class="[status ? `pen--${status.kind}` : '', { 'pen--giant': giant }]" :title-text="animal.name">
+    <template #top>
       <span v-if="pen" class="pen__chip">{{ pen }}</span>
       <span v-if="giant" class="pen__giant" :title="weight ? `巨大 · ${weight}` : '巨大'">巨大<template v-if="weight"> {{ weight }}</template></span>
-    </header>
+    </template>
 
-    <div class="pen__animal">
+    <template #media>
       <img v-if="animal.image && !failed" :src="animal.image" alt="" loading="lazy" @error="failed = true">
       <span v-else class="pen__placeholder i-carbon-pet-image-o" aria-hidden="true" />
-    </div>
+    </template>
 
-    <div class="pen__name">
+    <template #name>
       {{ animal.name }}
-    </div>
+    </template>
 
-    <div class="pen__time">
+    <template #state>
       <span v-if="status" class="pen__state" :class="`is-${status.kind}`"><span :class="status.icon" aria-hidden="true" />{{ status.text }}</span>
       <span v-else-if="remaining" class="pen__countdown"><span class="i-carbon-time" aria-hidden="true" />{{ remaining }}</span>
       <span v-else class="pen__state is-muted">{{ animal.stageName }}</span>
-    </div>
+    </template>
 
-    <div v-if="rounds" class="pen__rounds" :title="`已生产 ${rounds.done} / ${rounds.max} 轮`" :aria-label="`已生产 ${rounds.done} / ${rounds.max} 轮`" role="img">
-      <i v-for="n in rounds.max" :key="n" :class="{ 'is-done': n <= rounds.done }" />
-    </div>
-    <div v-else class="pen__rounds" aria-hidden="true" />
+    <template #progress>
+      <div class="pen__rounds" :class="{ 'pen__rounds--empty': !rounds }" :title="rounds ? `已生产 ${rounds.done} / ${rounds.max} 轮` : undefined" :aria-label="rounds ? `已生产 ${rounds.done} / ${rounds.max} 轮` : undefined" :role="rounds ? 'img' : undefined" :aria-hidden="rounds ? undefined : true">
+        <template v-if="rounds">
+          <i v-for="n in rounds.max" :key="n" :class="{ 'is-done': n <= rounds.done }" />
+        </template>
+      </div>
+    </template>
 
-    <footer v-if="actionable" class="pen__foot">
+    <template v-if="actionable" #footer>
       <NButton v-if="friend" size="tiny" type="primary" secondary :disabled="disabled || !animal.canStroke" :aria-label="`抚摸${animal.name}，${pen}第${animal.slot}栏`" @click="emit('stroke')">
         {{ animal.stroked ? '已抚摸' : animal.canStroke ? '抚摸' : '不可抚摸' }}
       </NButton>
@@ -90,55 +94,38 @@ const feedOptions = computed(() => [
       <NButton v-if="!friend && animal.canRelease" size="tiny" quaternary :disabled="disabled" :aria-label="`放生${animal.name}，${pen}第${animal.slot}栏`" @click="emit('release')">
         放生
       </NButton>
-    </footer>
-  </article>
+    </template>
+  </EntityCard>
 </template>
 
 <style scoped>
-/* 卡面用干草色，与农场普通土地同一色系；巨大动物换成金色。 */
-.pen {
-  --pen-bg: #fbf8f1;
-  --pen-line: #e6dbc2;
-  --pen-ink: #86642e;
-  --pen-chip: #f1e7d2;
-
-  position: relative;
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  align-items: center;
-  padding: 8px 10px 10px;
-  border: 1px solid var(--pen-line);
-  border-radius: 14px;
-  color: var(--ui-ink);
-  background: var(--pen-bg);
-  box-shadow: 0 1px 2px rgba(45, 66, 52, 0.05);
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
+/* 牧场卡复用 EntityCard 公共骨架，这里只保留动物专属：配色、徽章、轮次、操作。
+   配色直接覆盖 EntityCard 的 --ec-*，差异尺寸用变量覆盖（原图 52px / 进度间距 6px / footer 间距 8px）。 */
+.pen.pen {
+  --ec-bg: #fbf8f1;
+  --ec-line: #e6dbc2;
+  --ec-ink: #86642e;
+  --ec-chip: #f1e7d2;
+  --ec-tint: #c9a867;
+  --ec-media-size: 52px;
+  --ec-progress-gap: 6px;
+  --ec-footer-gap: 8px;
+  padding-bottom: 10px;
 }
 
-.pen--giant {
-  --pen-bg: #fffae8;
-  --pen-line: #ead57f;
-  --pen-ink: #946600;
-  --pen-chip: #f9e9a8;
+.pen.pen--giant {
+  --ec-bg: #fffae8;
+  --ec-line: #ead57f;
+  --ec-ink: #946600;
+  --ec-chip: #f9e9a8;
 }
 
-.pen--ripe {
-  border-color: color-mix(in srgb, var(--ui-primary) 55%, var(--pen-line));
+.pen.pen--ripe {
+  border-color: color-mix(in srgb, var(--ui-primary) 55%, var(--ec-line));
 }
 
-.pen--blocked {
-  border-color: color-mix(in srgb, var(--ui-warning) 60%, var(--pen-line));
-}
-
-.pen__top {
-  display: flex;
-  width: 100%;
-  height: 20px;
-  align-items: center;
-  gap: 4px;
+.pen.pen--blocked {
+  border-color: color-mix(in srgb, var(--ui-warning) 60%, var(--ec-line));
 }
 
 .pen__chip,
@@ -152,8 +139,8 @@ const feedOptions = computed(() => [
 }
 
 .pen__chip {
-  color: var(--pen-ink);
-  background: var(--pen-chip);
+  color: var(--ec-ink);
+  background: var(--ec-chip);
 }
 
 .pen__giant {
@@ -166,15 +153,7 @@ const feedOptions = computed(() => [
   font-variant-numeric: tabular-nums;
 }
 
-.pen__animal {
-  width: 52px;
-  height: 52px;
-  display: grid;
-  margin-top: 2px;
-  place-items: center;
-}
-
-.pen__animal img {
+.pen :deep(.entity-card__media img) {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
@@ -182,29 +161,8 @@ const feedOptions = computed(() => [
 }
 
 .pen__placeholder {
-  color: color-mix(in srgb, var(--pen-ink) 40%, transparent);
+  color: color-mix(in srgb, var(--ec-ink) 40%, transparent);
   font-size: 26px;
-}
-
-.pen__name {
-  width: 100%;
-  margin-top: 4px;
-  overflow: hidden;
-  font-size: 12px;
-  font-weight: var(--fw-650);
-  line-height: 16px;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pen__time {
-  display: flex;
-  max-width: 100%;
-  height: 20px;
-  align-items: center;
-  justify-content: center;
-  margin-top: 2px;
 }
 
 .pen__countdown {
@@ -259,33 +217,29 @@ const feedOptions = computed(() => [
   width: 100%;
   height: 4px;
   gap: 3px;
-  margin-top: 6px;
+}
+.pen__rounds--empty {
+  height: auto;
+  min-height: 4px;
 }
 
 .pen__rounds i {
   flex: 1;
+  height: 4px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--pen-ink) 14%, transparent);
+  background: color-mix(in srgb, var(--ec-ink) 14%, transparent);
 }
 
 .pen__rounds i.is-done {
   background: linear-gradient(90deg, #9fd17d, var(--ui-primary));
 }
 
-.pen__foot {
-  display: flex;
-  width: 100%;
+.pen :deep(.entity-card__footer) {
   min-height: 28px;
-  flex-wrap: wrap;
-  gap: 4px;
-  align-items: center;
-  justify-content: center;
-  margin-top: 8px;
-  padding-top: 6px;
-  border-top: 1px dashed color-mix(in srgb, var(--pen-ink) 22%, transparent);
+  border-top-style: dashed;
 }
 
-.pen__foot :deep(.n-button) {
+.pen :deep(.entity-card__footer .n-button) {
   min-width: 48px;
   min-height: 24px;
 }
@@ -295,28 +249,21 @@ const feedOptions = computed(() => [
   font-size: 11px;
 }
 
-.dark .pen {
-  --pen-tint: #c9a867;
-  border-color: color-mix(in srgb, var(--pen-tint) 28%, transparent);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--pen-tint) 12%, #1d2228) 0%, #1a1f25 70%);
-  box-shadow: none;
+.dark .pen.pen--giant {
+  --ec-tint: #e6c35a;
 }
 
-.dark .pen--giant {
-  --pen-tint: #e6c35a;
-}
-
-.dark .pen--ripe {
+.dark .pen.pen--ripe {
   border-color: color-mix(in srgb, var(--ui-primary) 55%, transparent);
 }
 
-.dark .pen--blocked {
+.dark .pen.pen--blocked {
   border-color: color-mix(in srgb, var(--ui-warning) 55%, transparent);
 }
 
 .dark .pen__chip {
-  color: var(--pen-tint);
-  background: color-mix(in srgb, var(--pen-tint) 15%, transparent);
+  color: var(--ec-tint);
+  background: color-mix(in srgb, var(--ec-tint) 15%, transparent);
 }
 
 .dark .pen__rounds i {
@@ -325,9 +272,5 @@ const feedOptions = computed(() => [
 
 .dark .pen__rounds i.is-done {
   background: linear-gradient(90deg, #6fae5a, var(--ui-primary));
-}
-
-.dark .pen__foot {
-  border-top-color: rgba(255, 255, 255, 0.08);
 }
 </style>

@@ -3,6 +3,8 @@ import { NButton } from 'naive-ui/es/button'
 import { NDropdown } from 'naive-ui/es/dropdown'
 import { storeToRefs } from 'pinia'
 import { computed, ref } from 'vue'
+import EntityPanelCard from '@/components/EntityPanelCard.vue'
+import EntityStateChip from '@/components/EntityStateChip.vue'
 import { BUCKETS, formatCount, formatDuration, formatHours, RANCH_IMAGE, RANCH_TODO_TONES, useRanchActions, useRanchClock, useRanchLoader } from '@/components/ranch/ranch-shared'
 import RanchAnimalCard from '@/components/ranch/RanchAnimalCard.vue'
 import RanchGate from '@/components/ranch/RanchGate.vue'
@@ -110,63 +112,67 @@ function target(animal: any) {
 <template>
   <div class="personal-panel">
     <RanchGate @retry="refresh">
-      <div class="personal-panel__card farm-card rounded-2xl !p-0">
-        <div class="ranch-head panel-sticky">
-          <h3 class="flex items-center gap-2 text-lg font-bold">
-            <span class="i-carbon-pet-image-o text-green-600" /> 动物详情
-            <small class="ranch-head__count">{{ animals.length }} / {{ capacity }}</small>
-          </h3>
-          <div class="ranch-actions">
-            <NButton :disabled="disabled || !hazards" @click="request('clean')">
-              <span class="i-carbon-clean" />一键清理
-            </NButton>
-            <NDropdown trigger="click" placement="bottom" :options="feedOptions" @select="(type: 1 | 2) => request('feed', { all: true, bucketType: type })">
-              <NButton :disabled="disabled || !canFeed">
-                <span class="i-carbon-time" aria-hidden="true" />一键喂养
+      <EntityPanelCard>
+        <template #head>
+          <div class="ranch-head panel-sticky">
+            <h3 class="flex items-center gap-2 text-lg font-bold">
+              <span class="i-carbon-pet-image-o text-green-600" /> 动物详情
+              <small class="ranch-head__count">{{ animals.length }} / {{ capacity }}</small>
+            </h3>
+            <div class="ranch-actions">
+              <NButton :disabled="disabled || !hazards" @click="request('clean')">
+                <span class="i-carbon-clean" />一键清理
               </NButton>
-            </NDropdown>
-            <NButton :disabled="disabled || !canProduce" @click="request('produce', { all: true })">
-              <span class="i-carbon-circle-dash" />一键生产
-            </NButton>
-            <NButton type="primary" :disabled="disabled || !canHarvest" @click="request('harvest', { all: true })">
-              <span class="i-carbon-flash" />一键收获
-            </NButton>
-            <NButton circle quaternary title="刷新牧场" aria-label="刷新牧场" :loading="loading" @click="refresh">
-              <template #icon>
-                <span class="i-carbon-renew" />
-              </template>
-            </NButton>
+              <NDropdown trigger="click" placement="bottom" :options="feedOptions" @select="(type: 1 | 2) => request('feed', { all: true, bucketType: type })">
+                <NButton :disabled="disabled || !canFeed">
+                  <span class="i-carbon-time" aria-hidden="true" />一键喂养
+                </NButton>
+              </NDropdown>
+              <NButton :disabled="disabled || !canProduce" @click="request('produce', { all: true })">
+                <span class="i-carbon-circle-dash" />一键生产
+              </NButton>
+              <NButton type="primary" :disabled="disabled || !canHarvest" @click="request('harvest', { all: true })">
+                <span class="i-carbon-flash" />一键收获
+              </NButton>
+              <NButton circle quaternary title="刷新牧场" aria-label="刷新牧场" :loading="loading" @click="refresh">
+                <template #icon>
+                  <span class="i-carbon-renew" />
+                </template>
+              </NButton>
+            </div>
           </div>
-        </div>
+        </template>
 
-        <div class="ranch-summary">
-          <div class="ranch-summary__states">
-            <button
-              type="button"
-              class="ranch-state"
-              :class="{ 'is-active': filterKey === 'all' }"
-              @click="filterKey = 'all'"
-            >
-              全部<b>{{ animals.length }}</b>
-            </button>
-            <button
-              v-for="item in summary"
-              :key="item.key"
-              type="button"
-              class="ranch-state"
-              :class="{ 'is-zero': !item.value, 'is-active': filterKey === item.key }"
-              :disabled="!item.value"
-              @click="toggleFilter(item.key)"
-            >
-              <span :class="item.icon" aria-hidden="true" />{{ item.label }}<b>{{ item.value }}</b>
-            </button>
+        <template #summary>
+          <div class="ranch-summary">
+            <div class="ranch-summary__states">
+              <EntityStateChip
+                label="全部"
+                :value="animals.length"
+                interactive
+                :active="filterKey === 'all'"
+                @select="filterKey = 'all'"
+              />
+              <EntityStateChip
+                v-for="item in summary"
+                :key="item.key"
+                :label="item.label"
+                :value="item.value"
+                :icon="item.icon"
+                interactive
+                :active="filterKey === item.key"
+                :disabled="!item.value"
+                :zero="!item.value"
+                @select="toggleFilter(item.key)"
+              />
+            </div>
+            <div class="ranch-summary__stock">
+              <span v-for="item in stock" :key="item.key" :title="item.label">
+                <img :src="item.image" alt="">{{ item.label }}<b>{{ item.value }}</b>
+              </span>
+            </div>
           </div>
-          <div class="ranch-summary__stock">
-            <span v-for="item in stock" :key="item.key" :title="item.label">
-              <img :src="item.image" alt="">{{ item.label }}<b>{{ item.value }}</b>
-            </span>
-          </div>
-        </div>
+        </template>
 
         <div class="p-4 sm:p-5">
           <div v-if="!animals.length" class="ranch-empty">
@@ -222,7 +228,7 @@ function target(animal: any) {
             </div>
           </section>
         </div>
-      </div>
+      </EntityPanelCard>
     </RanchGate>
   </div>
 </template>
@@ -272,50 +278,6 @@ function target(animal: any) {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-}
-
-.ranch-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 10px 3px 8px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  color: var(--ui-muted);
-  background: var(--ui-surface-soft);
-  font: inherit;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-  transition:
-    border-color 0.16s ease,
-    color 0.16s ease,
-    background-color 0.16s ease;
-}
-
-.ranch-state:not(:disabled):hover {
-  border-color: color-mix(in srgb, var(--ui-primary) 34%, transparent);
-  color: var(--ui-primary);
-}
-
-.ranch-state.is-active {
-  border-color: transparent;
-  background: var(--ui-primary-soft);
-  color: var(--ui-primary);
-  font-weight: var(--fw-600);
-}
-
-.ranch-state:disabled {
-  cursor: default;
-}
-
-.ranch-state b {
-  margin-left: 2px;
-  color: var(--ui-ink);
-  font-weight: var(--fw-650);
-}
-
-.ranch-state.is-zero {
-  opacity: 0.65;
 }
 
 .ranch-summary__stock {

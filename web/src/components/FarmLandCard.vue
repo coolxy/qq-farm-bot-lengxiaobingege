@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import EntityCard from '@/components/EntityCard.vue'
 
 /**
  * 一块地的卡片。结构固定为：编号与土地类型 / 作物 / 名称 / 时间或主状态 / 进度 / 状态图标，
  * 每张卡片高度一致；操作统一在外层“选择土地”后批量进行，卡片本身不放按钮。
+ * 与牧场动物卡共用 EntityCard 公共骨架，土地专属配色/等级/性状/选择态在此覆盖。
  */
 const props = withDefaults(defineProps<{
   land: any
@@ -206,7 +208,7 @@ const ariaLabel = computed(() => {
 </script>
 
 <template>
-  <article
+  <EntityCard
     class="plot"
     :class="[
       `plot--lv${level}`,
@@ -214,23 +216,17 @@ const ariaLabel = computed(() => {
       {
         'plot--locked': isLocked,
         'plot--follower': isFollower,
-        'plot--interactive': interactive,
-        'plot--selectable': selectable,
-        'plot--selected': selectable && selected,
-        'plot--disabled': selectable && selectionDisabled,
       },
     ]"
-    :role="interactive ? (selectable ? 'checkbox' : 'button') : undefined"
-    :tabindex="interactive && !(selectable && selectionDisabled) ? 0 : undefined"
-    :aria-checked="selectable ? selected : undefined"
-    :aria-disabled="selectable ? selectionDisabled : undefined"
+    :interactive="interactive"
+    :selectable="selectable"
+    :selected="selected"
+    :disabled="selectionDisabled"
     :aria-label="ariaLabel"
-    :title="selectable && selectionDisabled ? (selectionLabel || '这块地当前不能选择') : undefined"
-    @click="activate"
-    @keydown.enter.prevent="activate"
-    @keydown.space.prevent="activate"
+    :title-text="selectable && selectionDisabled ? (selectionLabel || '这块地当前不能选择') : undefined"
+    @activate="activate"
   >
-    <header class="plot__top">
+    <template #top>
       <span class="plot__no">#{{ land.id }}</span>
       <span class="plot__soil" :title="soil.name">{{ soil.short }}</span>
       <span v-if="isJointMaster" class="plot__joint" :title="`合种作物，占用 ${plantSize}×${plantSize} 块地`">
@@ -240,142 +236,111 @@ const ariaLabel = computed(() => {
         <span v-if="selected" class="i-carbon-checkmark" />
         <span v-else-if="selectionDisabled" class="i-carbon-subtract" />
       </span>
-    </header>
+    </template>
 
-    <div class="plot__crop">
+    <template #media>
       <span v-if="isLocked" class="plot__placeholder i-carbon-locked" />
       <span v-else-if="isEmpty" class="plot__placeholder i-carbon-sprout" />
       <img v-else-if="land.seedImage" :src="safeImage(land.seedImage)" alt="" loading="lazy" referrerpolicy="no-referrer">
       <span v-else class="plot__placeholder i-carbon-sprout" />
-    </div>
+    </template>
 
-    <div class="plot__name" :title="land.plantName">
-      {{ isLocked ? '—' : isEmpty ? '待种植' : land.plantName }}
-    </div>
+    <template #name>
+      <span :title="land.plantName">{{ isLocked ? '—' : isEmpty ? '待种植' : land.plantName }}</span>
+    </template>
 
-    <div class="plot__time">
+    <template #state>
       <span v-if="stateTag" class="plot__state" :class="`is-${stateTag.kind}`"><span :class="stateTag.icon" aria-hidden="true" />{{ stateTag.text }}</span>
       <span v-else-if="Number(land.matureInSec) > 0" class="plot__countdown"><span class="i-carbon-time" aria-hidden="true" />{{ formatTime(land.matureInSec) }}</span>
       <span v-else class="plot__state is-muted">{{ land.phaseName || '生长中' }}</span>
       <span v-if="seasonText && !isFollower && !isLocked && !isEmpty" class="plot__season">{{ seasonText }}</span>
-    </div>
+    </template>
 
-    <div class="plot__bar" aria-hidden="true">
-      <i :style="{ width: `${isFollower || isEmpty || isLocked ? 0 : growPercent}%` }" />
-    </div>
+    <template #progress>
+      <div class="plot__bar" aria-hidden="true">
+        <i :style="{ width: `${isFollower || isEmpty || isLocked ? 0 : growPercent}%` }" />
+      </div>
+    </template>
 
-    <footer class="plot__tags" :title="allTitle || undefined">
-      <template v-for="(item, index) in visibleTags" :key="item.key">
-        <i v-if="index > 0 && item.group === 'trait' && visibleTags[index - 1]?.group === 'need'" class="plot__sep" />
-        <span v-if="item.group === 'need'" class="plot__need" :class="`is-${item.kind}`" :title="item.title"><span :class="item.icon" /></span>
-        <span v-else class="plot__trait" :class="`is-${item.kind}`" :title="item.title">
-          <img v-if="item.image" :src="item.image" alt="" @error="markMutantFailed(item.key)">
-          <span v-else :class="item.icon" />
-        </span>
-      </template>
-      <span v-if="hiddenTags.length" class="plot__more" :title="hiddenTitle">+{{ hiddenTags.length }}</span>
-    </footer>
-  </article>
+    <template #footer>
+      <div class="plot__tags" :title="allTitle || undefined">
+        <template v-for="(item, index) in visibleTags" :key="item.key">
+          <i v-if="index > 0 && item.group === 'trait' && visibleTags[index - 1]?.group === 'need'" class="plot__sep" />
+          <span v-if="item.group === 'need'" class="plot__need" :class="`is-${item.kind}`" :title="item.title"><span :class="item.icon" /></span>
+          <span v-else class="plot__trait" :class="`is-${item.kind}`" :title="item.title">
+            <img v-if="item.image" :src="item.image" alt="" @error="markMutantFailed(item.key)">
+            <span v-else :class="item.icon" />
+          </span>
+        </template>
+        <span v-if="hiddenTags.length" class="plot__more" :title="hiddenTitle">+{{ hiddenTags.length }}</span>
+      </div>
+    </template>
+  </EntityCard>
 </template>
 
 <style scoped>
-.plot {
-  /* 土地类型色：卡面淡底、描边、类型标签共用这一组变量 */
-  --soil-bg: #fbf8f1;
-  --soil-line: #e6dbc2;
-  --soil-ink: #86642e;
-  --soil-chip: #f1e7d2;
-
-  position: relative;
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  align-items: center;
-  padding: 8px 10px 9px;
-  border: 1px solid var(--soil-line);
-  border-radius: 14px;
-  color: var(--ui-ink);
-  background: var(--soil-bg);
-  box-shadow: 0 1px 2px rgba(45, 66, 52, 0.05);
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease,
-    opacity 0.15s ease,
-    transform 0.15s ease;
+/* 农场土地卡复用 EntityCard 公共骨架，这里只保留土地专属：等级配色、编号/土质、合种、选择态、性状标签。
+   等级配色直接覆盖 EntityCard 的 --ec-*；差异尺寸用变量覆盖（原图 44px / 进度间距 5px / footer 间距 7px）。 */
+.plot.plot {
+  --ec-bg: #fbf8f1;
+  --ec-line: #e6dbc2;
+  --ec-ink: #86642e;
+  --ec-chip: #f1e7d2;
+  --ec-tint: #c9a867;
+  --ec-media-size: 44px;
+  --ec-progress-gap: 5px;
+  --ec-footer-gap: 7px;
 }
-.plot--lv2 {
-  --soil-bg: #fdf4f1;
-  --soil-line: #eecbc1;
-  --soil-ink: #b0482f;
-  --soil-chip: #f8ddd5;
+.plot.plot--lv2 {
+  --ec-bg: #fdf4f1;
+  --ec-line: #eecbc1;
+  --ec-ink: #b0482f;
+  --ec-chip: #f8ddd5;
 }
-.plot--lv3 {
-  --soil-bg: #f4f3f1;
-  --soil-line: #d3cfc8;
-  --soil-ink: #4b4540;
-  --soil-chip: #e3dfd9;
+.plot.plot--lv3 {
+  --ec-bg: #f4f3f1;
+  --ec-line: #d3cfc8;
+  --ec-ink: #4b4540;
+  --ec-chip: #e3dfd9;
 }
-.plot--lv4 {
-  --soil-bg: #fffae8;
-  --soil-line: #ead57f;
-  --soil-ink: #946600;
-  --soil-chip: #f9e9a8;
+.plot.plot--lv4 {
+  --ec-bg: #fffae8;
+  --ec-line: #ead57f;
+  --ec-ink: #946600;
+  --ec-chip: #f9e9a8;
 }
-.plot--lv5 {
-  --soil-bg: #f8f3fd;
-  --soil-line: #d7c6ef;
-  --soil-ink: #7140b5;
-  --soil-chip: #eadffa;
+.plot.plot--lv5 {
+  --ec-bg: #f8f3fd;
+  --ec-line: #d7c6ef;
+  --ec-ink: #7140b5;
+  --ec-chip: #eadffa;
+}
+.plot.plot--lv6 {
+  --ec-bg: #eef8fd;
+  --ec-line: #b5d9eb;
+  --ec-ink: #367caa;
+  --ec-chip: #d7edf8;
 }
 
-.plot--interactive {
-  cursor: pointer;
-  user-select: none;
+/* 选择态用 EntityCard 的 --selected/--disabled（基于 ui-primary），此处只保留土地专属边框色与合种/锁定 */
+.plot.plot--ripe {
+  border-color: color-mix(in srgb, var(--ui-primary) 55%, var(--ec-line));
 }
-.plot--interactive:hover {
-  border-color: color-mix(in srgb, var(--soil-ink) 45%, var(--soil-line));
-  box-shadow: 0 4px 14px rgba(45, 66, 52, 0.1);
+.plot.plot--steal {
+  border-color: color-mix(in srgb, var(--ui-violet) 55%, var(--ec-line));
 }
-.plot--interactive:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--ui-primary) 60%, transparent);
-  outline-offset: 2px;
-}
-.plot--ripe {
-  border-color: color-mix(in srgb, var(--ui-primary) 55%, var(--soil-line));
-}
-.plot--steal {
-  border-color: color-mix(in srgb, var(--ui-violet) 55%, var(--soil-line));
-}
-.plot--dead {
+.plot.plot--dead {
   filter: grayscale(0.85);
 }
-.plot--locked {
+.plot.plot--locked {
   border-style: dashed;
   opacity: 0.6;
 }
-.plot--follower .plot__crop,
-.plot--follower .plot__name {
+.plot--follower :deep(.entity-card__media),
+.plot--follower :deep(.entity-card__name) {
   opacity: 0.45;
 }
-.plot--selected,
-.plot--selected:hover {
-  border-color: var(--ui-primary);
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--ui-primary) 22%, transparent),
-    inset 0 0 0 1px var(--ui-primary);
-}
-.plot--disabled {
-  cursor: not-allowed;
-  opacity: 0.42;
-}
 
-.plot__top {
-  display: flex;
-  width: 100%;
-  height: 20px;
-  align-items: center;
-  gap: 4px;
-}
 .plot__no {
   color: var(--ui-subtle);
   font-size: 10px;
@@ -384,8 +349,8 @@ const ariaLabel = computed(() => {
 .plot__soil {
   padding: 0 6px;
   border-radius: 999px;
-  color: var(--soil-ink);
-  background: var(--soil-chip);
+  color: var(--ec-ink);
+  background: var(--ec-chip);
   font-size: 10px;
   font-weight: var(--fw-700);
   line-height: 16px;
@@ -396,7 +361,7 @@ const ariaLabel = computed(() => {
   align-items: center;
   gap: 2px;
   margin-left: auto;
-  color: var(--soil-ink);
+  color: var(--ec-ink);
   font-size: 10px;
   font-weight: var(--fw-700);
   font-variant-numeric: tabular-nums;
@@ -414,11 +379,11 @@ const ariaLabel = computed(() => {
   background: color-mix(in srgb, var(--ui-surface-strong) 65%, transparent);
   font-size: 12px;
 }
-.plot--selected .plot__check {
+.entity-card--selected .plot__check {
   border-color: var(--ui-primary-fill);
   background: var(--ui-primary-fill);
 }
-.plot--disabled .plot__check {
+.entity-card--disabled .plot__check {
   color: var(--ui-subtle);
   border-color: var(--ui-border-strong);
   border-style: dashed;
@@ -429,46 +394,27 @@ const ariaLabel = computed(() => {
   margin-left: 2px;
 }
 
-.plot--selectable .plot__joint > span {
+.plot.entity-card--selectable .plot__joint > span {
   display: none;
 }
 
-.plot__crop {
-  width: 44px;
-  height: 44px;
-  display: grid;
-  margin-top: 2px;
-  place-items: center;
-}
-.plot__crop img {
+.plot :deep(.entity-card__media img) {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.12));
 }
 .plot__placeholder {
-  color: color-mix(in srgb, var(--soil-ink) 40%, transparent);
+  color: color-mix(in srgb, var(--ec-ink) 40%, transparent);
   font-size: 24px;
 }
 
-.plot__name {
-  width: 100%;
+.plot :deep(.entity-card__name) {
   margin-top: 4px;
-  overflow: hidden;
-  font-size: 12px;
-  font-weight: var(--fw-650);
-  line-height: 16px;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.plot__time {
-  display: flex;
+.plot :deep(.entity-card__state) {
   height: 20px;
-  align-items: center;
-  justify-content: center;
-  margin-top: 2px;
 }
 .plot__countdown {
   display: inline-flex;
@@ -513,10 +459,9 @@ const ariaLabel = computed(() => {
 .plot__bar {
   width: 100%;
   height: 4px;
-  margin-top: 5px;
   overflow: hidden;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--soil-ink) 12%, transparent);
+  background: color-mix(in srgb, var(--ec-ink) 12%, transparent);
 }
 .plot__bar i {
   display: block;
@@ -526,6 +471,14 @@ const ariaLabel = computed(() => {
   transition: width 0.4s ease;
 }
 
+/* 土地卡的 tags 是图标行（无边框/无分隔线），覆盖 EntityCard footer 的操作行样式 */
+.plot :deep(.entity-card__footer) {
+  min-height: 20px;
+  padding-top: 0;
+  border-top: 0;
+  flex-wrap: nowrap;
+  gap: 3px;
+}
 .plot__tags {
   display: flex;
   width: 100%;
@@ -534,7 +487,6 @@ const ariaLabel = computed(() => {
   align-items: center;
   justify-content: center;
   gap: 3px;
-  margin-top: 7px;
   overflow: hidden;
 }
 .plot__need,
@@ -632,38 +584,38 @@ const ariaLabel = computed(() => {
 }
 
 /* 深色：深灰卡面，类型色只在顶部渐变、描边和类型标签上 */
-.dark .plot {
-  --soil-tint: #9aa3ad;
-  border-color: color-mix(in srgb, var(--soil-tint) 28%, transparent);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--soil-tint) 12%, #1d2228) 0%, #1a1f25 70%);
+.dark .plot.plot {
+  --ec-tint: #9aa3ad;
+  border-color: color-mix(in srgb, var(--ec-tint) 28%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ec-tint) 12%, #1d2228) 0%, #1a1f25 70%);
   box-shadow: none;
 }
-.dark .plot--lv1,
-.dark .plot--lv0 {
-  --soil-tint: #c9a867;
+.dark .plot.plot--lv1,
+.dark .plot.plot--lv0 {
+  --ec-tint: #c9a867;
 }
-.dark .plot--lv2 {
-  --soil-tint: #e08a6e;
+.dark .plot.plot--lv2 {
+  --ec-tint: #e08a6e;
 }
-.dark .plot--lv3 {
-  --soil-tint: #8d939b;
+.dark .plot.plot--lv3 {
+  --ec-tint: #8d939b;
 }
-.dark .plot--lv4 {
-  --soil-tint: #e6c35a;
+.dark .plot.plot--lv4 {
+  --ec-tint: #e6c35a;
 }
-.dark .plot--lv5 {
-  --soil-tint: #b892f0;
+.dark .plot.plot--lv5 {
+  --ec-tint: #b892f0;
+}
+.dark .plot.plot--lv6 {
+  --ec-tint: #82bddf;
 }
 .dark .plot__soil,
 .dark .plot__joint {
-  color: var(--soil-tint);
-  background: color-mix(in srgb, var(--soil-tint) 15%, transparent);
+  color: var(--ec-tint);
+  background: color-mix(in srgb, var(--ec-tint) 15%, transparent);
 }
 .dark .plot__joint {
   background: transparent;
-}
-.dark .plot--selected {
-  border-color: var(--ui-primary);
 }
 .dark .plot__trait {
   background: transparent;
@@ -677,14 +629,5 @@ const ariaLabel = computed(() => {
   .plot__bar i {
     transition: none;
   }
-}
-.plot--lv6 {
-  --soil-bg: #eef8fd;
-  --soil-line: #b5d9eb;
-  --soil-ink: #367caa;
-  --soil-chip: #d7edf8;
-}
-.dark .plot--lv6 {
-  --soil-tint: #82bddf;
 }
 </style>

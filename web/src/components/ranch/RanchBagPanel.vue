@@ -3,6 +3,7 @@ import type { RanchItem } from '@/stores/ranch'
 import { NButton } from 'naive-ui/es/button'
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
+import BagGridCard from '@/components/BagGridCard.vue'
 import { formatCount, formatDuration, useRanchActions, useRanchLoader } from '@/components/ranch/ranch-shared'
 import RanchAmountDialog from '@/components/ranch/RanchAmountDialog.vue'
 import RanchGate from '@/components/ranch/RanchGate.vue'
@@ -139,7 +140,7 @@ watch(category, () => failed.value = {})
     <RanchGate @retry="refresh">
       <EmptyState v-if="!items.length" title="牧场背包是空的" description="在牧场商店购买幼崽或罐头后会出现在这里" icon="i-carbon-box" />
 
-      <div v-else class="personal-panel__card bag-card farm-card rounded-2xl">
+      <div v-else class="personal-panel__card bag-card-shell farm-card rounded-2xl">
         <div class="bag-toolbar panel-sticky">
           <div class="bag-categories" role="group" aria-label="背包分类">
             <NButton
@@ -161,21 +162,26 @@ watch(category, () => failed.value = {})
 
         <EmptyState v-if="!filtered.length" bare title="这个分类暂无物品" icon="i-carbon-box" />
         <div v-else class="bag-grid">
-          <article v-for="item in filtered" :key="item.uid" class="bag-item">
-            <div class="bag-item__thumb">
+          <BagGridCard v-for="item in filtered" :key="item.uid" :name-title="item.name">
+            <template #thumb>
               <img v-if="item.image && !failed[item.uid]" :src="item.image" :alt="item.name" loading="lazy" @error="failed[item.uid] = true">
               <span v-else class="bag-item__fallback">{{ (item.name || '物').slice(0, 1) }}</span>
               <span v-if="item.locked" class="bag-item__lock" title="已锁定"><span class="i-carbon-locked" /></span>
-            </div>
-            <strong class="bag-item__name" :title="item.name">{{ item.name }}</strong>
-            <div class="bag-item__meta">
+            </template>
+
+            <template #name>
+              {{ item.name }}
+            </template>
+
+            <template #meta>
               <span class="bag-type" :class="`bag-type--${categoryOf(item)}`">{{ SHORT[categoryOf(item)] }}</span>
               <span v-if="item.giantCub" class="is-giant">巨大</span>
               <span v-if="item.product?.weightX10">{{ (item.product.weightX10 / 100).toFixed(2).replace(/\.?0+$/, '') }}kg</span>
               <span v-if="item.sellPrices?.[0]" title="单价">{{ formatCount(item.sellPrices[0].count) }}{{ item.sellPrices[0].name }}</span>
               <span v-if="item.locked" class="is-locked">已锁定</span>
-            </div>
-            <footer class="bag-item__foot">
+            </template>
+
+            <template #footer>
               <span class="bag-item__qty"><small>×</small>{{ formatCount(item.count) }}</span>
               <div class="bag-item__actions">
                 <NButton
@@ -193,8 +199,8 @@ watch(category, () => failed.value = {})
                   {{ action.label }}
                 </NButton>
               </div>
-            </footer>
-          </article>
+            </template>
+          </BagGridCard>
         </div>
       </div>
     </RanchGate>
@@ -219,144 +225,10 @@ watch(category, () => failed.value = {})
   </div>
 </template>
 
+<style scoped src="@/styles/bag.css"></style>
+
 <style scoped>
-.bag-card {
-  --bag-pad: 16px;
-  padding: var(--bag-pad);
-}
-
-@media (min-width: 640px) {
-  .bag-card {
-    --bag-pad: 20px;
-  }
-}
-
-.bag-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin: calc(-1 * var(--bag-pad)) calc(-1 * var(--bag-pad)) 14px;
-  padding: 12px var(--bag-pad);
-  border-radius: var(--ui-radius-card) var(--ui-radius-card) 0 0;
-  background: var(--ui-table-head);
-  box-shadow: 0 1px 0 var(--ui-border);
-}
-
-.bag-categories {
-  display: flex;
-  min-width: 0;
-  gap: 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.bag-categories :deep(.n-button) {
-  flex: none;
-}
-
-.bag-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
-  grid-auto-rows: 1fr;
-  gap: 14px;
-}
-
-.bag-item {
-  position: relative;
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 16px 12px 12px;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-card);
-  background: var(--ui-surface);
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    var(--ui-shadow-sm);
-  text-align: center;
-}
-
-.bag-item__thumb {
-  position: relative;
-  display: grid;
-  width: 72px;
-  height: 72px;
-  margin-bottom: 8px;
-  place-items: center;
-  border-radius: 18px;
-  background: var(--ui-surface-soft);
-}
-
-.bag-item__thumb img {
-  max-width: 56px;
-  max-height: 56px;
-  object-fit: contain;
-}
-
-.bag-item__fallback {
-  color: var(--ui-subtle);
-  font-size: 24px;
-  font-weight: var(--fw-700);
-}
-
-.bag-item__lock {
-  position: absolute;
-  top: -6px;
-  left: -6px;
-  display: grid;
-  width: 22px;
-  height: 22px;
-  place-items: center;
-  border-radius: 999px;
-  color: #fff;
-  background: var(--ui-warning-fill);
-  box-shadow: 0 0 0 2px var(--ui-surface-strong);
-  font-size: 12px;
-}
-
-.bag-item__name {
-  width: 100%;
-  overflow: hidden;
-  color: var(--ui-ink);
-  font-size: 14px;
-  font-weight: var(--fw-650);
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bag-item__meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 4px 8px;
-  color: var(--ui-muted);
-  font-size: 11px;
-  line-height: 18px;
-  font-variant-numeric: tabular-nums;
-}
-
-.bag-item__meta .is-giant {
-  color: #b07a0c;
-  font-weight: var(--fw-650);
-}
-
-.bag-item__meta .is-locked {
-  color: var(--ui-warning);
-  font-weight: var(--fw-600);
-}
-
-.bag-type {
-  padding: 0 6px;
-  border-radius: 5px;
-  font-weight: var(--fw-600);
-}
-
+/* 牧场背包只保留分类配色与提示；工具栏/网格/卡片骨架复用农场背包体系。 */
 .bag-type--product {
   color: var(--ui-danger);
   background: var(--ui-danger-soft);
@@ -382,56 +254,14 @@ watch(category, () => failed.value = {})
   background: var(--ui-surface-soft);
 }
 
-.bag-item__foot {
-  display: flex;
-  width: 100%;
-  min-height: 34px;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: auto;
-  padding-top: 10px;
-  border-top: 1px dashed var(--ui-border);
-}
-
-.bag-item__actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 4px;
-  margin-inline-start: auto;
-}
-
-.bag-item__qty {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--ui-ink);
-  font-size: 16px;
-  font-weight: var(--fw-700);
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.bag-item__qty small {
-  margin-right: 1px;
-  color: var(--ui-muted);
-  font-size: 12px;
-  font-weight: var(--fw-600);
+.is-giant {
+  color: #b07a0c;
+  font-weight: var(--fw-650);
 }
 
 .bag-hint {
   margin: 0;
   color: var(--ui-warning);
   font-size: 12px;
-}
-
-@media (max-width: 520px) {
-  .bag-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
 }
 </style>
