@@ -17,33 +17,6 @@ const { remainingSeconds } = useRanchClock()
 const pens = computed<any[]>(() => (state.value?.facilities || []).filter((f: any) => f.ranch))
 const animals = computed(() => pens.value.flatMap(f => (f.ranch.animals || []).map((animal: any) => ({ animal, pen: f.name, hazards: f.ranch.hazards?.length || 0 }))))
 
-/**
- * 按设施分组：窝（6）在前、棚（7）在后。服务器返回的设施顺序不固定，
- * 组内再按栏位、实例编号排序，刷新后位置不变。
- * 分组基于当前筛选结果（visible），因此筛选与分组可同时使用。
- */
-const PEN_ORDER: Record<number, number> = { 6: 0, 7: 1 }
-const penGroups = computed(() => {
-  const groups = new Map<number, { type: number, name: string, count: number, capacity: number, animals: any[] }>()
-  for (const f of pens.value) {
-    const type = Number(f.moduleType)
-    const group = groups.get(type) || { type, name: f.name, count: 0, capacity: 0, animals: [] as any[] }
-    group.count += Number(f.ranch.count) || 0
-    group.capacity += Number(f.ranch.capacity) || 0
-    groups.set(type, group)
-  }
-  for (const entry of visible.value) {
-    const f = pens.value.find((pen: any) => pen.name === entry.pen)
-    if (!f) continue
-    const type = Number(f.moduleType)
-    const group = groups.get(type)
-    if (group && !group.animals.some((a: any) => a.id === entry.animal.id))
-      group.animals.push(entry.animal)
-  }
-  return [...groups.values()]
-    .sort((a, b) => (PEN_ORDER[a.type] ?? 9) - (PEN_ORDER[b.type] ?? 9) || a.type - b.type)
-    .map(group => ({ ...group, animals: [...group.animals].sort((a, b) => (Number(a.slot) || 0) - (Number(b.slot) || 0) || Number(a.id) - Number(b.id)) }))
-})
 const capacity = computed(() => pens.value.reduce((sum, f) => sum + (Number(f.ranch.capacity) || 0), 0))
 const shelves = computed(() => pens.value.flatMap(f => f.ranch.shelves.filter((s: any) => s.canCollect).map((s: any) => ({ ...s, pen: f.name, key: `${f.id}:${s.slot}` }))))
 const hazards = computed(() => pens.value.reduce((sum, f) => sum + (f.ranch.hazards?.length || 0), 0))
@@ -67,6 +40,35 @@ const visible = computed(() => {
 function toggleFilter(key: AnimalFilter) {
   filterKey.value = filterKey.value === key ? 'all' : key
 }
+
+/**
+ * 按设施分组：窝（6）在前、棚（7）在后。服务器返回的设施顺序不固定，
+ * 组内再按栏位、实例编号排序，刷新后位置不变。
+ * 分组基于当前筛选结果（visible），因此筛选与分组可同时使用。
+ */
+const PEN_ORDER: Record<number, number> = { 6: 0, 7: 1 }
+const penGroups = computed(() => {
+  const groups = new Map<number, { type: number, name: string, count: number, capacity: number, animals: any[] }>()
+  for (const f of pens.value) {
+    const type = Number(f.moduleType)
+    const group = groups.get(type) || { type, name: f.name, count: 0, capacity: 0, animals: [] as any[] }
+    group.count += Number(f.ranch.count) || 0
+    group.capacity += Number(f.ranch.capacity) || 0
+    groups.set(type, group)
+  }
+  for (const entry of visible.value) {
+    const f = pens.value.find((pen: any) => pen.name === entry.pen)
+    if (!f)
+      continue
+    const type = Number(f.moduleType)
+    const group = groups.get(type)
+    if (group && !group.animals.some((a: any) => a.id === entry.animal.id))
+      group.animals.push(entry.animal)
+  }
+  return [...groups.values()]
+    .sort((a, b) => (PEN_ORDER[a.type] ?? 9) - (PEN_ORDER[b.type] ?? 9) || a.type - b.type)
+    .map(group => ({ ...group, animals: [...group.animals].sort((a, b) => (Number(a.slot) || 0) - (Number(b.slot) || 0) || Number(a.id) - Number(b.id)) }))
+})
 
 const canProduce = computed(() => animals.value.some(({ animal }) => animal.canProduce))
 const canHarvest = computed(() => animals.value.some(({ animal }) => animal.canHarvest) || shelves.value.length > 0)
