@@ -841,8 +841,14 @@ function openAnimals() {
     justify-content: flex-start;
   }
 
+  /* 手机端筛选项为 2×2 网格 + 按钮行，本身约占 200px；
+     卡片太矮会让日志列表只剩一两行、内容被裁切，这里给足高度容纳多行日志。 */
+  .ov-log :deep(.dash-logs) {
+    min-height: 460px;
+  }
+
   .ov-log :deep(.dash-logs__card) {
-    height: 260px;
+    height: 460px;
   }
 }
 </style>

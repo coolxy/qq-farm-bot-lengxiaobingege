@@ -24,6 +24,8 @@ const { currentAccountId } = storeToRefs(accountStore)
 const { season, shop, solarTerms, constellation, notice, actionError } = storeToRefs(activityStore)
 const selectedActivity = ref<ActivityGameplayKey | null>(null)
 const selectedInstanceId = ref('')
+/** 从牧场活动页 ?activity=muge&from=ranch 进入时，返回应回到牧场活动页而非农场活动中心。 */
+const detailFromRanch = ref(false)
 const appStore = useAppStore()
 watch(selectedActivity, (value) => {
   appStore.activityDetailOpen = !!value
@@ -51,6 +53,12 @@ async function openActivity(activity: ActivityDirectoryItemDto) {
 
 function goBack() {
   if (selectedActivity.value) {
+    if (detailFromRanch.value) {
+      detailFromRanch.value = false
+      selectedActivity.value = null
+      void router.push({ name: 'ranch-activity' })
+      return
+    }
     selectedActivity.value = null
     return
   }
@@ -59,6 +67,7 @@ function goBack() {
 
 watch(currentAccountId, () => {
   selectedActivity.value = null
+  detailFromRanch.value = false
   activityStore.refresh(accountId())
 }, { flush: 'post' })
 
@@ -97,8 +106,10 @@ watch(stellarDetailsAvailable, (available) => {
 onMounted(() => {
   activityStore.refresh(accountId())
   // 牧场活动页等外部入口可通过 ?activity=muge 直接打开牧歌初启详情页
-  if (router.currentRoute.value.query.activity === 'muge')
+  if (router.currentRoute.value.query.activity === 'muge') {
+    detailFromRanch.value = router.currentRoute.value.query.from === 'ranch'
     selectedActivity.value = 'muge'
+  }
 })
 onUnmounted(() => {
   appStore.activityDetailOpen = false

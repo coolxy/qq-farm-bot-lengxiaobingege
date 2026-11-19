@@ -18,9 +18,10 @@ const { serverNow, remainingSeconds } = useRanchClock()
 const { request, disabled } = useRanchActions()
 const router = useRouter()
 
-/** 牧歌初启有独立详情页（含奖励进度与人格测试），从牧场活动卡片跳转过去。 */
+/** 牧歌初启有独立详情页（含奖励进度与人格测试），从牧场活动卡片跳转过去。
+ *  带 from=ranch 让详情页返回时回到牧场活动页，而不是落到农场活动中心。 */
 function openMuge() {
-  router.push({ name: 'activity-center', query: { activity: 'muge' } })
+  router.push({ name: 'activity-center', query: { activity: 'muge', from: 'ranch' } })
 }
 function hasMugeDetail(activity: any) {
   return String(activity?.id) === '2026111700' && phase(activity).tone !== 'ended'
