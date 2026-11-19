@@ -155,16 +155,24 @@ function inventory(raw: any): any[] {
 }
 
 function taskList(reply: any): any[] {
-    const source = reply.task_info;
+    const source = reply.task_info || {};
     const result = new Map<string, any>();
-    for (const task of [...source.growth_tasks, ...source.daily_tasks, ...source.tasks]) {
-        if (![4, 5].includes(task.task_type)) continue;
+    // 牧场（scene 2）TaskInfo 返回 task_type 4（成长）/5（每日）；
+    // 农场（scene 1）为 1（成长）/2（每日）。这里两种都兼容：正常请求带
+    // global_scene_id=2 时拿 4/5；万一请求丢失场景参数退回农场任务也能识别，不会漏领。
+    const growthTypes = [1, 4];
+    const dailyTypes = [2, 5];
+    for (const task of [...(source.growth_tasks || []), ...(source.daily_tasks || []), ...(source.tasks || [])]) {
+        const type = Number(task.task_type);
+        const isGrowth = growthTypes.includes(type);
+        const isDaily = dailyTypes.includes(type);
+        if (!isGrowth && !isDaily) continue;
         const id = quantity(task.id);
         result.set(id, {
-            id, category: task.task_type === 5 ? 'daily' : 'growth', desc: task.desc || taskMap.get(Number(task.id))?.desc || `任务${id}`,
+            id, category: isDaily ? 'daily' : 'growth', desc: task.desc || taskMap.get(Number(task.id))?.desc || `任务${id}`,
             progress: quantity(task.progress), total: quantity(task.total_progress), claimed: task.is_claimed, unlocked: task.is_unlocked,
             canClaim: task.is_unlocked && !task.is_claimed && BigInt(quantity(task.total_progress)) > 0n && BigInt(quantity(task.progress)) >= BigInt(quantity(task.total_progress)),
-            shareMultiple: Number(task.share_multiple), conditionType: Number(task.cond_type), rewards: task.rewards.map(itemDto),
+            shareMultiple: Number(task.share_multiple), conditionType: Number(task.cond_type), rewards: (task.rewards || []).map(itemDto),
             entry: id === '300008' ? 'friends' : null,
         });
     }
