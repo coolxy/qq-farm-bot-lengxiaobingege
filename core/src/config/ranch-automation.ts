@@ -21,6 +21,7 @@ export const RANCH_AUTOMATION_DEFAULTS = {
     ranch_friend_clean: false,
     ranch_friend_mosquito: false,
     ranch_task: true,
+    ranch_illustrated: true,
     ranch_share: true,
     // 演练：只跑报价、记日志，不发写请求。用于在新账号或版本更新后验证判定逻辑。
     ranch_dry_run: false,
