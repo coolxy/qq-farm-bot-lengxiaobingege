@@ -1,5 +1,6 @@
-/* 概览卡片：农场与牧场概览共用，保证两个空间的首页结构与视觉一致。
-   组件内以 <style scoped src> 引入，类名仍按组件作用域隔离。 */
+/* 概览卡片共享样式：以农场 Dashboard 为基准抽取，牧场概览复用，保证两边视觉一致。
+   组件内以 <style scoped src> 引入，类名按组件作用域隔离。
+   日志区等农场独有样式仍留在 Dashboard.vue 内联。 */
 .overview-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -27,47 +28,25 @@
 }
 
 .ov-card {
-  position: relative;
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 14px;
   padding: 20px;
   border: 1px solid var(--ui-border);
-  border-radius: 16px;
+  border-radius: var(--ui-radius-card);
   background: var(--ui-surface);
   box-shadow:
     inset 0 1px 0 var(--glass-highlight),
-    var(--ui-shadow-sm),
-    0 12px 28px -18px rgba(38, 74, 52, 0.2);
-}
-
-/* 首卡突出：左上角注入一抹主题绿光晕，与其余卡片拉开层次。 */
-.ov-account {
-  background:
-    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--ui-primary) 9%, transparent), transparent 60%),
-    var(--ui-surface);
+    var(--ui-shadow-sm);
 }
 
 .ov-card__title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
   margin: 0;
   color: var(--ui-muted);
   font-size: 13px;
   font-weight: var(--fw-600);
   line-height: 1.4;
-}
-
-/* 标题左侧的品牌色条，给纯文字标题一点精致感 */
-.ov-card__title::before {
-  width: 3px;
-  height: 13px;
-  flex: none;
-  border-radius: 2px;
-  background: linear-gradient(180deg, var(--ui-primary), var(--ui-teal));
-  content: '';
 }
 
 /* 账号 */
@@ -79,18 +58,15 @@
 
 .ov-avatar {
   position: relative;
-  width: 54px;
-  height: 54px;
+  width: 52px;
+  height: 52px;
   display: grid;
   flex: none;
   place-items: center;
-  border-radius: 17px;
+  border-radius: 16px;
   color: var(--ui-subtle);
-  background: linear-gradient(150deg, var(--ui-surface-solid), var(--ui-surface-soft));
-  box-shadow:
-    0 0 0 1px var(--ui-border),
-    0 4px 12px -4px rgba(38, 74, 52, 0.18);
-  font-size: 27px;
+  background: var(--ui-surface-soft);
+  font-size: 26px;
 }
 
 .ov-avatar img {
@@ -113,7 +89,6 @@
 
 .ov-avatar.is-online .ov-avatar__dot {
   background: #3fa765;
-  box-shadow: 0 0 0 3px color-mix(in srgb, #3fa765 22%, transparent);
 }
 
 .ov-account__name-row {
@@ -136,14 +111,13 @@
 
 .ov-level {
   flex: none;
-  padding: 2px 10px;
-  border: 1px solid color-mix(in srgb, var(--ui-primary) 18%, transparent);
+  padding: 1px 8px;
   border-radius: 999px;
-  color: var(--ui-primary);
-  background: var(--ui-primary-soft);
+  color: var(--ui-blue);
+  background: var(--ui-blue-soft);
   font-size: 12px;
   font-weight: var(--fw-700);
-  line-height: 18px;
+  line-height: 20px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -214,29 +188,17 @@
 }
 
 .ov-exp__track {
-  height: 9px;
+  height: 8px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--ui-surface-soft);
-  box-shadow: inset 0 1px 2px rgba(38, 74, 52, 0.1);
 }
 
 .ov-exp__bar {
-  position: relative;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--ov-exp-from, #8ecf9f), var(--ov-exp-to, #438d63));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  background: linear-gradient(90deg, #5c9fd0, #4b86c5);
   transition: width 0.5s ease;
-}
-
-/* 高光扫过效果，让进度条更有质感 */
-.ov-exp__bar::after {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 55%);
-  border-radius: inherit;
-  content: '';
 }
 
 .ov-account__foot {
@@ -268,30 +230,14 @@
 }
 
 .ov-tile {
-  position: relative;
   display: flex;
   min-width: 0;
   flex-direction: column;
   justify-content: flex-start;
-  gap: 5px;
-  padding: 13px 15px;
-  overflow: hidden;
-  border: 1px solid var(--ui-border);
-  border-radius: 13px;
-  background: linear-gradient(150deg, var(--ui-surface-solid), var(--ui-surface-soft));
-  box-shadow: inset 0 1px 0 var(--glass-highlight);
-  transition:
-    border-color 0.16s ease,
-    box-shadow 0.16s ease,
-    transform 0.16s ease;
-}
-
-.ov-tile:hover {
-  border-color: color-mix(in srgb, var(--ui-primary) 26%, var(--ui-border));
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    0 8px 18px -12px rgba(38, 74, 52, 0.22);
-  transform: translateY(-1px);
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--ui-surface-soft);
 }
 
 .ov-tile__label {
@@ -336,12 +282,10 @@
 @media (max-width: 520px) {
   .ov-card {
     padding: 16px;
-    border-radius: 15px;
   }
 
   .ov-tile {
-    padding: 11px 13px;
-    border-radius: 12px;
+    padding: 10px 12px;
   }
 
   .ov-tile__value {

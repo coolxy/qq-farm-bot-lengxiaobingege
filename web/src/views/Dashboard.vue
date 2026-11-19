@@ -775,7 +775,7 @@ useIntervalFn(updateCountdowns, 1000)
 
 <style scoped src="@/styles/overview.css"></style>
 
-<!-- 日志区样式为农场概览独有，保留内联；ov-* 概览卡片样式统一走 overview.css 与牧场共用。 -->
+<!-- 概览卡片样式统一走 overview.css（以农场为基准，牧场复用）；日志区为农场独有，保留内联。 -->
 <style scoped>
 .log-filters {
   display: grid;
