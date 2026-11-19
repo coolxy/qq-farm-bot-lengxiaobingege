@@ -117,6 +117,12 @@ function mergeRanches(cells: any, ranches: any[]): any {
     };
 }
 
+function shedAwaitingActivation(raw: any): any {
+    // 达到开放条件后，服务器下发待激活的一级棚和正式实例 ID。
+    return raw.cells.facilities.find((facility: any) =>
+        facility.module_type === 7 && facility.facility_id === 6002001 && facility.state === 3);
+}
+
 function snapshot(raw: any): any {
     const info = levelInfo(Number(balance(raw.bag, 1102).total));
     const scene = sceneStatus();
@@ -316,4 +322,4 @@ async function resourceBalances(keys: string[]): Promise<any[]> {
     }, { fresh: true });
 }
 
-module.exports = { getState, loadRaw, loadBag, mergeRanches, snapshot, balance, bagItems, inventory, salePrices, taskList, catalog, market, readMarketRotation, canCatalog, resourceBalance, isRanchResource, resourceBalances, animalDto };
+module.exports = { getState, loadRaw, loadBag, mergeRanches, shedAwaitingActivation, snapshot, balance, bagItems, inventory, salePrices, taskList, catalog, market, readMarketRotation, canCatalog, resourceBalance, isRanchResource, resourceBalances, animalDto };

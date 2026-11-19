@@ -113,6 +113,7 @@ const events = [
   { label: '补充牧草', value: 'ranch_addGrass' },
   { label: '添加罐头', value: 'ranch_useCan' },
   { label: '喂养动物', value: 'ranch_feed' },
+  { label: '解锁牧场棚', value: 'ranch_activateShed' },
   { label: '牧场设施升级', value: 'ranch_upgrade' },
   { label: '完成设施升级', value: 'ranch_completeUpgrade' },
   { label: '领取图鉴奖励', value: 'ranch_claimIllustrated' },
