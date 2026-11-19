@@ -1,18 +1,17 @@
 /**
  * 活动任务自动化编排入口：每个活动一个独立文件，这里只负责按顺序执行并汇总日志
  *
- * - milk-tea-auto.ts  奶茶热销中（2026110100）
- * - happy-auto.ts     快乐不独享（2026110104）
  * - solar-auto.ts     节令日历（节令开始当天执行一次）
  * - muge-auto.ts      牧歌初启（2026111700，牧场限时活动，自动领可领奖励）
+ *
+ * 奶茶热销中 / 快乐不独享已过期下线，其自动化（auto/remind）已移除；
+ * 手动查看与操作能力保留在 milk-tea / share-reward-activity service 及前端页面。
  */
 
 import type { AutoPushMessage, AutoResult } from './shared';
 export {};
 const { isAutomationOn } = require('../../models/store');
 const { log } = require('../../utils/utils');
-const { autoMilkTea } = require('./milk-tea-auto');
-const { autoHappy } = require('./happy-auto');
 const { autoSolar } = require('./solar-auto');
 const { autoMuge } = require('./muge-auto');
 
@@ -33,8 +32,6 @@ async function checkAndClaimActivityTasks(): Promise<ActivityTaskResult> {
         if (result.push?.title && result.push?.content) pushes.push(result.push);
     };
 
-    await run(autoMilkTea);
-    await run(autoHappy);
     await run(autoSolar);
     await run(autoMuge);
 
@@ -46,8 +43,6 @@ async function checkAndClaimActivityTasks(): Promise<ActivityTaskResult> {
 
 module.exports = {
     checkAndClaimActivityTasks,
-    autoMilkTea,
-    autoHappy,
     autoSolar,
     autoMuge,
 };
