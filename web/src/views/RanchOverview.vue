@@ -388,10 +388,17 @@ function openAnimals() {
   align-self: flex-start;
 }
 
+/* 异构道具图标统一放进浅色圆角托盘，视觉归一、更有质感 */
 .ov-tile__img {
-  width: 16px;
-  height: 16px;
+  box-sizing: content-box;
+  width: 18px;
+  height: 18px;
   flex: none;
+  padding: 3px;
+  border: 1px solid var(--ui-border);
+  border-radius: 7px;
+  background: var(--ui-surface-solid);
+  box-shadow: 0 1px 2px rgba(38, 74, 52, 0.08);
   object-fit: contain;
 }
 
