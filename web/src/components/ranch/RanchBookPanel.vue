@@ -4,7 +4,7 @@ import { NCard } from 'naive-ui/es/card'
 import { NModal } from 'naive-ui/es/modal'
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, ref, watch } from 'vue'
-import api, { getApiErrorMessage } from '@/api'
+import { getApiErrorMessage } from '@/api'
 import BookOverview from '@/components/illustrated/BookOverview.vue'
 import BookSection from '@/components/illustrated/BookSection.vue'
 import BookTile from '@/components/illustrated/BookTile.vue'
@@ -12,12 +12,10 @@ import BookToolbar from '@/components/illustrated/BookToolbar.vue'
 import { formatCount, useRanchActions, useRanchLoader } from '@/components/ranch/ranch-shared'
 import RanchGate from '@/components/ranch/RanchGate.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import { useAccountStore } from '@/stores/account'
 import { useRanchStore } from '@/stores/ranch'
 import { useToastStore } from '@/stores/toast'
 
 const props = defineProps<{ kind: 'normal' | 'giant' }>()
-const { currentAccountId } = storeToRefs(useAccountStore())
 const { state, loading } = storeToRefs(useRanchStore())
 const { refresh } = useRanchLoader('illustrated')
 const { disabled, request } = useRanchActions()
@@ -97,9 +95,8 @@ function tileMeta(entry: any) {
   return `${entry.giant.tierName ? `${entry.giant.tierName} · ` : ''}${entry.giant.weightKg} kg`
 }
 async function clearGiantNew() {
-  const accountId = String(currentAccountId.value || '')
   const fruitIds = freshGiantIds.value
-  if (clearing.value || disabled.value || !accountId)
+  if (clearing.value || disabled.value)
     return
   if (!fruitIds.length) {
     toast.warning('没有未读图鉴')
@@ -107,24 +104,10 @@ async function clearGiantNew() {
   }
   clearing.value = true
   try {
-    const response = await api.post('/api/illustrated/clear-new', { fruitIds }, {
-      headers: { 'x-account-id': accountId },
-      skipErrorToast: true,
-    } as any)
-    if (!response.data?.ok)
-      throw new Error(getApiErrorMessage(response.data, '图鉴已读清除失败'))
-    const cleared: number[] = Array.isArray(response.data?.data?.cleared) ? response.data.data.cleared : []
-    if (cleared.length && book.value?.animals) {
-      const done = new Set(cleared)
-      for (const entry of book.value.animals) {
-        if (done.has(Number(entry.id)) && entry.giant)
-          entry.giant.isNew = false
-      }
-    }
-    if (cleared.length)
-      toast.success(`已读 ${cleared.length} 条新增图鉴`)
-    else
-      toast.warning('没有未读图鉴')
+    // 走牧场自有 action（clearIllustrated → inScene(2)），不再复用农场 /api/illustrated/clear-new，
+    // 避免账号停在场景1时把牧场图鉴的已读状态清到农场上。执行后 reload 会从服务端刷新 isNew。
+    await request('clearIllustrated', { fruitIds }, { costItems: [], rewards: [] })
+    toast.success(`已读 ${fruitIds.length} 条新增图鉴`)
   }
   catch (cause) {
     toast.error(getApiErrorMessage(cause, '图鉴已读清除失败'))

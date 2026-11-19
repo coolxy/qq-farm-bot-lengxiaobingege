@@ -32,10 +32,8 @@ const growthDone = computed(() => growthTasks.value.filter(task => task.claimed)
 
 /**
  * 牧场「我的任务」：任务进度来自牧场自己的 TaskInfo（task_type 4/5），
- * 分享礼包状态来自牧场快照 dailyShare；邮箱/会员/月卡与农场共用。
- *
- * 说明：/api/daily-gifts 返回的 ranch.gifts（服务端汇总的牧场每日状态）暂未接入，
- * 该接口目前只汇总农场侧，因此牧场两项自己算，其余沿用共享礼包。
+ * 分享礼包状态优先取 /api/daily-gifts 的 ranch.gifts（服务端汇总），缺失时回退牧场快照 dailyShare；
+ * 邮箱/商城礼包/月卡为账号级共用，沿用共享 dailyGifts。
  */
 const overview = computed(() => {
   const shared = (key: string) => dailyGifts.value?.gifts?.find((gift: any) => gift.key === key)
@@ -49,14 +47,17 @@ const overview = computed(() => {
     completedCount: claimed,
     totalCount: daily.length,
   }
+  // 服务端已汇总牧场分享状态（ranch.gifts），缺失时回退牧场快照，避免旧后端缓存导致空白。
+  const ranchShare = (dailyGifts.value as any)?.ranch?.gifts?.find((gift: any) => gift.key === 'daily_share')
   const shareState: any = state.value?.dailyShare || {}
+  const shareDone = ranchShare ? !!ranchShare.doneToday : !!shareState.claimed
   const shareGift = {
     key: 'daily_share',
     label: '分享礼包',
     enabled: true,
     mode: 'auto_claim',
-    doneToday: !!shareState.claimed,
-    completedCount: shareState.claimed ? 1 : 0,
+    doneToday: shareDone,
+    completedCount: shareDone ? 1 : 0,
     totalCount: 1,
   }
   const [email, mallFree, month] = SHARED_GIFTS.map(shared)

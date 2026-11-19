@@ -240,6 +240,7 @@ function createDataProvider(options: DataProviderOptions) {
         doFarmOp: (accountRef: string, opType: string, targetLandId: unknown = null) => (
             callWorkerApi(resolveAccountRefId(accountRef), 'doFarmOp', opType, targetLandId, true)
         ),
+        claimFarmShare: (accountRef: string) => callWorkerApi(resolveAccountRefId(accountRef), 'claimFarmShare'),
         fertilizeOwnLand: (accountRef: string, landId: unknown, fertilizerType: unknown) => (
             callWorkerApi(resolveAccountRefId(accountRef), 'fertilizeOwnLand', landId, fertilizerType)
         ),

@@ -121,8 +121,34 @@ async function checkDailyShareStatus(force: boolean = false): Promise<boolean> {
     }
 }
 
+/**
+ * 手动触发每日分享领取（与后台自动巡查共用同一套 check→report→claim 流程与当日状态）。
+ * 自动化为主、手动为辅：claimedDateKey 短路保证一天只会真正领一次，手动点不会重复领取。
+ */
+async function claimShareRewardManually(): Promise<any> {
+    const before = claimedDateKey === getSystemDateKey();
+    const changed = await checkDailyShareStatus(true);
+    const state = {
+        key: DAILY_KEY,
+        mode: 'auto_claim',
+        checkedToday: isCheckedToday(),
+        checkStatus,
+        canShare,
+        doneToday: claimedDateKey === getSystemDateKey(),
+        lastCheckAt,
+        lastClaimAt,
+    };
+    return {
+        ok: state.doneToday,
+        changed,
+        alreadyClaimed: before && state.doneToday,
+        state,
+    };
+}
+
 module.exports = {
     checkDailyShareStatus,
+    claimShareRewardManually,
     reportActivityShare,
     getInviteInfo,
     getShareDailyState: () => ({

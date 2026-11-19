@@ -174,6 +174,9 @@ async function handleApiCall(msg: any): Promise<void> {
             case 'doFarmOp':
                 result = await runFarmOperation(args[0], args[1], args[2] === true); // opType, optional targetLandId
                 break;
+            case 'claimFarmShare':
+                result = await require('../../services/share').claimShareRewardManually();
+                break;
             case 'fertilizeOwnLand':
                 result = await fertilizeOwnLand(args[0], args[1]);
                 break;
@@ -317,6 +320,19 @@ async function getDailyGiftOverview(propagateErrors: boolean = false): Promise<a
     const free = getFreeGiftDailyState ? getFreeGiftDailyState() : { doneToday: false, lastClaimAt: 0 };
     const share = getShareDailyState ? getShareDailyState() : { doneToday: false, lastClaimAt: 0 };
     const month = getMonthCardDailyState ? getMonthCardDailyState() : { doneToday: false, lastClaimAt: 0 };
+    // 牧场每日分享(102)状态取自本地网络缓存，零额外请求；与农场分享(1)互不影响。
+    // 牧场任务进度仍由 /api/ranch?view=tasks 提供，这里不重复拉取任务 RPC。
+    let ranchShare: any = null;
+    try {
+        const state = require('../../services/ranch/daily-share').getState();
+        ranchShare = {
+            key: 'daily_share',
+            doneToday: !!state.claimed,
+            shared: !!state.shared,
+            canClaim: !!state.canClaim,
+            rewards: Array.isArray(state.rewards) ? state.rewards : [],
+        };
+    } catch { /* 牧场数据未就绪时留空，不影响农场礼包总览 */ }
 
     return {
         date: getSystemDateKey(),
@@ -364,6 +380,20 @@ async function getDailyGiftOverview(propagateErrors: boolean = false): Promise<a
                 result: month.result || '',
             },
         ],
+        // 牧场侧汇总：与农场礼包分列，避免串台。任务进度仍由牧场自己的 /api/ranch?view=tasks 提供。
+        ranch: {
+            gifts: ranchShare ? [
+                {
+                    key: 'daily_share',
+                    label: '牧场分享礼包',
+                    enabled: true,
+                    doneToday: !!ranchShare.doneToday,
+                    canShare: !!ranchShare.shared,
+                    canClaim: !!ranchShare.canClaim,
+                    rewards: ranchShare.rewards,
+                },
+            ] : [],
+        },
     };
 }
 module.exports = { handleApiCall, getDailyGiftOverview };

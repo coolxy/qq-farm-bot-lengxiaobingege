@@ -13,6 +13,7 @@ const LABELS: Record<string, string> = {
     completeUpgrade: '完成牧场升级', claimTasks: '领取牧场任务', reportEntry: '完成牧场引导', exchange: '集市兑换',
     activateShed: '解锁牧场棚',
     claimIllustrated: '领取牧场图鉴奖励',
+    clearIllustrated: '标记牧场图鉴已读',
     claimDailyShare: '领取每日首次分享礼包',
     buyCan: '购买牧场罐头',
     release: '放生动物',
@@ -227,6 +228,13 @@ async function planAction(action: string, input: any, raw: any): Promise<any> {
         plan.marker = { kind: plan.bookClaim.kind, ids: plan.bookClaim.ids, rewards: plan.bookClaim.rewards };
         plan.expectedRewards = plan.bookClaim.rewards;
         plan.count = plan.bookClaim.count;
+    } else if (action === 'clearIllustrated') {
+        const ids: number[] = (Array.isArray(input.fruitIds) ? input.fruitIds : [])
+            .map((id: any) => Number(id)).filter((id: number) => Number.isInteger(id) && id > 0);
+        if (!ids.length) throw error('INVALID_ARGUMENT', '没有需要标记的图鉴');
+        plan.payload = { fruit_ids: ids };
+        plan.marker = ids.slice().sort((a: number, b: number) => a - b);
+        plan.count = ids.length;
     } else if (action === 'claimDailyShare') {
         const state = await require('./daily-share').prepare();
         plan.count = state.claimed ? 0 : 1;
@@ -265,7 +273,7 @@ async function prepareAction(action: string, input: any = {}): Promise<any> {
     if (action === 'steal') return require('./friends').prepareSteal(input);
     if (['stroke', 'putMosquito', 'cleanFriend'].includes(action)) return require('./friends').prepareInteraction(action, input);
     return inScene(async (cells: any) => {
-        const plan = await planAction(action, input, action === 'claimIllustrated' ? null : await loadRaw(cells));
+        const plan = await planAction(action, input, (action === 'claimIllustrated' || action === 'clearIllustrated') ? null : await loadRaw(cells));
         return { action, label: plan.label, costs: plan.costs, costItems: plan.costItems, rewards: plan.expectedRewards, count: plan.count,
             expected: { signature: plan.signature }, skipped: plan.count === 0, message: plan.message };
     });
@@ -305,6 +313,11 @@ async function operate(action: string, input: any = {}): Promise<any> {
             } else if (action === 'claimIllustrated') {
                 rewards = await require('./book').claimBook(plan.bookClaim);
                 reply = {};
+            } else if (action === 'clearIllustrated') {
+                const cleared = await require('./book').clearBookNew(plan.payload.fruit_ids);
+                // 回包已确认清除的条数必须与提交一致，否则视为未确认，避免前端误清本地标记。
+                if (cleared.cleared.length !== plan.marker.length) unknown(action, '图鉴已读回包数量不一致');
+                reply = { cleared: cleared.cleared };
             } else if (action === 'reportEntry') {
                 for (const entry of plan.reportTasks) {
                     reply = await rpc('reportTask', { task_id: entry.id, progress: entry.progress }, true);

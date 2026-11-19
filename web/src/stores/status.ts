@@ -32,6 +32,7 @@ interface DailyGiftsResponse {
   date: string
   growth: DailyGift
   gifts: DailyGift[]
+  ranch?: { gifts: DailyGift[] }
 }
 
 export const useStatusStore = defineStore('status', () => {
@@ -293,6 +294,32 @@ export const useStatusStore = defineStore('status', () => {
     }
   }
 
+  /** 手动补领农场每日分享（后台自动化为主）。成功后刷新每日奖励状态。 */
+  async function claimFarmShare(accountId: string): Promise<{ ok: boolean, message: string }> {
+    if (!accountId)
+      return { ok: false, message: '请先选择账号' }
+    try {
+      const { data } = await api.post('/api/farm/claim-share', {}, {
+        headers: { 'x-account-id': accountId },
+      })
+      if (!data?.ok)
+        return { ok: false, message: getApiErrorMessage(data, '领取失败') }
+      const result = data.data || {}
+      if (result.alreadyClaimed)
+        return { ok: true, message: '今日已领取过，无需重复领取' }
+      if (result.ok)
+        return { ok: true, message: '每日分享礼包领取成功' }
+      return { ok: false, message: '分享入口暂不可用，请稍后重试' }
+    }
+    catch (e) {
+      return { ok: false, message: getApiErrorMessage(e, '领取失败') }
+    }
+    finally {
+      // 无论成功与否都刷新状态，让卡片显示最新的领取情况。
+      void fetchDailyGifts(accountId)
+    }
+  }
+
   function setRealtimeLogsEnabled(enabled: boolean) {
     realtimeLogsEnabled.value = !!enabled
   }
@@ -313,6 +340,7 @@ export const useStatusStore = defineStore('status', () => {
     fetchDiamond,
     fetchLogs,
     fetchDailyGifts,
+    claimFarmShare,
     setRealtimeLogsEnabled,
     connectRealtime,
     disconnectRealtime,

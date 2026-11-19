@@ -78,4 +78,20 @@ async function claimBook(plan: any): Promise<any[]> {
     return rewards;
 }
 
-module.exports = { getBook, prepareBookClaim, claimBook };
+/**
+ * 清除牧场图鉴的未读标记。必须走 ranch transport（inScene(2)），
+ * 不能复用农场 illustrated service 的无场景 sendMsgAsync，否则账号停在场景1时会清错对象。
+ */
+async function clearBookNew(fruitIds: number[]): Promise<{ cleared: number[] }> {
+    const ids: number[] = (Array.isArray(fruitIds) ? fruitIds : [])
+        .map((id: any) => Number(id))
+        .filter((id: number) => Number.isInteger(id) && id > 0);
+    if (!ids.length) return { cleared: [] };
+    const reply = await rpc('clearBook', { fruit_ids: ids }, true);
+    const cleared: number[] = Array.isArray(reply?.cleared_fruit_ids)
+        ? reply.cleared_fruit_ids.map((id: any) => Number(id)).filter((id: number) => id > 0)
+        : [];
+    return { cleared };
+}
+
+module.exports = { getBook, prepareBookClaim, claimBook, clearBookNew };

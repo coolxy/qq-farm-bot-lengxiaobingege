@@ -6,15 +6,52 @@ import { computed, onMounted, ref, watch } from 'vue'
 import DailyOverview from '@/components/DailyOverview.vue'
 import { useAccountStore } from '@/stores/account'
 import { useStatusStore } from '@/stores/status'
+import { useToastStore } from '@/stores/toast'
 
 const statusStore = useStatusStore()
 const accountStore = useAccountStore()
+const toast = useToastStore()
 const { status, dailyGifts, realtimeConnected, dailyGiftsLoading, dailyGiftsError, loading: statusLoading } = storeToRefs(statusStore)
 const { currentAccountId, currentAccount } = storeToRefs(accountStore)
 
 const currentTaskTab = ref('daily')
 const isConnected = computed(() => !!currentAccount.value?.running && status.value?.connection?.connected === true)
 const taskEmptyText = computed(() => !currentAccountId.value ? '请先选择账号' : !isConnected.value ? '启动账号后读取任务' : dailyGiftsLoading.value || statusLoading.value ? '正在读取任务…' : '暂无任务详情')
+
+/** 后台自动领取为主；未领取时给每日分享补一个手动按钮，与牧场活动页体验对称。 */
+const claimShareBusy = ref(false)
+const decoratedDailyGifts = computed(() => {
+  const source = dailyGifts.value
+  if (!source?.gifts)
+    return source
+  const gifts = source.gifts.map((gift: any) => {
+    if (gift?.key !== 'daily_share')
+      return gift
+    const canManual = !gift.doneToday && gift.canShare !== false
+    return {
+      ...gift,
+      actionLabel: canManual ? '分享并领取' : '',
+      actionDisabled: claimShareBusy.value || !isConnected.value,
+    }
+  })
+  return { ...source, gifts }
+})
+
+async function handleGiftAction(key: string) {
+  if (key !== 'daily_share' || claimShareBusy.value || !currentAccountId.value)
+    return
+  claimShareBusy.value = true
+  try {
+    const result = await statusStore.claimFarmShare(currentAccountId.value)
+    if (result.ok)
+      toast.success(result.message)
+    else
+      toast.error(result.message)
+  }
+  finally {
+    claimShareBusy.value = false
+  }
+}
 
 const growth = computed(() => dailyGifts.value?.growth || null)
 const growthCurrentTask = computed(() => growth.value?.currentTask || growth.value?.tasks?.[0] || null)
@@ -89,7 +126,7 @@ function formatTaskProgress(task: any) {
         重新加载
       </button>
     </div>
-    <DailyOverview v-show="currentTaskTab === 'daily'" :daily-gifts="dailyGifts" :empty-text="taskEmptyText" />
+    <DailyOverview v-show="currentTaskTab === 'daily'" :daily-gifts="decoratedDailyGifts" :empty-text="taskEmptyText" @action="handleGiftAction" />
 
     <!-- Growth Task -->
     <section v-show="currentTaskTab === 'growth'" class="personal-panel__card farm-card rounded-xl p-4">

@@ -6,6 +6,10 @@ const props = withDefaults(defineProps<{
   emptyText?: string
 }>(), { emptyText: '暂无每日奖励数据' })
 
+// 可选的手动操作：某个 gift 提供 actionLabel 时显示按钮，点击把 key 抛给父组件处理。
+// 自动化仍是主路径；这里只给需要手动补领的项（如农场每日分享）一个入口。
+const emit = defineEmits<{ (e: 'action', key: string): void }>()
+
 const GIFT_ICONS: Record<string, string> = {
   task_claim: 'i-carbon-task-complete',
   email_rewards: 'i-carbon-email',
@@ -168,6 +172,16 @@ function formatGiftProgress(gift: any) {
           >
             {{ gift.lastError }}
           </p>
+          <button
+            v-if="gift.actionLabel"
+            type="button"
+            class="mt-2 rounded-lg px-3 py-1 text-xs transition-colors font-medium disabled:cursor-not-allowed disabled:opacity-50"
+            style="background: color-mix(in srgb, var(--theme-primary, #22c55e) 14%, transparent); color: var(--theme-primary, #22c55e)"
+            :disabled="!!gift.actionDisabled"
+            @click="emit('action', gift.key)"
+          >
+            {{ gift.actionLabel }}
+          </button>
         </div>
       </div>
     </div>

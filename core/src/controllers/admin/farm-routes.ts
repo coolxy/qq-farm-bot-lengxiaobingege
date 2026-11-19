@@ -649,6 +649,19 @@ function mountFarmRoutes(app: Application, ctx: AdminContext): void {
         }
     });
 
+    // API: 手动领取农场每日分享礼包（后台自动化为主，此为手动补领入口）
+    app.post('/api/farm/claim-share', async (req: Request, res: Response) => {
+        const id = getAccId(ctx, req);
+        if (!id) return res.status(400).json({ ok: false });
+
+        try {
+            const data = await ctx.provider.claimFarmShare(id);
+            res.json({ ok: true, data });
+        } catch (e: any) {
+            handleApiError(res, e);
+        }
+    });
+
     // API: 数据分析
     app.get('/api/analytics', async (req: Request, res: Response) => {
         try {

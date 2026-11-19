@@ -45,6 +45,7 @@ const ROUTES: Record<string, [string, string, string, string?]> = {
     book: ['illustratedpb.IllustratedService', 'GetIllustratedListV2', 'RanchGetIllustratedListV2'],
     weightBook: ['illustratedpb.IllustratedService', 'GetRanchWeightScoreV2', 'RanchGetRanchWeightScoreV2'],
     claimBook: ['illustratedpb.IllustratedService', 'ClaimAllRewardsV2', 'RanchClaimAllRewardsV2'],
+    clearBook: ['illustratedpb.IllustratedService', 'ClearNewUnlockedFruitsV2', 'ClearNewUnlockedFruitsV2'],
     claimWeight: ['illustratedpb.IllustratedService', 'ClaimRanchWeightScoreRewardV2', 'RanchClaimRanchWeightScoreRewardV2'],
     checkShare: ['sharepb.ShareService', 'CheckCanShare', 'CheckCanShare'],
     reportShare: ['sharepb.ShareService', 'ReportShare', 'RanchReportShare'],
