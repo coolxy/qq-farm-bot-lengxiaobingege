@@ -1,8 +1,8 @@
 import type { RanchAutomationConfig } from '../../config/ranch-automation';
 export {};
 
-const { RANCH_SWITCH_KEYS } = require('../../config/ranch-automation');
-const { getAutomation } = require('../../models/store');
+const { RANCH_SWITCH_KEYS, RANCH_MARKET_SWITCH_KEYS, isRanchMarketEnabled } = require('../../config/ranch-automation');
+const { getAutomation, getFriendBlacklist } = require('../../models/store');
 const { inScene, isUnlocked, isManualWaiting, noteManualYield } = require('./transport');
 const { loadRaw, snapshot, inventory, catalog, market, readMarketRotation, balance } = require('./state');
 const { cubMap, quantity } = require('./model');
@@ -24,8 +24,8 @@ const completedSteps = new Set<string>();
 const PATROL_SLICE_MS = 5000;
 const SCENE_REENTRY_MS = 20_000;
 const MARKET_EXCHANGES = [
-    { currencyId: 7002, rewardPriority: [80012, 80011], minBalance: 3n },
-    { currencyId: 1008, rewardPriority: [80013, 80012, 80011], minBalance: 1n },
+    { key: 'ranch_market_organic_poop', currencyId: 7002, rewardPriority: [80012, 80011], minBalance: 3n },
+    { key: 'ranch_market_organic_pinecone', currencyId: 1008, rewardPriority: [80013, 80012, 80011], minBalance: 1n },
 ];
 type MarketRotation = { periodDay: string; roundIndex: number; startsAt: number; endsAt: number; present: boolean };
 let marketCheckPending = true;
@@ -80,9 +80,9 @@ const due = (state: any) => !state.doneToday && Date.now() >= (state.nextCheckAt
 
 function getRoutineState(): any {
     const auto = getAutomation();
-    const work = RANCH_SWITCH_KEYS.some((key: string) => !['ranch_task', 'ranch_share', 'ranch_grass_buy', 'ranch_market_organic'].includes(key) && auto[key]);
+    const work = RANCH_SWITCH_KEYS.some((key: string) => !['ranch_task', 'ranch_share', 'ranch_grass_buy', 'ranch_market_organic', ...RANCH_MARKET_SWITCH_KEYS].includes(key) && auto[key]);
     const routineDue = work || auto.ranch_task && due(daily.getTaskRoutineState()) || auto.ranch_share && due(daily.getShareRoutineState());
-    const pending = routineDue || auto.ranch_market_organic && marketCheckPending;
+    const pending = routineDue || isRanchMarketEnabled(auto) && marketCheckPending;
     return {
         doneToday: !isUnlocked() || !pending,
         nextCheckAt: pending ? nextCheckAt : Infinity,
@@ -216,12 +216,12 @@ async function run(options: { farmDeadline?: () => number, canContinue?: () => b
             await phase('clean', () => act('ranch_clean', 'clean'));
             await phase('sell', () => act('ranch_sell', 'sell', { all: true }));
 
-            if (auto.ranch_market_organic && marketCheckPending) completedPhases.delete('market-organic');
+            if (isRanchMarketEnabled(auto) && marketCheckPending) completedPhases.delete('market-organic');
             await phase('market-organic', async () => {
-                if (!enabled('ranch_market_organic')) return;
-                const stockReady = MARKET_EXCHANGES.some(({ currencyId, minBalance }) => {
+                if (!isRanchMarketEnabled(getAutomation())) return;
+                const stockReady = MARKET_EXCHANGES.some(({ key, currencyId, minBalance }) => {
                     const stock = available(currencyId);
-                    return stock >= minBalance && stock > (lastMarketBalances.get(currencyId) ?? 0n);
+                    return enabled(key) && stock >= minBalance && stock > (lastMarketBalances.get(currencyId) ?? 0n);
                 });
                 if (!marketCheckPending && !stockReady && marketIsOpen(lastMarketRotation)) return;
                 checkpoint(true);
@@ -234,16 +234,17 @@ async function run(options: { farmDeadline?: () => number, canContinue?: () => b
                     current = await market(raw);
                 }
                 if (current && marketIsOpen(rotation) && current.opened && current.present && sameMarketRound(current, rotation)) {
-                    for (const { currencyId, rewardPriority } of MARKET_EXCHANGES) {
+                    for (const { key, currencyId, rewardPriority } of MARKET_EXCHANGES) {
+                        if (!enabled(key)) continue;
                         const goods = current.goods.filter((entry: any) => entry.available && Number(entry.price.id) === currencyId
                             && BigInt(entry.price.count) > 0n && rewardPriority.includes(Number(entry.reward.id)));
                         goods.sort((a: any, b: any) => rewardPriority.indexOf(Number(a.reward.id)) - rewardPriority.indexOf(Number(b.reward.id)));
                         for (const good of goods) {
-                            while (good.remaining !== 0 && marketIsOpen(rotation)) {
+                            while (enabled(key) && good.remaining !== 0 && marketIsOpen(rotation)) {
                                 const stock = available(currencyId);
                                 const count = affordable(good, Math.min(good.remaining ?? 2147483647, 2147483647));
                                 if (count < 1) break;
-                                const exchanged = await act('ranch_market_organic', 'exchange', { goodsId: good.id, count, marketRotation: rotation },
+                                const exchanged = await act(key, 'exchange', { goodsId: good.id, count, marketRotation: rotation },
                                     currencyId, `${runId}:${good.id}:${stock}`, Number(good.reward.id));
                                 if (!exchanged) break;
                                 if (good.remaining !== null) good.remaining = Math.max(0, good.remaining - count);

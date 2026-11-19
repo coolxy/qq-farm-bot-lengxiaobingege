@@ -2,6 +2,7 @@ import type { AccountConfig, AutomationConfig, BagSeedFallbackStrategy, Fertiliz
 export {};
 
 const sharedState = require('./shared-state');
+const { migrateRanchMarketAutomation } = require('../../config/ranch-automation');
 const { readKnownFriendGidsCache, writeKnownFriendGidsCache } = require('./gid-cache');
 
 const {
@@ -134,7 +135,7 @@ function applyConfigSnapshot(snapshot: Record<string, any> | undefined, options:
     const next = normalizeAccountConfig(current, sharedState.accountFallbackConfig);
 
     if (cfg.automation && typeof cfg.automation === 'object') {
-        for (const [k, v] of Object.entries(cfg.automation)) {
+        for (const [k, v] of Object.entries(migrateRanchMarketAutomation(cfg.automation))) {
             if ((next.automation as any)[k] === undefined) continue;
             if (k === 'fertilizer') {
                 const allowed = ['both', 'normal', 'organic', 'smart', 'none'];

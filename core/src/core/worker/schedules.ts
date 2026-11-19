@@ -12,6 +12,7 @@ const { buyFreeGifts, getFreeGiftDailyState } = require('../../services/mall');
 const { checkFarm, startFarmCheckLoop, stopFarmCheckLoop, refreshFarmCheckLoop, runFertilizerByConfig } = require('../../services/farm');
 const { checkFriends, startFriendCheckLoop, stopFriendCheckLoop, refreshFriendCheckLoop } = require('../../services/friend');
 const ranchAutomation = require('../../services/ranch/automation');
+const { isRanchMarketEnabled } = require('../../config/ranch-automation');
 const { checkAndClaimTasks } = require('../../services/task');
 const { checkAndClaimActivityTasks } = require('../../services/activity-auto-task');
 const { openFertilizerGiftPacksSilently } = require('../../services/warehouse');
@@ -298,14 +299,14 @@ async function runUnifiedTick(): Promise<void> {
 
 /** 集市货币到账时唤醒牧场兑换例程，无需等待六小时兜底检查。 */
 function wakeRanchMarketExchange(): void {
-    if (!st.loginReady || getAutomation().ranch_market_organic !== true) return;
+    if (!st.loginReady || !isRanchMarketEnabled(getAutomation())) return;
     if (typeof ranchAutomation.requestMarketCheck === 'function') ranchAutomation.requestMarketCheck();
     scheduleUnifiedNextTick();
 }
 
 /** 集市到访场次变化时排队一次兑换检查。 */
 function onRanchMarketVisitChanged(rotation: any): void {
-    if (!st.loginReady || getAutomation().ranch_market_organic !== true) return;
+    if (!st.loginReady || !isRanchMarketEnabled(getAutomation())) return;
     if (typeof ranchAutomation.noteMarketVisit === 'function' && ranchAutomation.noteMarketVisit(rotation)) scheduleUnifiedNextTick();
 }
 

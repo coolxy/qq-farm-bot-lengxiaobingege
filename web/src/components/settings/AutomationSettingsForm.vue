@@ -46,7 +46,8 @@ const ranchSwitches = [
   { key: 'ranch_buy', label: '自动补栏（金券）' },
   { key: 'ranch_upgrade', label: '自动升级设施（金券）' },
   { key: 'ranch_sell', label: '自动出售牧场产物' },
-  { key: 'ranch_market_organic', label: '仓鼠集市自动兑换有机化肥' },
+  { key: 'ranch_market_organic_poop', label: '集市粑粑兑换有机化肥' },
+  { key: 'ranch_market_organic_pinecone', label: '集市松果兑换有机化肥' },
   { key: 'ranch_clean', label: '自动清理灾害' },
   { key: 'ranch_grass', label: '自动补充牧草' },
   { key: 'ranch_grass_buy', label: '牧草不足时购买（金券）' },
@@ -392,7 +393,7 @@ onMounted(async () => {
               />
             </div>
             <div class="col-span-full text-xs text-gray-500 dark:text-gray-400">
-              松果按 8 小时、4 小时、1 小时兑换，便便按 4 小时、1 小时兑换。到访或货币到账后排队，登录、重连和日常巡查时核对集市状态。
+              两种兑换可独立开启；松果按 8 小时、4 小时、1 小时兑换，粑粑按 4 小时、1 小时兑换。到访或货币到账后排队，登录、重连和日常巡查时核对集市状态。
             </div>
             <div class="automation-setting-item">
               <NInputNumber v-model:value="settings.automation.ranch_check_minutes" :min="1" :max="60" :step="1" class="w-full">

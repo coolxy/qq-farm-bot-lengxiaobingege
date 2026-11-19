@@ -39,6 +39,8 @@ export interface AutomationConfig {
   ranch_upgrade?: boolean
   ranch_sell?: boolean
   ranch_market_organic?: boolean
+  ranch_market_organic_poop?: boolean
+  ranch_market_organic_pinecone?: boolean
   ranch_grass?: boolean
   ranch_grass_buy?: boolean
   ranch_fill_cans?: boolean
