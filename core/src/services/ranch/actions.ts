@@ -275,6 +275,12 @@ function unknown(action: string, reason: string): never {
     throw error('RANCH_RESULT_UNKNOWN', `${LABELS[action]}结果未能确认：${reason}，请刷新核对，勿重复提交`);
 }
 
+/** 统计快照中指定动物的总只数（跨所有栏舍），用于自动放养到账的增量确认。 */
+function countAnimals(raw: any, animalId: number): number {
+    return (raw.cells.facilities || []).reduce((sum: number, facility: any) =>
+        sum + (facility.ranch?.animals || []).filter((animal: any) => Number(animal.animal_id) === animalId).length, 0);
+}
+
 async function operate(action: string, input: any = {}): Promise<any> {
     if (isManualRequest()) markManualTurn();
     if (['stroke', 'putMosquito', 'cleanFriend'].includes(action)) return require('./friends').interact(action, input);
@@ -290,6 +296,8 @@ async function operate(action: string, input: any = {}): Promise<any> {
         if (input.expected?.signature !== plan.signature) throw error('RANCH_OFFER_CHANGED', '牧场状态、商品或费用已变化，请重新确认');
         return reservations.forCurrentAccount().spend({ target: `ranch:${action}:${input.goodsId || input.facilityId || input.uid || input.taskId || input.ranchId || 'all'}`, label: plan.label, costs: plan.costs, balances: plan.balances }, async () => {
             let reply: any; let rewards: any[] = []; let actualCosts = plan.costItems;
+            // 自动放养前的 fresh 动物数量基准（紧邻购买写请求读取，避免陈旧快照污染增量判定）。
+            let placeBaseline: number | null = null;
             if (action === 'claimDailyShare') {
                 const claimed = await require('./daily-share').claim();
                 rewards = claimed.rewards;
@@ -322,6 +330,15 @@ async function operate(action: string, input: any = {}): Promise<any> {
                 }
                 if (signature(rewards) !== signature(plan.expectedRewards)) unknown(action, '任务奖励不匹配');
             } else {
+                // 自动放养到账校验不能用 operate 入口的 before：它来自 20 秒缓存快照，
+                // 可能在收获腾栏/其它设备操作后陈旧，与购买后的 fresh 快照相减会产生假阴性。
+                // 紧邻写请求用 fresh 读一次目标动物数量作为基准，保证前后同一数据源、时间紧邻。
+                if (action === 'buy' && plan.autoPlaceAnimalId) {
+                    try {
+                        const baseRaw = await loadRaw(undefined, { fresh: true });
+                        placeBaseline = countAnimals(baseRaw, Number(plan.autoPlaceAnimalId));
+                    } catch { placeBaseline = null; }
+                }
                 reply = await rpc(plan.route, plan.payload, true);
                 if (action === 'buyCan') {
                     if (!reply.success || quantity(reply.goods_id) !== plan.payload.goods_id || signature(reply.reward_items) !== signature(plan.expectedRewards)) unknown(action, '商品或奖励不匹配');
@@ -398,16 +415,13 @@ async function operate(action: string, input: any = {}): Promise<any> {
             if (plan.autoPlaceAnimalId) {
                 if (!after) unknown(action, '自动放养后的栏位状态未能读取');
                 // 自动放养的 BuyGoods 回包不带栏舍，只能读栏位确认幼崽是否到账。
-                // 旧实现用 animal_inst_id 精确集合比对「新增动物」，但 before 来自 20 秒缓存快照、
-                // after 是 fresh 全量读，两者 inst_id 会因缓存滞后/成长/并发写入而不同，
-                // 导致「动物其实已到账却判结果未知」→ 写入账本永久锁死该商品。
-                // 改为按 animal_id 统计该类动物的数量增量：只要求目标动物至少增加本次购买数即可，
-                // 对 inst_id 变化和缓存差异鲁棒；若数量没有增加才判结果未知（保留防重复扣款底线）。
-                const countOf = (raw: any, animalId: number) => (raw.cells.facilities || []).reduce((sum: number, f: any) =>
-                    sum + (f.ranch?.animals || []).filter((animal: any) => Number(animal.animal_id) === animalId).length, 0);
+                // 按 animal_id 统计该类动物的数量增量：只要求目标动物至少增加本次购买数即可，
+                // 对 inst_id 变化和成长/并发写入鲁棒；若数量没有增加才判结果未知（保留防重复扣款底线）。
+                // 基准优先用紧邻写请求前 fresh 读到的 placeBaseline；仅当该读取失败时才回退到
+                // operate 入口的缓存快照 before（后者可能因收获腾栏/其它设备操作而陈旧）。
                 const targetId = Number(plan.autoPlaceAnimalId);
-                const beforeCount = countOf(before, targetId);
-                const afterCount = countOf(after, targetId);
+                const beforeCount = placeBaseline ?? countAnimals(before, targetId);
+                const afterCount = countAnimals(after, targetId);
                 if (afterCount - beforeCount < plan.payload.num) unknown(action, '自动放养的动物或数量不匹配');
             }
             if (['place', 'addGrass', 'useCan', 'exchange', 'buyCan'].includes(action)) {
