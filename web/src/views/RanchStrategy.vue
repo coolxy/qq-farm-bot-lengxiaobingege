@@ -21,9 +21,11 @@ const fertilizerLandTypeOptions = [
 
 const fertilizerOptions = [
   { label: '普通 + 有机', value: 'both' },
-  { label: '智能施肥', value: 'smart' },
+  { label: '智能施肥（普通 + 有机催熟）', value: 'smart' },
   { label: '仅有机化肥', value: 'organic' },
   { label: '仅普通化肥', value: 'normal' },
+  { label: '仅普通化肥催熟', value: 'normal_ripen' },
+  { label: '仅有机化肥催熟', value: 'organic_ripen' },
   { label: '不施肥', value: 'none' },
 ]
 
