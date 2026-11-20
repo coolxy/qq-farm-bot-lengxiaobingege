@@ -52,14 +52,11 @@ watch(() => route.query.tab, (value) => {
     activeTab.value = nextTab
 })
 
-// 服务器同款道具图：自动化设置入口与其他资产/化肥图标风格统一。
-const gameImg = (id: number | string) => `/game-config/seed_images_named/seed_images/${id}.png`
-
 const tabs = [
-  { key: 'account', label: '账号管理', icon: 'i-carbon-user-profile', img: '' },
-  // 4001 金色齿轮星：直观代表「自动化设置」。
-  { key: 'automation', label: '自动化设置', icon: '', img: gameImg(4001) },
-  { key: 'system', label: '系统设置', icon: 'i-carbon-settings', img: '' },
+  { key: 'account', label: '账号管理', icon: 'i-carbon-user-profile' },
+  // 与其他 tab 保持同一套简约线性图标，避免单独用彩色道具图显得突兀。
+  { key: 'automation', label: '自动化设置', icon: 'i-carbon-settings-adjust' },
+  { key: 'system', label: '系统设置', icon: 'i-carbon-settings' },
 ] as const
 
 function setActiveTab(value: string) {
@@ -79,11 +76,10 @@ onMounted(async () => {
 <template>
   <div class="settings-page page-stack">
     <div class="settings-content">
-      <PageTabs :value="activeTab" @update:value="setActiveTab">
+      <PageTabs :value="activeTab" class="settings-page-tabs" justify-content="space-evenly" @update:value="setActiveTab">
         <NTab v-for="tab in tabs" :key="tab.key" :name="tab.key">
-          <span class="inline-flex items-center gap-2">
-            <img v-if="tab.img" :src="tab.img" alt="" class="settings-tab__icon">
-            <span v-else :class="tab.icon" />
+          <span class="inline-flex items-center justify-center gap-2">
+            <span :class="tab.icon" />
             {{ tab.label }}
           </span>
         </NTab>
@@ -108,11 +104,3 @@ onMounted(async () => {
     />
   </div>
 </template>
-
-<style scoped>
-.settings-tab__icon {
-  width: 20px;
-  height: 20px;
-  object-fit: contain;
-}
-</style>

@@ -862,6 +862,20 @@ select:focus-visible {
   margin: 8px 0 0 !important;
 }
 
+/* 设置页三个 tab 等宽铺满,随页面宽度自适应(手机端也不会挤在一角)。 */
+.settings-page-tabs .n-tabs-nav {
+  width: 100%;
+}
+
+.settings-page-tabs .n-tabs-tab-wrapper {
+  flex: 1 1 0;
+}
+
+.settings-page-tabs .n-tabs-tab {
+  width: 100%;
+  justify-content: center;
+}
+
 @media (min-width: 1024px) {
   .panel-sticky {
     position: sticky;
