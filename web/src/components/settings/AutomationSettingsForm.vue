@@ -8,6 +8,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
+import AutomationSectionHeader from './AutomationSectionHeader.vue'
 import RanchCubPriority from './RanchCubPriority.vue'
 
 export type AutomationSettingsFormModel = Pick<
@@ -42,6 +43,42 @@ const settings = defineModel<AutomationSettingsFormModel>({ required: true })
 const ripeningOnly = computed(() => ['normal_ripen', 'organic_ripen'].includes(settings.value.automation.fertilizer ?? 'none'))
 const ripeningEnabled = computed(() => ripeningOnly.value || settings.value.automation.fertilizer === 'smart')
 const ripeningFertilizerLabel = computed(() => settings.value.automation.fertilizer === 'normal_ripen' ? '普通化肥' : '有机化肥')
+
+// 平坦开关统一用数组驱动，减少重复的模板与样式包裹。
+const farmSwitches = [
+  { key: 'farm', label: '自动种植收获', span: false },
+  { key: 'farm_harvest_tiangong', label: '自动收获天工作物', span: false },
+  { key: 'farm_push', label: '推送触发巡田', span: false },
+  { key: 'skip_own_weed_bug', label: '巡田时跳过一键务农', span: false },
+  { key: 'land_upgrade', label: '自动升级土地', span: false },
+  { key: 'task', label: '自动做任务', span: false },
+  { key: 'sell', label: '自动卖果实', span: false },
+  { key: 'fertilizer_gift', label: '自动填充化肥', span: true },
+] as const
+const fertilizerSwitches = [
+  { key: 'fertilizer_buy_organic', label: '自动购买有机化肥' },
+  { key: 'fertilizer_buy_normal', label: '自动购买无机化肥' },
+  { key: 'fertilizer_multi_season', label: '多季补肥' },
+  { key: 'show_manual_fertilizer', label: '显示手动施肥按钮' },
+] as const
+const friendActionSwitches = [
+  { key: 'friend_steal', label: '自动偷菜' },
+  { key: 'friend_help', label: '自动帮忙' },
+  { key: 'friend_bad', label: '自动捣乱' },
+  { key: 'friend_help_exp_limit', label: '经验满不帮忙' },
+  { key: 'friend_help_protect_dog_ignore_exp_limit', label: '护主犬经验满仍帮忙' },
+] as const
+const mysteryShopSwitches = [
+  { key: 'mystery_shop_auto_buy', label: '自动购买', span: false },
+  { key: 'mystery_shop_arrival_notify', label: '到货提醒', span: false },
+  { key: 'mystery_shop_purchase_notify', label: '购买提醒', span: true },
+] as const
+const mysteryShopCurrencySwitches = [
+  { key: 'mystery_shop_allow_gold', label: '金币' },
+  { key: 'mystery_shop_allow_coupon', label: '点券' },
+  { key: 'mystery_shop_allow_gold_bean', label: '金豆豆' },
+  { key: 'mystery_shop_allow_diamond', label: '钻石' },
+] as const
 
 // 牧场自动化（services/ranch）开关，与后端 config/ranch-automation.ts 一一对应。
 const ranchSwitches = [
@@ -91,76 +128,35 @@ onMounted(async () => {
   <div class="space-y-4">
     <div class="automation-card-layout">
       <div class="automation-card-column">
-        <section class="farm-card rounded-2xl p-4">
-          <div class="mb-4 flex items-start gap-3">
-            <div class="h-9 w-9 flex shrink-0 items-center justify-center rounded-lg bg-green-50 text-green-600 dark:bg-green-900/25 dark:text-green-400">
-              <span class="i-carbon-sprout text-xl" />
-            </div>
-            <div>
-              <h4 class="text-base text-gray-900 font-bold dark:text-gray-100">
-                日常农场
-              </h4>
-              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                管理巡田、种植、任务和产出处理
-              </p>
-            </div>
-          </div>
+        <section class="farm-card">
+          <AutomationSectionHeader title="日常农场" description="管理巡田、种植、任务和产出处理" tone="green">
+            <span class="i-carbon-sprout text-xl" />
+          </AutomationSectionHeader>
 
           <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div class="automation-setting-item">
-              <BaseSwitch v-model="settings.automation.farm" class="automation-setting-item" label="自动种植收获" />
-            </div>
-            <div class="automation-setting-item">
-              <BaseSwitch v-model="settings.automation.farm_harvest_tiangong" label="自动收获天工作物" />
-            </div>
-            <div class="automation-setting-item">
-              <BaseSwitch v-model="settings.automation.farm_push" class="automation-setting-item" label="推送触发巡田" />
-            </div>
-            <div class="automation-setting-item">
-              <BaseSwitch v-model="settings.automation.skip_own_weed_bug" class="automation-setting-item" label="巡田时跳过一键务农" />
-            </div>
-            <div class="automation-setting-item">
-              <BaseSwitch v-model="settings.automation.land_upgrade" class="automation-setting-item" label="自动升级土地" />
-            </div>
-            <div class="automation-setting-item">
-              <BaseSwitch v-model="settings.automation.task" class="automation-setting-item" label="自动做任务" />
-            </div>
-            <div class="automation-setting-item">
-              <BaseSwitch v-model="settings.automation.sell" class="automation-setting-item" label="自动卖果实" />
-            </div>
-            <div class="automation-setting-item sm:col-span-2">
-              <BaseSwitch v-model="settings.automation.fertilizer_gift" class="automation-setting-item" label="自动填充化肥" />
+            <div
+              v-for="item in farmSwitches"
+              :key="item.key"
+              class="automation-setting-item"
+              :class="{ 'sm:col-span-2': item.span }"
+            >
+              <BaseSwitch v-model="(settings.automation as any)[item.key]" :label="item.label" />
             </div>
           </div>
         </section>
 
-        <section class="farm-card rounded-2xl p-4">
-          <div class="mb-4 flex items-start gap-3">
-            <div class="h-9 w-9 flex shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-900/25 dark:text-amber-400">
-              <span class="i-carbon-chemistry text-xl" />
-            </div>
-            <div>
-              <h4 class="text-base text-gray-900 font-bold dark:text-gray-100">
-                施肥管理
-              </h4>
-              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                设置施肥策略、范围和化肥补充
-              </p>
-            </div>
-          </div>
+        <section class="farm-card">
+          <AutomationSectionHeader title="施肥管理" description="设置施肥策略、范围和化肥补充" tone="amber">
+            <span class="i-carbon-chemistry text-xl" />
+          </AutomationSectionHeader>
 
           <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div class="automation-setting-item">
-              <BaseSwitch v-model="settings.automation.fertilizer_buy_organic" class="automation-setting-item" label="自动购买有机化肥" />
-            </div>
-            <div class="automation-setting-item">
-              <BaseSwitch v-model="settings.automation.fertilizer_buy_normal" class="automation-setting-item" label="自动购买无机化肥" />
-            </div>
-            <div class="automation-setting-item">
-              <BaseSwitch v-model="settings.automation.fertilizer_multi_season" class="automation-setting-item" label="多季补肥" :disabled="ripeningOnly" />
-            </div>
-            <div class="automation-setting-item">
-              <BaseSwitch v-model="settings.automation.show_manual_fertilizer" class="automation-setting-item" label="显示手动施肥按钮" />
+            <div v-for="item in fertilizerSwitches" :key="item.key" class="automation-setting-item">
+              <BaseSwitch
+                v-model="(settings.automation as any)[item.key]"
+                :label="item.label"
+                :disabled="item.key === 'fertilizer_multi_season' && ripeningOnly"
+              />
             </div>
           </div>
 
@@ -238,59 +234,37 @@ onMounted(async () => {
       </div>
 
       <div class="automation-card-column">
-        <section class="farm-card rounded-2xl p-4">
-          <div class="mb-4 flex items-start gap-3">
-            <div class="h-9 w-9 flex shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/25 dark:text-blue-400">
-              <span class="i-carbon-user-multiple text-xl" />
-            </div>
-            <div>
-              <h4 class="text-base text-gray-900 font-bold dark:text-gray-100">
-                好友互动
-              </h4>
-              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                管理好友农场互动和好友申请
-              </p>
-            </div>
-          </div>
+        <section class="farm-card">
+          <AutomationSectionHeader title="好友互动" description="管理好友农场互动和好友申请" tone="blue">
+            <span class="i-carbon-user-multiple text-xl" />
+          </AutomationSectionHeader>
 
           <div class="automation-setting-item">
-            <BaseSwitch v-model="settings.automation.friend" class="automation-setting-item" label="自动好友互动" />
+            <BaseSwitch v-model="settings.automation.friend" label="自动好友互动" />
           </div>
           <div v-if="settings.automation.friend" class="mt-3 rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
             <div class="mb-2 text-xs text-blue-700 font-medium dark:text-blue-300">
               互动行为
             </div>
             <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div class="automation-setting-item">
-                <BaseSwitch v-model="settings.automation.friend_steal" class="automation-setting-item" label="自动偷菜" />
-              </div>
-              <div class="automation-setting-item">
-                <BaseSwitch v-model="settings.automation.friend_help" class="automation-setting-item" label="自动帮忙" />
-              </div>
-              <div class="automation-setting-item">
-                <BaseSwitch v-model="settings.automation.friend_bad" class="automation-setting-item" label="自动捣乱" />
-              </div>
-              <div class="automation-setting-item">
-                <BaseSwitch v-model="settings.automation.friend_help_exp_limit" class="automation-setting-item" label="经验满不帮忙" />
-              </div>
-              <div class="automation-setting-item">
-                <BaseSwitch v-model="settings.automation.friend_help_protect_dog_ignore_exp_limit" class="automation-setting-item" label="护主犬经验满仍帮忙" />
+              <div v-for="item in friendActionSwitches" :key="item.key" class="automation-setting-item">
+                <BaseSwitch v-model="(settings.automation as any)[item.key]" :label="item.label" />
               </div>
             </div>
           </div>
 
           <div class="mt-3 rounded-lg bg-blue-50 p-3 space-y-3 dark:bg-blue-900/20">
-            <BaseSwitch v-model="settings.automation.friend_auto_accept" class="automation-setting-item" label="自动通过好友申请" />
+            <BaseSwitch v-model="settings.automation.friend_auto_accept" label="自动通过好友申请" />
             <template v-if="settings.automation.friend_auto_accept">
               <div class="grid grid-cols-1 items-end gap-3 sm:grid-cols-2">
                 <BaseInput v-model.number="settings.autoAcceptFriendMinLevel" label="最低等级" type="number" min="0" max="200" />
-                <BaseSwitch v-model="settings.autoAcceptRequireOwnLevel" class="automation-setting-item" label="不低于自己等级" />
+                <BaseSwitch v-model="settings.autoAcceptRequireOwnLevel" label="不低于自己等级" />
               </div>
               <p class="text-xs text-gray-500 dark:text-gray-400">
                 最低等级设为 0 表示不限制固定等级；开启等级条件时需同时满足所有条件。
               </p>
               <div class="flex flex-wrap items-end gap-3">
-                <BaseSwitch v-model="settings.autoAcceptHarvestStealEnabled" class="automation-setting-item" label="收偷比过滤" />
+                <BaseSwitch v-model="settings.autoAcceptHarvestStealEnabled" label="收偷比过滤" />
                 <BaseInput
                   v-model.number="settings.autoAcceptHarvestStealHarvest"
                   label="收获"
@@ -318,34 +292,22 @@ onMounted(async () => {
           </div>
         </section>
 
-        <section class="farm-card rounded-2xl p-4">
-          <div class="mb-4 flex items-start gap-3">
-            <div class="h-9 w-9 flex shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-900/25 dark:text-violet-400">
-              <span class="i-carbon-store text-xl" />
-            </div>
-            <div>
-              <h4 class="text-base text-gray-900 font-bold dark:text-gray-100">
-                神秘商人
-              </h4>
-              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                自动购买商品并接收相关提醒
-              </p>
-            </div>
-          </div>
+        <section class="farm-card">
+          <AutomationSectionHeader title="神秘商人" description="自动购买商品并接收相关提醒" tone="violet">
+            <span class="i-carbon-store text-xl" />
+          </AutomationSectionHeader>
 
           <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div class="automation-setting-item">
-              <BaseSwitch v-model="settings.automation.mystery_shop_auto_buy" class="automation-setting-item" label="自动购买" />
-            </div>
-            <div class="automation-setting-item">
-              <BaseSwitch v-model="settings.automation.mystery_shop_arrival_notify" class="automation-setting-item" label="到货提醒" />
-            </div>
-            <div class="automation-setting-item sm:col-span-2">
+            <div
+              v-for="item in mysteryShopSwitches"
+              :key="item.key"
+              class="automation-setting-item"
+              :class="{ 'sm:col-span-2': item.span }"
+            >
               <BaseSwitch
-                v-model="settings.automation.mystery_shop_purchase_notify"
-                class="automation-setting-item"
-                label="购买提醒"
-                :disabled="!settings.automation.mystery_shop_auto_buy"
+                v-model="(settings.automation as any)[item.key]"
+                :label="item.label"
+                :disabled="item.key === 'mystery_shop_purchase_notify' && !settings.automation.mystery_shop_auto_buy"
               />
             </div>
           </div>
@@ -355,17 +317,8 @@ onMounted(async () => {
               允许使用的货币
             </div>
             <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div class="automation-setting-item">
-                <BaseSwitch v-model="settings.automation.mystery_shop_allow_gold" class="automation-setting-item" label="金币" />
-              </div>
-              <div class="automation-setting-item">
-                <BaseSwitch v-model="settings.automation.mystery_shop_allow_coupon" class="automation-setting-item" label="点券" />
-              </div>
-              <div class="automation-setting-item">
-                <BaseSwitch v-model="settings.automation.mystery_shop_allow_gold_bean" class="automation-setting-item" label="金豆豆" />
-              </div>
-              <div class="automation-setting-item">
-                <BaseSwitch v-model="settings.automation.mystery_shop_allow_diamond" class="automation-setting-item" label="钻石" />
+              <div v-for="item in mysteryShopCurrencySwitches" :key="item.key" class="automation-setting-item">
+                <BaseSwitch v-model="(settings.automation as any)[item.key]" :label="item.label" />
               </div>
             </div>
             <p class="text-xs text-gray-500 dark:text-gray-400">
@@ -377,20 +330,10 @@ onMounted(async () => {
           </p>
         </section>
 
-        <section class="border border-gray-200 rounded-xl p-4 dark:border-gray-700">
-          <div class="mb-3 flex items-center gap-3">
-            <div class="h-9 w-9 flex items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-              <span class="i-tabler-horse text-xl" />
-            </div>
-            <div>
-              <h4 class="text-base text-gray-900 font-bold dark:text-gray-100">
-                牧场
-              </h4>
-              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                收获、催产、补草、喂养、清理与好友互动
-              </p>
-            </div>
-          </div>
+        <section class="farm-card">
+          <AutomationSectionHeader title="牧场" description="收获、催产、补草、喂养、清理与好友互动" tone="amber">
+            <span class="i-tabler-horse text-xl" />
+          </AutomationSectionHeader>
 
           <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div v-for="{ key, label } in ranchSwitches" :key="key" class="automation-setting-item">
@@ -491,16 +434,6 @@ onMounted(async () => {
   gap: 1rem;
 }
 
-.automation-setting-item {
-  display: flex;
-  min-height: 42px;
-  align-items: center;
-  padding: 9px 11px;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-control);
-  background: color-mix(in srgb, var(--ui-surface-strong) 58%, transparent);
-}
-
 @media (max-width: 1279px) {
   .automation-card-layout {
     display: block;
@@ -510,7 +443,7 @@ onMounted(async () => {
     display: contents;
   }
 
-  .automation-card-layout section {
+  .automation-card-layout > .automation-card-column > section {
     margin-bottom: 1rem;
   }
 }
