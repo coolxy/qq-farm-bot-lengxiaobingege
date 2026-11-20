@@ -28,11 +28,12 @@ export type AutomationSettingsFormModel = Pick<
 
 withDefaults(defineProps<{
   accountId?: string
+  accountName?: string
   connected?: boolean
   saving: boolean
   fertilizerLandTypeOptions: Array<{ label: string, value: string }>
   fertilizerOptions: Array<{ label: string, value: string }>
-}>(), { accountId: '', connected: false })
+}>(), { accountId: '', accountName: '', connected: false })
 
 const emit = defineEmits<{
   save: []
@@ -122,22 +123,106 @@ onMounted(async () => {
     // 拿不到动物列表时只影响「指定动物」下拉，其余设置照常保存
   }
 })
+
+// ── 设置中心：左侧分组导航 + 右侧单面板 ──
+const sectionConfig = [
+  {
+    id: 'farm', title: '日常农场', description: '巡田、种植、任务与产出处理',
+    icon: 'i-carbon-sprout', tone: 'green',
+    keys: farmSwitches.map(s => s.key),
+  },
+  {
+    id: 'fertilizer', title: '施肥管理', description: '施肥策略、范围与化肥补充',
+    icon: 'i-carbon-chemistry', tone: 'amber',
+    keys: fertilizerSwitches.map(s => s.key),
+  },
+  {
+    id: 'friends', title: '好友互动', description: '好友农场互动与好友申请',
+    icon: 'i-carbon-user-multiple', tone: 'blue',
+    keys: ['friend', ...friendActionSwitches.map(s => s.key), 'friend_auto_accept'],
+  },
+  {
+    id: 'shop', title: '神秘商人', description: '自动购买与到货/购买提醒',
+    icon: 'i-carbon-store', tone: 'violet',
+    keys: [...mysteryShopSwitches.map(s => s.key), ...mysteryShopCurrencySwitches.map(s => s.key)],
+  },
+  {
+    id: 'ranch', title: '牧场', description: '收获、催产、补草、喂养与好友互动',
+    icon: 'i-tabler-horse', tone: 'amber',
+    keys: [...ranchSwitches.map(s => s.key), ...ranchFriendSwitches.map(s => s.key)],
+  },
+] as const
+
+const activeSection = ref<string>('farm')
+const activeSectionMeta = computed(() => sectionConfig.find(s => s.id === activeSection.value) ?? sectionConfig[0])
+
+function enabledCount(keys: readonly string[]): number {
+  return keys.reduce((count, key) => count + ((settings.value.automation as any)[key] ? 1 : 0), 0)
+}
 </script>
 
 <template>
-  <div class="space-y-4">
-    <div class="automation-card-layout">
-      <div class="automation-card-column">
-        <section class="farm-card">
-          <AutomationSectionHeader title="日常农场" description="管理巡田、种植、任务和产出处理" tone="green">
-            <span class="i-carbon-sprout text-xl" />
-          </AutomationSectionHeader>
+  <div class="automation-center">
+    <!-- 顶部常驻保存栏 -->
+    <div class="automation-topbar">
+      <div class="automation-topbar__lead">
+        <span class="automation-topbar__mark"><span class="i-carbon-settings-adjust" /></span>
+        <div class="min-w-0">
+          <div class="automation-topbar__title">
+            <span class="automation-topbar__account">{{ accountName || '未选择账号' }}</span>
+            <span class="automation-topbar__sep">/</span>
+            <span>{{ activeSectionMeta.title }}</span>
+          </div>
+          <div class="automation-topbar__crumb">
+            共 {{ sectionConfig.length }} 组设置 · 修改后点击右侧保存生效
+          </div>
+        </div>
+      </div>
+      <div class="automation-topbar__actions">
+        <BaseButton variant="primary" size="sm" :loading="saving" @click="emit('save')">
+          <template #icon>
+            <span class="i-carbon-save" />
+          </template>
+          保存自动控制
+        </BaseButton>
+      </div>
+    </div>
 
-          <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+    <div class="automation-center__body">
+      <!-- 左侧分组导航 -->
+      <nav class="automation-nav" aria-label="自动控制分组">
+        <button
+          v-for="section in sectionConfig"
+          :key="section.id"
+          type="button"
+          class="automation-nav__item"
+          :class="{ 'is-active': activeSection === section.id }"
+          :aria-current="activeSection === section.id ? 'page' : undefined"
+          @click="activeSection = section.id"
+        >
+          <span class="automation-nav__icon" :class="`is-${section.tone}`">
+            <span :class="section.icon" />
+          </span>
+          <span class="automation-nav__text">
+            <span class="automation-nav__title">{{ section.title }}</span>
+            <span class="automation-nav__desc">{{ section.description }}</span>
+          </span>
+          <span class="automation-nav__count">{{ enabledCount(section.keys) }}/{{ section.keys.length }}</span>
+        </button>
+      </nav>
+
+      <!-- 右侧单面板 -->
+      <div class="automation-panels">
+        <!-- 日常农场 -->
+        <section v-if="activeSection === 'farm'" class="automation-panel">
+          <AutomationSectionHeader title="日常农场" description="管理巡田、种植、任务和产出处理" tone="green">
+            <span class="i-carbon-sprout" />
+          </AutomationSectionHeader>
+          <div class="setting-grid">
             <div
               v-for="item in farmSwitches"
               :key="item.key"
-              class="automation-setting-item"
+              class="setting-tile"
               :class="{ 'sm:col-span-2': item.span }"
             >
               <BaseSwitch v-model="(settings.automation as any)[item.key]" :label="item.label" />
@@ -145,13 +230,14 @@ onMounted(async () => {
           </div>
         </section>
 
-        <section class="farm-card">
+        <!-- 施肥管理 -->
+        <section v-else-if="activeSection === 'fertilizer'" class="automation-panel">
           <AutomationSectionHeader title="施肥管理" description="设置施肥策略、范围和化肥补充" tone="amber">
-            <span class="i-carbon-chemistry text-xl" />
+            <span class="i-carbon-chemistry" />
           </AutomationSectionHeader>
 
-          <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div v-for="item in fertilizerSwitches" :key="item.key" class="automation-setting-item">
+          <div class="setting-grid">
+            <div v-for="item in fertilizerSwitches" :key="item.key" class="setting-tile">
               <BaseSwitch
                 v-model="(settings.automation as any)[item.key]"
                 :label="item.label"
@@ -162,10 +248,10 @@ onMounted(async () => {
 
           <div
             v-if="settings.automation.fertilizer_buy_organic || settings.automation.fertilizer_buy_normal"
-            class="mt-3 rounded-lg bg-green-50 p-3 text-sm space-y-3 dark:bg-green-900/20"
+            class="panel-hint panel-hint--green"
           >
-            <div v-if="settings.automation.fertilizer_buy_organic" class="space-y-2">
-              <div class="text-green-700 font-medium dark:text-green-400">
+            <div v-if="settings.automation.fertilizer_buy_organic" class="panel-hint__block">
+              <div class="panel-hint__heading">
                 有机化肥设置
               </div>
               <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -173,8 +259,8 @@ onMounted(async () => {
                 <BaseInput v-model.number="settings.fertilizerBuyOrganicThresholdHours" label="触发阈值 (小时)" type="number" min="1" max="990" />
               </div>
             </div>
-            <div v-if="settings.automation.fertilizer_buy_normal" class="space-y-2">
-              <div class="text-green-700 font-medium dark:text-green-400">
+            <div v-if="settings.automation.fertilizer_buy_normal" class="panel-hint__block">
+              <div class="panel-hint__heading">
                 无机化肥设置
               </div>
               <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -183,13 +269,13 @@ onMounted(async () => {
               </div>
             </div>
             <BaseInput v-model.number="settings.fertilizerBuyCheckIntervalMinutes" label="检测间隔 (分钟)" type="number" min="1" max="1440" />
-            <p class="text-xs text-gray-500 dark:text-gray-400">
+            <p class="panel-note">
               系统会按检测间隔检查化肥余量，低于阈值时自动购买。两种化肥同时开启时优先购买有机化肥。
             </p>
           </div>
 
-          <div class="mt-3 border border-amber-200 rounded-lg bg-amber-50/60 p-3 dark:border-amber-800/60 dark:bg-amber-900/10">
-            <div class="mb-2 text-sm text-amber-800 font-medium dark:text-amber-300">
+          <div class="panel-hint panel-hint--amber">
+            <div class="panel-hint__heading">
               施肥范围
             </div>
             <NCheckboxGroup v-model:value="settings.automation.fertilizer_land_types">
@@ -203,12 +289,12 @@ onMounted(async () => {
                 </NCheckbox>
               </div>
             </NCheckboxGroup>
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            <p class="panel-note">
               仅对选中土地类型的地块执行施肥策略。
             </p>
           </div>
 
-          <div class="mt-3 space-y-3">
+          <div class="panel-stack">
             <BaseSelect v-model="settings.automation.fertilizer" label="施肥策略" :options="fertilizerOptions" />
             <div
               v-if="ripeningEnabled"
@@ -231,36 +317,37 @@ onMounted(async () => {
             </div>
           </div>
         </section>
-      </div>
 
-      <div class="automation-card-column">
-        <section class="farm-card">
+        <!-- 好友互动 -->
+        <section v-else-if="activeSection === 'friends'" class="automation-panel">
           <AutomationSectionHeader title="好友互动" description="管理好友农场互动和好友申请" tone="blue">
-            <span class="i-carbon-user-multiple text-xl" />
+            <span class="i-carbon-user-multiple" />
           </AutomationSectionHeader>
 
-          <div class="automation-setting-item">
-            <BaseSwitch v-model="settings.automation.friend" label="自动好友互动" />
+          <div class="setting-grid">
+            <div class="setting-tile sm:col-span-2">
+              <BaseSwitch v-model="settings.automation.friend" label="自动好友互动" />
+            </div>
           </div>
-          <div v-if="settings.automation.friend" class="mt-3 rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
-            <div class="mb-2 text-xs text-blue-700 font-medium dark:text-blue-300">
+          <div v-if="settings.automation.friend" class="panel-hint panel-hint--blue">
+            <div class="panel-hint__heading">
               互动行为
             </div>
-            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div v-for="item in friendActionSwitches" :key="item.key" class="automation-setting-item">
+            <div class="setting-grid">
+              <div v-for="item in friendActionSwitches" :key="item.key" class="setting-tile">
                 <BaseSwitch v-model="(settings.automation as any)[item.key]" :label="item.label" />
               </div>
             </div>
           </div>
 
-          <div class="mt-3 rounded-lg bg-blue-50 p-3 space-y-3 dark:bg-blue-900/20">
+          <div class="panel-hint panel-hint--blue">
             <BaseSwitch v-model="settings.automation.friend_auto_accept" label="自动通过好友申请" />
             <template v-if="settings.automation.friend_auto_accept">
               <div class="grid grid-cols-1 items-end gap-3 sm:grid-cols-2">
                 <BaseInput v-model.number="settings.autoAcceptFriendMinLevel" label="最低等级" type="number" min="0" max="200" />
                 <BaseSwitch v-model="settings.autoAcceptRequireOwnLevel" label="不低于自己等级" />
               </div>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
+              <p class="panel-note">
                 最低等级设为 0 表示不限制固定等级；开启等级条件时需同时满足所有条件。
               </p>
               <div class="flex flex-wrap items-end gap-3">
@@ -285,23 +372,24 @@ onMounted(async () => {
                   :disabled="!settings.autoAcceptHarvestStealEnabled"
                 />
               </div>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
+              <p class="panel-note">
                 默认按 8:1 比较收获/偷菜数量，不合格的申请会直接拒绝。
               </p>
             </template>
           </div>
         </section>
 
-        <section class="farm-card">
+        <!-- 神秘商人 -->
+        <section v-else-if="activeSection === 'shop'" class="automation-panel">
           <AutomationSectionHeader title="神秘商人" description="自动购买商品并接收相关提醒" tone="violet">
-            <span class="i-carbon-store text-xl" />
+            <span class="i-carbon-store" />
           </AutomationSectionHeader>
 
-          <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div class="setting-grid">
             <div
               v-for="item in mysteryShopSwitches"
               :key="item.key"
-              class="automation-setting-item"
+              class="setting-tile"
               :class="{ 'sm:col-span-2': item.span }"
             >
               <BaseSwitch
@@ -312,41 +400,42 @@ onMounted(async () => {
             </div>
           </div>
 
-          <div v-if="settings.automation.mystery_shop_auto_buy" class="mt-3 rounded-lg bg-gray-50 p-3 space-y-3 dark:bg-gray-800/60">
-            <div class="text-sm text-gray-800 font-medium dark:text-gray-200">
+          <div v-if="settings.automation.mystery_shop_auto_buy" class="panel-hint panel-hint--neutral">
+            <div class="panel-hint__heading">
               允许使用的货币
             </div>
-            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div v-for="item in mysteryShopCurrencySwitches" :key="item.key" class="automation-setting-item">
+            <div class="setting-grid">
+              <div v-for="item in mysteryShopCurrencySwitches" :key="item.key" class="setting-tile">
                 <BaseSwitch v-model="(settings.automation as any)[item.key]" :label="item.label" />
               </div>
             </div>
-            <p class="text-xs text-gray-500 dark:text-gray-400">
+            <p class="panel-note">
               自动购买会先按标价币种筛选，再检查余额是否足够；提醒使用「用户设置 → 事件通知」的推送渠道。
             </p>
           </div>
-          <p v-else class="mt-3 text-xs text-gray-500 dark:text-gray-400">
+          <p v-else class="panel-note panel-note--standalone">
             到货提醒可单独开启；购买提醒需先打开自动购买。
           </p>
         </section>
 
-        <section class="farm-card">
+        <!-- 牧场 -->
+        <section v-else class="automation-panel">
           <AutomationSectionHeader title="牧场" description="收获、催产、补草、喂养、清理与好友互动" tone="amber">
-            <span class="i-tabler-horse text-xl" />
+            <span class="i-tabler-horse" />
           </AutomationSectionHeader>
 
-          <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div v-for="{ key, label } in ranchSwitches" :key="key" class="automation-setting-item">
+          <div class="setting-grid">
+            <div v-for="{ key, label } in ranchSwitches" :key="key" class="setting-tile">
               <BaseSwitch
                 v-model="(settings.automation as any)[key]"
                 :label="label"
                 :disabled="key === 'ranch_grass_buy' && !settings.automation.ranch_grass"
               />
             </div>
-            <div class="col-span-full text-xs text-gray-500 dark:text-gray-400">
+            <div class="col-span-full panel-note">
               两种兑换可独立开启；松果按 8 小时、4 小时、1 小时兑换，粑粑按 4 小时、1 小时兑换。到访或货币到账后排队，登录、重连和日常巡查时核对集市状态。
             </div>
-            <div class="automation-setting-item">
+            <div class="setting-tile">
               <NInputNumber v-model:value="settings.automation.ranch_check_minutes" :min="1" :max="60" :step="1" class="w-full">
                 <template #prefix>
                   巡查间隔
@@ -355,96 +444,362 @@ onMounted(async () => {
             </div>
           </div>
 
-          <div class="mt-4">
-            <h4 class="mb-2 text-sm text-gray-900 font-bold dark:text-gray-100">
+          <div class="panel-subsection">
+            <h4 class="panel-subsection__title">
               好友互动
             </h4>
-            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div v-for="{ key, label } in ranchFriendSwitches" :key="key" class="automation-setting-item">
+            <div class="setting-grid">
+              <div v-for="{ key, label } in ranchFriendSwitches" :key="key" class="setting-tile">
                 <BaseSwitch v-model="(settings.automation as any)[key]" :label="label" />
               </div>
             </div>
           </div>
 
-          <div class="grid grid-cols-1 mt-4 gap-3 sm:grid-cols-2">
-            <BaseSelect v-model="settings.automation.ranch_strategy" label="养殖策略" :options="RANCH_STRATEGIES" />
-            <BaseSelect
+          <div class="panel-stack">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <BaseSelect v-model="settings.automation.ranch_strategy" label="养殖策略" :options="RANCH_STRATEGIES" />
+              <BaseSelect
+                v-if="settings.automation.ranch_strategy === 'bag_priority'"
+                v-model="settings.automation.ranch_bag_fallback"
+                label="库存不足时"
+                :options="RANCH_STRATEGIES.slice(0, 2)"
+              />
+              <template v-if="settings.automation.ranch_strategy === 'preferred' || (settings.automation.ranch_strategy === 'bag_priority' && settings.automation.ranch_bag_fallback === 'preferred')">
+                <BaseSelect
+                  v-model="settings.automation.ranch_coop_animal"
+                  label="窝 · 指定动物"
+                  :options="[{ value: 0, label: '不购买' }, ...ranchAnimalOptions.filter(animal => animal.kind === '窝')]"
+                />
+                <BaseSelect
+                  v-model="settings.automation.ranch_shed_animal"
+                  label="棚 · 指定动物"
+                  :options="[{ value: 0, label: '不购买' }, ...ranchAnimalOptions.filter(animal => animal.kind === '棚')]"
+                />
+              </template>
+            </div>
+            <RanchCubPriority
               v-if="settings.automation.ranch_strategy === 'bag_priority'"
-              v-model="settings.automation.ranch_bag_fallback"
-              label="库存不足时"
-              :options="RANCH_STRATEGIES.slice(0, 2)"
+              v-model="settings.automation"
+              :account-id="accountId"
+              :connected="connected"
             />
-            <template v-if="settings.automation.ranch_strategy === 'preferred' || (settings.automation.ranch_strategy === 'bag_priority' && settings.automation.ranch_bag_fallback === 'preferred')">
-              <BaseSelect
-                v-model="settings.automation.ranch_coop_animal"
-                label="窝 · 指定动物"
-                :options="[{ value: 0, label: '不购买' }, ...ranchAnimalOptions.filter(animal => animal.kind === '窝')]"
-              />
-              <BaseSelect
-                v-model="settings.automation.ranch_shed_animal"
-                label="棚 · 指定动物"
-                :options="[{ value: 0, label: '不购买' }, ...ranchAnimalOptions.filter(animal => animal.kind === '棚')]"
-              />
-            </template>
+            <p class="panel-note">
+              牧场自动化会把收获/喂养等写操作切到牧场场景再执行；未解锁场景 2 的账号会自动降级为当前场景读取，无需额外设置。
+            </p>
           </div>
-          <RanchCubPriority
-            v-if="settings.automation.ranch_strategy === 'bag_priority'"
-            v-model="settings.automation"
-            :account-id="accountId"
-            :connected="connected"
-            class="mt-4"
-          />
-          <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
-            牧场自动化会把收获/喂养等写操作切到牧场场景再执行；未解锁场景 2 的账号会自动降级为当前场景读取，无需额外设置。
-          </p>
         </section>
       </div>
-    </div>
-
-    <div class="flex justify-end gap-2 border-t pt-3 dark:border-gray-700">
-      <BaseButton variant="primary" size="sm" :loading="saving" @click="emit('save')">
-        保存自动控制
-      </BaseButton>
     </div>
   </div>
 </template>
 
 <style scoped>
-.automation-setting-item {
+.automation-center {
+  display: grid;
+  gap: 16px;
+}
+
+/* ── 顶部常驻保存栏 ── */
+.automation-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
-  min-height: 42px;
   align-items: center;
-  padding: 9px 11px;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-card);
+  background: color-mix(in srgb, var(--ui-surface-strong) 88%, transparent);
+  box-shadow: var(--ui-shadow-sm);
+  backdrop-filter: blur(12px);
+}
+
+.automation-topbar__lead {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.automation-topbar__mark {
+  display: flex;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  color: var(--ui-primary);
+  background: var(--ui-primary-soft);
+  font-size: 20px;
+}
+
+.automation-topbar__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  color: var(--ui-ink);
+  font-size: 15px;
+  font-weight: var(--fw-700);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automation-topbar__account {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automation-topbar__sep {
+  color: var(--ui-border-strong);
+}
+
+.automation-topbar__crumb {
+  margin-top: 2px;
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+
+.automation-topbar__actions {
+  flex-shrink: 0;
+}
+
+/* ── 两栏主体 ── */
+.automation-center__body {
+  display: grid;
+  grid-template-columns: 244px minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+/* ── 左侧分组导航 ── */
+.automation-nav {
+  position: sticky;
+  top: 88px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-card);
+  background: var(--ui-surface);
+}
+
+.automation-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ui-ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+.automation-nav__item:hover {
+  background: var(--ui-surface-soft);
+}
+
+.automation-nav__item.is-active {
+  border-color: color-mix(in srgb, var(--ui-primary) 28%, transparent);
+  background: var(--ui-primary-soft);
+}
+
+.automation-nav__icon {
+  display: flex;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  font-size: 18px;
+}
+
+.automation-nav__icon.is-green { color: var(--ui-primary); background: color-mix(in srgb, var(--ui-primary) 14%, transparent); }
+.automation-nav__icon.is-amber { color: #b45309; background: rgb(245 158 11 / 14%); }
+.automation-nav__icon.is-blue { color: #2563eb; background: rgb(59 130 246 / 14%); }
+.automation-nav__icon.is-violet { color: #7c3aed; background: rgb(139 92 246 / 14%); }
+:global(.dark) .automation-nav__icon.is-amber { color: #fcd34d; }
+:global(.dark) .automation-nav__icon.is-blue { color: #93c5fd; }
+:global(.dark) .automation-nav__icon.is-violet { color: #c4b5fd; }
+
+.automation-nav__text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.automation-nav__title {
+  font-size: 13px;
+  font-weight: var(--fw-700);
+}
+
+.automation-nav__desc {
+  overflow: hidden;
+  color: var(--ui-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automation-nav__count {
+  flex-shrink: 0;
+  color: var(--ui-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.automation-nav__item.is-active .automation-nav__count {
+  color: var(--ui-primary);
+  font-weight: var(--fw-700);
+}
+
+/* ── 右侧面板 ── */
+.automation-panels {
+  min-width: 0;
+}
+
+.automation-panel {
+  padding: 18px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-card);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.setting-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (min-width: 640px) {
+  .setting-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.setting-tile {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  padding: 10px 12px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-control);
   background: color-mix(in srgb, var(--ui-surface-strong) 58%, transparent);
 }
 
-.automation-card-layout {
+.panel-hint {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
-  gap: 1rem;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 12px;
 }
 
-.automation-card-column {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 1rem;
+.panel-hint--green { background: rgb(34 139 96 / 8%); }
+.panel-hint--amber { border: 1px solid rgb(245 158 11 / 30%); background: rgb(245 158 11 / 8%); }
+.panel-hint--blue { background: rgb(59 130 246 / 8%); }
+.panel-hint--neutral { background: var(--ui-surface-soft); }
+
+.panel-hint__block {
+  display: grid;
+  gap: 8px;
 }
 
-@media (max-width: 1279px) {
-  .automation-card-layout {
-    display: block;
+.panel-hint__heading {
+  color: var(--ui-ink);
+  font-size: 13px;
+  font-weight: var(--fw-700);
+}
+
+.panel-hint--green .panel-hint__heading { color: #157f52; }
+:global(.dark) .panel-hint--green .panel-hint__heading { color: #6ee7a8; }
+.panel-hint--blue .panel-hint__heading { color: #2563eb; }
+:global(.dark) .panel-hint--blue .panel-hint__heading { color: #93c5fd; }
+
+.panel-note {
+  color: var(--ui-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.panel-note--standalone {
+  margin-top: 14px;
+}
+
+.panel-stack {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.panel-subsection {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.panel-subsection__title {
+  margin-bottom: 10px;
+  color: var(--ui-ink);
+  font-size: 14px;
+  font-weight: var(--fw-700);
+}
+
+/* ── 窄屏：导航转横向标签 ── */
+@media (max-width: 900px) {
+  .automation-center__body {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .automation-card-column {
-    display: contents;
+  .automation-nav {
+    position: static;
+    flex-direction: row;
+    gap: 6px;
+    overflow-x: auto;
   }
 
-  .automation-card-layout > .automation-card-column > section {
-    margin-bottom: 1rem;
+  .automation-nav__item {
+    width: auto;
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .automation-nav__icon {
+    width: 30px;
+    height: 30px;
+    font-size: 16px;
+  }
+
+  .automation-nav__desc {
+    display: none;
+  }
+
+  .automation-topbar {
+    position: static;
+  }
+}
+
+@media (max-width: 520px) {
+  .automation-topbar__crumb {
+    display: none;
+  }
+
+  .automation-topbar__title {
+    font-size: 14px;
   }
 }
 </style>

@@ -98,15 +98,6 @@ onMounted(() => {
 
 <template>
   <div class="space-y-4">
-    <div class="flex items-center justify-between">
-      <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
-        自动控制
-        <span v-if="currentAccountName" class="ml-2 text-sm text-gray-500 font-normal dark:text-gray-400">
-          ({{ currentAccountName }})
-        </span>
-      </h3>
-    </div>
-
     <div v-if="settingsLoading" class="py-4 text-center text-gray-500">
       <span class="i-carbon-circle-dash mx-auto mb-2 inline-block animate-spin text-2xl" />
       <p>加载中...</p>
@@ -122,6 +113,7 @@ onMounted(() => {
       v-model="localAutomationSettings"
       :saving="automationSaving"
       :account-id="currentAccountId"
+      :account-name="currentAccountName || ''"
       :connected="currentAccountConnected"
       :fertilizer-land-type-options="fertilizerLandTypeOptions"
       :fertilizer-options="fertilizerOptions"
