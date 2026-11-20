@@ -11,6 +11,15 @@ const { isAutomationOn } = require('../models/store');
 const { sendMsgAsync, networkEvents, getUserState } = require('../utils/network');
 const { types } = require('../utils/proto');
 const { toLong, toNum, toTimeSec, log, logWarn, sleep, getSystemDateKey } = require('../utils/utils');
+const LongModule = require('long');
+
+/** int64 数量转十进制字符串：Long 直接 toString，避免 Long→Number→String 在大数上丢精度。 */
+function int64CountString(value: any): string {
+    if (value == null) return '0';
+    if (LongModule.isLong(value)) return value.toString();
+    if (typeof value === 'string') return /^-?\d+$/.test(value) ? value : '0';
+    return Number.isSafeInteger(value) ? String(value) : '0';
+}
 const { getSellConditionContext } = require('./activity-windows');
 const { updateStatusGold } = require('./status');
 
@@ -34,6 +43,27 @@ const ORGANIC_FERTILIZER_ITEM_HOURS: Map<number, number> = new Map([
 ]);
 let fertilizerGiftDoneDateKey: string = '';
 let fertilizerGiftLastOpenAt: number = 0;
+// 化肥道具使用失败冷却：背包里有化肥道具但 BatchUse 全部失败（如「不足」/道具不可直接使用）时，
+// 农场巡查每轮都会重发这些必然失败的请求（曾实测一天 6000+ 条无效告警）。失败后冷却，成功后清零。
+let fertilizerGiftCooldownUntil: number = 0;
+
+function isFertilizerGiftCooling(now: number = Date.now()): boolean {
+    return now < fertilizerGiftCooldownUntil;
+}
+
+/** 记录一次开启结果：成功(used>0)清零冷却；全部失败则进入冷却。返回冷却到期时间。 */
+function noteFertilizerGiftOutcome(usedCount: number, failed: boolean, now: number = Date.now()): number {
+    if (usedCount > 0) {
+        fertilizerGiftCooldownUntil = 0;
+        return 0;
+    }
+    if (failed) fertilizerGiftCooldownUntil = now + SPECIAL_GIFT_CHECK_COOLDOWN_MS;
+    return fertilizerGiftCooldownUntil;
+}
+
+function resetFertilizerGiftCooldown(): void {
+    fertilizerGiftCooldownUntil = 0;
+}
 let pendingBagRequest: Promise<any> | null = null;
 
 // ============ API ============
@@ -162,10 +192,10 @@ async function batchUseItems(items: any[]): Promise<any> {
         const { body: replyBody } = await sendMsgAsync('gamepb.itempb.ItemService', 'BatchUse', body);
         const reply: any = types.BatchUseReply.decode(replyBody);
         results.push({
-            used: reply.used ? { id: toNum(reply.used.item_id), count: String(toNum(reply.used.count)) } : null,
+            used: reply.used ? { id: toNum(reply.used.item_id), count: int64CountString(reply.used.count) } : null,
             rewards: reply.gained ? [{
                 id: toNum(reply.gained.item_id),
-                count: String(toNum(reply.gained.count)),
+                count: int64CountString(reply.gained.count),
                 name: getItemById(toNum(reply.gained.item_id))?.name || `物品${toNum(reply.gained.item_id)}`,
             }] : [],
         });
@@ -354,6 +384,8 @@ function isFertilizerContainerFullError(err: any): boolean {
 }
 
 async function autoOpenFertilizerGiftPacks(): Promise<number> {
+    // 冷却期内直接跳过，避免每轮农场巡查重发必然失败的请求。
+    if (isFertilizerGiftCooling()) return 0;
     try {
         const bagReply: any = await getBag();
         const bagItems: any[] = getBagItems(bagReply);
@@ -364,6 +396,7 @@ async function autoOpenFertilizerGiftPacks(): Promise<number> {
         const containerHours: { normal: number; organic: number } = getContainerHoursFromBagItems(bagItems);
 
         let opened: number = 0;
+        let anyFailed: boolean = false;
         const details: string[] = [];
         // 按条目 BatchUse，避免数量大时逐个 Use 造成请求风暴
         for (const row of payloads) {
@@ -392,8 +425,9 @@ async function autoOpenFertilizerGiftPacks(): Promise<number> {
                 await batchUseItems([{ itemId, count: useCount, uid: 0 }]);
                 used = useCount;
             } catch {
-                // BatchUse 失败时直接跳过该条目
+                // BatchUse 失败时直接跳过该条目，但记录失败用于冷却判定
                 used = 0;
+                anyFailed = true;
             }
             if (used > 0) {
                 opened += used;
@@ -404,7 +438,9 @@ async function autoOpenFertilizerGiftPacks(): Promise<number> {
             await sleep(100);
         }
 
+        noteFertilizerGiftOutcome(opened, anyFailed);
         if (opened > 0) {
+            // 真正用掉了道具：清零冷却，保持后续巡查可继续使用。
             fertilizerGiftDoneDateKey = getSystemDateKey();
             fertilizerGiftLastOpenAt = Date.now();
             log('仓库', `自动使用化肥类道具 x${opened}${details.length ? ` [${details.join('，')}]` : ''}`, {
@@ -412,6 +448,15 @@ async function autoOpenFertilizerGiftPacks(): Promise<number> {
                 event: '开启化肥礼包',
                 result: 'ok',
                 count: opened,
+            });
+        } else if (anyFailed) {
+            // 有道具但全部使用失败（如服务端报「不足」）：进入冷却，避免每轮巡查空转发请求。
+            // 有冷却保护，这条告警每个冷却周期最多一次，不会刷屏。
+            logWarn('仓库', `${payloads.length} 种化肥道具本次均使用失败，${Math.round(SPECIAL_GIFT_CHECK_COOLDOWN_MS / 60000)} 分钟内不再重试`, {
+                module: 'warehouse',
+                event: '开启化肥礼包',
+                result: 'cooldown',
+                kinds: payloads.length,
             });
         }
         return opened;
@@ -792,6 +837,11 @@ module.exports = {
     useItem,
     batchUseItems,
     openFertilizerGiftPacksSilently,
+    isFertilizerGiftCooling,
+    noteFertilizerGiftOutcome,
+    resetFertilizerGiftCooldown,
+    int64CountString,
+    SPECIAL_GIFT_CHECK_COOLDOWN_MS,
     getFertilizerGiftDailyState: () => ({
         key: 'fertilizer_gift_open',
         doneToday: fertilizerGiftDoneDateKey === getSystemDateKey(),

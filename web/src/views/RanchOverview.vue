@@ -26,7 +26,7 @@ const facilities = computed<any[]>(() => sortFacilities(state.value?.facilities 
 const pens = computed(() => facilities.value.filter(f => f.ranch))
 const animals = computed(() => pens.value.flatMap(f => (f.ranch.animals || []).map((animal: any) => ({ animal, pen: f.name }))))
 const capacity = computed(() => pens.value.reduce((sum, f) => sum + (Number(f.ranch.capacity) || 0), 0))
-const shelves = computed(() => pens.value.flatMap(f => f.ranch.shelves.filter((s: any) => s.canCollect).map((s: any) => ({ ...s, pen: f.name, key: `${f.id}:${s.slot}` }))))
+const shelves = computed(() => pens.value.flatMap(f => (f.ranch.shelves || []).filter((s: any) => s.canCollect).map((s: any) => ({ ...s, pen: f.name, key: `${f.id}:${s.slot}` }))))
 const shelvesReady = computed(() => shelves.value.length)
 const hazards = computed(() => pens.value.reduce((sum, f) => sum + (f.ranch.hazards?.length || 0), 0))
 const blocked = computed(() => animals.value.filter(({ animal }) => animal.grassBlocked).length)

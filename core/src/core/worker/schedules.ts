@@ -158,6 +158,7 @@ function nextBusinessTickDeferMs(kind: string): number {
 
 async function runFarmTick(auto: any): Promise<void> {
     if (st.farmTaskRunning) return;
+    const generation = st.runtimeGeneration;
     const farmDeferMs = nextBusinessTickDeferMs('farm');
     if (farmDeferMs > 0) {
         st.nextFarmRunAt = Date.now() + farmDeferMs;
@@ -185,8 +186,11 @@ async function runFarmTick(auto: any): Promise<void> {
     } catch {
         // ignore
     } finally {
-        st.nextFarmRunAt = Date.now() + farmMs;
-        st.farmTaskRunning = false;
+        // 与好友/牧场班次一致：重连/切号使 generation 递增后，旧轮次的收尾不得覆盖新一轮调度状态。
+        if (generation === st.runtimeGeneration) {
+            st.nextFarmRunAt = Date.now() + farmMs;
+            st.farmTaskRunning = false;
+        }
     }
 }
 

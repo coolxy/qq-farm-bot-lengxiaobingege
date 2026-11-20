@@ -20,7 +20,7 @@ const pens = computed<any[]>(() => (state.value?.facilities || []).filter((f: an
 const animals = computed(() => pens.value.flatMap(f => (f.ranch.animals || []).map((animal: any) => ({ animal, pen: f.name, hazards: f.ranch.hazards?.length || 0 }))))
 
 const capacity = computed(() => pens.value.reduce((sum, f) => sum + (Number(f.ranch.capacity) || 0), 0))
-const shelves = computed(() => pens.value.flatMap(f => f.ranch.shelves.filter((s: any) => s.canCollect).map((s: any) => ({ ...s, pen: f.name, key: `${f.id}:${s.slot}` }))))
+const shelves = computed(() => pens.value.flatMap(f => (f.ranch.shelves || []).filter((s: any) => s.canCollect).map((s: any) => ({ ...s, pen: f.name, key: `${f.id}:${s.slot}` }))))
 const hazards = computed(() => pens.value.reduce((sum, f) => sum + (f.ranch.hazards?.length || 0), 0))
 
 /** 动物多时按状态筛一批出来处理；默认不排序，保持槽位稳定，避免筛完位置乱跳。 */

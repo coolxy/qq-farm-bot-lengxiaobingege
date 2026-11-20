@@ -873,22 +873,12 @@ export const useActivityCenterStore = defineStore('activity-center', () => {
     loading.value = true
     error.value = ''
     try {
-      let detail: unknown
-      const detailKey: 'season' | null = null
-      {
-        const response = await api.get('/api/activity-center/stellar', { headers: { 'x-account-id': requestedAccountId }, skipErrorToast: true } as any)
-        detail = responsePayload(response.data)
-      }
+      const response = await api.get('/api/activity-center/stellar', { headers: { 'x-account-id': requestedAccountId }, skipErrorToast: true } as any)
+      const detail = responsePayload(response.data)
       if (!isCurrent(version, requestedAccountId))
         return false
-      if (detailKey) {
-        const current = record(snapshot.value)
-        applySnapshot({ ...current, [detailKey]: detail }, clientStartedAt)
-      }
-      else {
-        const current = record(snapshot.value)
-        applySnapshot({ ...current, ...record(detail), activities: snapshot.value.activities }, clientStartedAt)
-      }
+      const current = record(snapshot.value)
+      applySnapshot({ ...current, ...record(detail), activities: snapshot.value.activities }, clientStartedAt)
       return true
     }
     catch (detailError) {

@@ -370,29 +370,6 @@ th {
   animation: spring-pop-in var(--spring-pop-duration) var(--spring-pop) both;
 }
 
-/* 复制反馈：对勾微弹出现，2.5 秒后由 useCopyFeedback 熄灭，淡出恢复原图标。 */
-.copy-feedback-enter-active {
-  transition:
-    opacity 0.16s ease,
-    transform var(--spring-pop-duration) var(--spring-pop);
-}
-
-.copy-feedback-leave-active {
-  transition: opacity 0.18s ease;
-}
-
-.copy-feedback-enter-from {
-  opacity: 0;
-}
-
-.copy-feedback-enter-from[data-copied='true'] {
-  transform: scale(0.5);
-}
-
-.copy-feedback-leave-to {
-  opacity: 0;
-}
-
 .app-shell {
   color: var(--ui-ink);
   background: transparent;

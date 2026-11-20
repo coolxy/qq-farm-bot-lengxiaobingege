@@ -61,7 +61,13 @@ function backToPassword() {
   password.value = ''
 }
 
-onUnmounted(stopCountdown)
+let copyResetTimer: ReturnType<typeof setTimeout> | undefined
+
+onUnmounted(() => {
+  stopCountdown()
+  if (copyResetTimer)
+    clearTimeout(copyResetTimer)
+})
 
 const usernameValid = computed(() => {
   const name = username.value
@@ -116,6 +122,12 @@ async function copyGeneratedPassword(): Promise<void> {
   try {
     await navigator.clipboard.writeText(generatedPassword.value)
     copied.value = true
+    // 复制反馈自动复位，避免「已复制」永久停留（原 useCopyFeedback 的 2.5s 行为）。
+    if (copyResetTimer)
+      clearTimeout(copyResetTimer)
+    copyResetTimer = setTimeout(() => {
+      copied.value = false
+    }, 2500)
   }
   catch {
     error.value = '复制失败，请手动选中密码复制'
