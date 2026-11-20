@@ -32,6 +32,7 @@ const statusStore = useStatusStore()
 const toast = useToastStore()
 const { currentAccountId, currentAccount } = storeToRefs(accountStore)
 const { status } = storeToRefs(statusStore)
+const goldCoinImage = '/game-config/seed_images_named/seed_images/1001.png'
 const {
   friends,
   loading,
@@ -1055,7 +1056,7 @@ async function handleBatchAddKnownFriendGids() {
                     {{ friendPetBadge(friend).state === 'unknown' ? '宠物未知' : friendPetBadge(friend).text }}
                   </span>
                   <span v-if="getFriendGold(friend) > 0" class="f-tag f-tag--gold" :title="`金币 ${getFriendGold(friend).toLocaleString('zh-CN')}`">
-                    <span class="i-fas-coins" />{{ formatFriendGold(friend.gold) }}
+                    <img class="f-tag__coin" :src="goldCoinImage" alt="">{{ formatFriendGold(friend.gold) }}
                   </span>
                   <span
                     v-for="tag in friendActionTags(friend)"
@@ -1617,6 +1618,13 @@ async function handleBatchAddKnownFriendGids() {
 .f-tag--gold {
   color: var(--ui-warning);
   background: var(--ui-warning-soft);
+}
+
+.f-tag__coin {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  object-fit: contain;
 }
 
 .f-tag--blocked {

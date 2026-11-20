@@ -128,30 +128,33 @@ onMounted(async () => {
 const sectionConfig = [
   {
     id: 'farm', title: '日常农场', description: '巡田、种植、任务与产出处理',
-    icon: 'i-carbon-sprout', tone: 'green',
+    icon: 1101, tone: 'green',
     keys: farmSwitches.map(s => s.key),
   },
   {
     id: 'fertilizer', title: '施肥管理', description: '施肥策略、范围与化肥补充',
-    icon: 'i-carbon-chemistry', tone: 'amber',
+    icon: 1011, tone: 'amber',
     keys: fertilizerSwitches.map(s => s.key),
   },
   {
     id: 'friends', title: '好友互动', description: '好友农场互动与好友申请',
-    icon: 'i-carbon-user-multiple', tone: 'blue',
+    icon: 1013, tone: 'blue',
     keys: ['friend', ...friendActionSwitches.map(s => s.key), 'friend_auto_accept'],
   },
   {
     id: 'shop', title: '神秘商人', description: '自动购买与到货/购买提醒',
-    icon: 'i-carbon-store', tone: 'violet',
+    icon: 1041, tone: 'violet',
     keys: [...mysteryShopSwitches.map(s => s.key), ...mysteryShopCurrencySwitches.map(s => s.key)],
   },
   {
     id: 'ranch', title: '牧场', description: '收获、催产、补草、喂养与好友互动',
-    icon: 'i-tabler-horse', tone: 'amber',
+    icon: 60001, tone: 'amber',
     keys: [...ranchSwitches.map(s => s.key), ...ranchFriendSwitches.map(s => s.key)],
   },
 ] as const
+
+// 服务器同款道具图：与全项目统一走 /game-config/seed_images_named/seed_images/{id}.png
+const gameImg = (id: number | string) => `/game-config/seed_images_named/seed_images/${id}.png`
 
 const activeSection = ref<string>('farm')
 const activeSectionMeta = computed(() => sectionConfig.find(s => s.id === activeSection.value) ?? sectionConfig[0])
@@ -201,7 +204,7 @@ function enabledCount(keys: readonly string[]): number {
           @click="activeSection = section.id"
         >
           <span class="automation-nav__icon" :class="`is-${section.tone}`">
-            <span :class="section.icon" />
+            <img :src="gameImg(section.icon)" alt="">
           </span>
           <span class="automation-nav__text">
             <span class="automation-nav__title">{{ section.title }}</span>
@@ -216,7 +219,7 @@ function enabledCount(keys: readonly string[]): number {
         <!-- 日常农场 -->
         <section v-if="activeSection === 'farm'" class="automation-panel">
           <AutomationSectionHeader title="日常农场" description="管理巡田、种植、任务和产出处理" tone="green">
-            <span class="i-carbon-sprout" />
+            <img :src="gameImg(1101)" alt="">
           </AutomationSectionHeader>
           <div class="setting-grid">
             <div
@@ -233,7 +236,7 @@ function enabledCount(keys: readonly string[]): number {
         <!-- 施肥管理 -->
         <section v-else-if="activeSection === 'fertilizer'" class="automation-panel">
           <AutomationSectionHeader title="施肥管理" description="设置施肥策略、范围和化肥补充" tone="amber">
-            <span class="i-carbon-chemistry" />
+            <img :src="gameImg(1011)" alt="">
           </AutomationSectionHeader>
 
           <div class="setting-grid">
@@ -321,7 +324,7 @@ function enabledCount(keys: readonly string[]): number {
         <!-- 好友互动 -->
         <section v-else-if="activeSection === 'friends'" class="automation-panel">
           <AutomationSectionHeader title="好友互动" description="管理好友农场互动和好友申请" tone="blue">
-            <span class="i-carbon-user-multiple" />
+            <img :src="gameImg(1013)" alt="">
           </AutomationSectionHeader>
 
           <div class="setting-grid">
@@ -382,7 +385,7 @@ function enabledCount(keys: readonly string[]): number {
         <!-- 神秘商人 -->
         <section v-else-if="activeSection === 'shop'" class="automation-panel">
           <AutomationSectionHeader title="神秘商人" description="自动购买商品并接收相关提醒" tone="violet">
-            <span class="i-carbon-store" />
+            <img :src="gameImg(1041)" alt="">
           </AutomationSectionHeader>
 
           <div class="setting-grid">
@@ -421,7 +424,7 @@ function enabledCount(keys: readonly string[]): number {
         <!-- 牧场 -->
         <section v-else class="automation-panel">
           <AutomationSectionHeader title="牧场" description="收获、催产、补草、喂养、清理与好友互动" tone="amber">
-            <span class="i-tabler-horse" />
+            <img :src="gameImg(60001)" alt="">
           </AutomationSectionHeader>
 
           <div class="setting-grid">
@@ -622,6 +625,12 @@ function enabledCount(keys: readonly string[]): number {
   justify-content: center;
   border-radius: 9px;
   font-size: 18px;
+}
+
+.automation-nav__icon img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
 }
 
 .automation-nav__icon.is-green { color: var(--ui-primary); background: color-mix(in srgb, var(--ui-primary) 14%, transparent); }

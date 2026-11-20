@@ -31,6 +31,9 @@ const autoScroll = ref(true)
 const lastBagFetchAt = ref(0)
 const clearingLogs = ref(false)
 
+// 服务器同款道具图：与全项目其他页面统一走 /game-config/seed_images_named/seed_images/{id}.png
+const gameImg = (id: number | string) => `/game-config/seed_images_named/seed_images/${id}.png`
+
 const allLogs = computed(() => {
   return [...(statusLogs.value || [])]
     .slice(-200)
@@ -568,25 +571,25 @@ useIntervalFn(updateCountdowns, 1000)
         </h3>
         <div class="ov-tiles">
           <div class="ov-tile">
-            <span class="ov-tile__label"><span class="i-fas-coins text-yellow-500" />金币</span>
+            <span class="ov-tile__label"><img class="ov-tile__icon" :src="gameImg(1001)" alt="">金币</span>
             <strong class="ov-tile__value">{{ formatAssetAmount(status?.status?.gold) }}</strong>
             <small v-if="(status?.sessionGoldGained || 0) !== 0" class="ov-tile__delta" :class="(status?.sessionGoldGained || 0) > 0 ? 'is-up' : 'is-down'">
               本次 {{ (status?.sessionGoldGained || 0) > 0 ? '+' : '' }}{{ formatPlainNumber(status?.sessionGoldGained) }}
             </small>
           </div>
           <div class="ov-tile">
-            <span class="ov-tile__label"><span class="i-fas-ticket-alt text-emerald-500" />点券</span>
+            <span class="ov-tile__label"><img class="ov-tile__icon" :src="gameImg(1002)" alt="">点券</span>
             <strong class="ov-tile__value">{{ formatAssetAmount(status?.status?.coupon) }}</strong>
             <small v-if="(status?.sessionCouponGained || 0) !== 0" class="ov-tile__delta" :class="(status?.sessionCouponGained || 0) > 0 ? 'is-up' : 'is-down'">
               本次 {{ (status?.sessionCouponGained || 0) > 0 ? '+' : '' }}{{ formatPlainNumber(status?.sessionCouponGained) }}
             </small>
           </div>
           <div class="ov-tile">
-            <span class="ov-tile__label"><span class="i-fas-seedling text-amber-500" />金豆豆</span>
+            <span class="ov-tile__label"><img class="ov-tile__icon" :src="gameImg(1005)" alt="">金豆豆</span>
             <strong class="ov-tile__value">{{ formatAssetAmount(status?.status?.goldBean) }}</strong>
           </div>
           <div class="ov-tile">
-            <span class="ov-tile__label"><span class="i-fas-gem text-cyan-500" />钻石</span>
+            <span class="ov-tile__label"><img class="ov-tile__icon" :src="gameImg(1004)" alt="">钻石</span>
             <strong class="ov-tile__value">{{ formatAssetAmount(diamondBalance) }}</strong>
           </div>
         </div>
@@ -599,19 +602,19 @@ useIntervalFn(updateCountdowns, 1000)
         </h3>
         <div class="ov-tiles">
           <div class="ov-tile">
-            <span class="ov-tile__label"><span class="i-fas-flask text-emerald-500" />普通化肥</span>
+            <span class="ov-tile__label"><img class="ov-tile__icon" :src="gameImg(1011)" alt="">普通化肥</span>
             <strong class="ov-tile__value">{{ formatBucketTime(fertilizerNormal) }}</strong>
           </div>
           <div class="ov-tile">
-            <span class="ov-tile__label"><span class="i-fas-vial text-emerald-500" />有机化肥</span>
+            <span class="ov-tile__label"><img class="ov-tile__icon" :src="gameImg(1012)" alt="">有机化肥</span>
             <strong class="ov-tile__value">{{ formatBucketTime(fertilizerOrganic) }}</strong>
           </div>
           <div class="ov-tile">
-            <span class="ov-tile__label"><span class="i-fas-bookmark text-violet-400" />普通收藏点</span>
+            <span class="ov-tile__label"><img class="ov-tile__icon" :src="gameImg(3001)" alt="">普通收藏点</span>
             <strong class="ov-tile__value">{{ formatPlainNumber(collectionNormal?.count) }}</strong>
           </div>
           <div class="ov-tile">
-            <span class="ov-tile__label"><span class="i-fas-gem text-violet-400" />典藏收藏点</span>
+            <span class="ov-tile__label"><img class="ov-tile__icon" :src="gameImg(3002)" alt="">典藏收藏点</span>
             <strong class="ov-tile__value">{{ formatPlainNumber(collectionRare?.count) }}</strong>
           </div>
         </div>
@@ -777,6 +780,14 @@ useIntervalFn(updateCountdowns, 1000)
 
 <!-- 概览卡片样式统一走 overview.css（以农场为基准，牧场复用）；日志区为农场独有，保留内联。 -->
 <style scoped>
+/* 资产/库存磁贴的服务器同款道具图 */
+.ov-tile__icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  object-fit: contain;
+}
+
 .log-filters {
   display: grid;
   min-width: 0;

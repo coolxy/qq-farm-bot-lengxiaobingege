@@ -9,7 +9,9 @@ withDefaults(defineProps<{
 <template>
   <header class="panel-head">
     <div class="panel-head__icon" :class="`is-${tone}`">
-      <slot name="icon" />
+      <slot name="icon">
+        <slot />
+      </slot>
     </div>
     <div class="min-w-0">
       <h4 class="panel-head__title">
@@ -41,6 +43,12 @@ withDefaults(defineProps<{
   justify-content: center;
   border-radius: 12px;
   font-size: 22px;
+}
+
+.panel-head__icon img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
 }
 
 .panel-head__icon.is-green {
