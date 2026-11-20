@@ -94,7 +94,13 @@ const DEFAULT_ACCOUNT_CONFIG: AccountConfig = {
         ranch_friend_clean: true,
         ranch_friend_mosquito: false,
         ranch_task: true,
+        ranch_illustrated: true,
         ranch_share: true,
+        // 集市兑换开关与 config/ranch-automation 的 RANCH_AUTOMATION_DEFAULTS 保持一致；
+        // 必须在此声明，否则 ALLOWED_AUTOMATION_KEYS 会过滤掉，enabled() 永远读不到。
+        ranch_market_organic: false,
+        ranch_market_organic_poop: false,
+        ranch_market_organic_pinecone: false,
         ranch_dry_run: false,
         ranch_check_minutes: 5,
         ranch_strategy: 'level',

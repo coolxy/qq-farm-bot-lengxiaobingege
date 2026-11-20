@@ -62,7 +62,13 @@ export interface AutomationConfig {
   ranch_friend_clean: boolean;
   ranch_friend_mosquito: boolean;
   ranch_task: boolean;
+  ranch_illustrated: boolean;
   ranch_share: boolean;
+  // 集市兑换（与 ranch-automation 默认值保持一致；必须在类型与默认配置声明，
+  // 否则 ALLOWED_AUTOMATION_KEYS 白名单会过滤，enabled() 永远读不到）。
+  ranch_market_organic: boolean;
+  ranch_market_organic_poop: boolean;
+  ranch_market_organic_pinecone: boolean;
   ranch_dry_run: boolean;
   /** 牧场巡查间隔（分钟，1–60） */
   ranch_check_minutes: number;
