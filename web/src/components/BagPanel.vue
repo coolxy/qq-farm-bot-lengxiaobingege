@@ -945,9 +945,16 @@ useIntervalFn(loadBag, 60000)
 <style scoped src="@/styles/bag.css"></style>
 
 <style scoped>
-/* 农场背包保留自己的批量工具栏排列；卡片骨架与布局走 BagGridCard + bag.css。 */
+/* 农场背包保留自己的批量工具栏排列；卡片骨架与布局走 BagGridCard + bag.css。
+   bag.css 的 .bag-toolbar 是给牧场横向工具栏设计的（align-items:center /
+   justify-content:space-between / flex-wrap:wrap）；农场这里改成纵向排列时，
+   必须把这三项一并覆盖掉。否则 column 下 align-items:center 会让分类条和批量
+   按钮行按内容宽度居中、向两侧溢出，窄屏上左边缘被裁切。 */
 .bag-toolbar {
   flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  justify-content: flex-start;
 }
 
 .bag-batch-hint {
