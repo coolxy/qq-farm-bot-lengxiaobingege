@@ -332,16 +332,27 @@ function isFertilizerRelatedItemId(itemId: number): boolean {
     return interactionType === 'fertilizer' || interactionType === 'fertilizerpro';
 }
 
-function collectFertilizerUsePayload(items: any[]): Array<{ id: number; count: number }> {
-    const merged: Map<number, number> = new Map();
+/**
+ * 收集化肥类道具，按 (id, uid) 逐堆保留。
+ * 2026-11-20 实包验证：化肥道具须走 Use 协议并带真实 uid 才能生效；
+ * BatchUse（无 uid）对化肥返回「不足」。useItem 在 count 超过单堆数量且有多堆时会
+ * fallback 到 BatchUse，故这里按 uid 拆堆、每堆单独使用，确保始终走 Use 协议。
+ */
+function collectFertilizerUsePayload(items: any[]): Array<{ id: number; count: number; uid: number }> {
+    const merged: Map<string, { id: number; count: number; uid: number }> = new Map();
     for (const it of (items || [])) {
         const id: number = toNum(it && it.id);
         const count: number = Math.max(0, toNum(it && it.count));
         if (id <= 0 || count <= 0) continue;
         if (!isFertilizerRelatedItemId(id)) continue;
-        merged.set(id, (merged.get(id) || 0) + count);
+        if (isItemLocked(it)) continue; // 锁定堆不能用，交给 useItem 会报数量不足
+        const uid: number = toNum(it && it.uid);
+        const key = `${id}:${uid}`;
+        const prev = merged.get(key);
+        if (prev) prev.count += count;
+        else merged.set(key, { id, count, uid });
     }
-    return Array.from(merged.entries()).map(([id, count]) => ({ id, count }));
+    return Array.from(merged.values());
 }
 
 function getContainerHoursFromBagItems(items: any[]): { normal: number; organic: number } {
@@ -389,7 +400,7 @@ async function autoOpenFertilizerGiftPacks(): Promise<number> {
     try {
         const bagReply: any = await getBag();
         const bagItems: any[] = getBagItems(bagReply);
-        const payloads: Array<{ id: number; count: number }> = collectFertilizerUsePayload(bagItems);
+        const payloads: Array<{ id: number; count: number; uid: number }> = collectFertilizerUsePayload(bagItems);
         if (payloads.length <= 0) {
             return 0;
         }
@@ -398,9 +409,12 @@ async function autoOpenFertilizerGiftPacks(): Promise<number> {
         let opened: number = 0;
         let anyFailed: boolean = false;
         const details: string[] = [];
-        // 按条目 BatchUse，避免数量大时逐个 Use 造成请求风暴
+        // 2026-11-20 实包验证：化肥道具须走 Use 协议并带真实 uid 才能补进容器；
+        // 11-16 的 BatchUse 勘误（针对牧场罐头）去掉了 uid，导致化肥全部报「不足」。
+        // 按 (id, uid) 逐堆使用，count 不超过单堆数量，确保 useItem 走 Use 协议。
         for (const row of payloads) {
             const itemId: number = Number(row.id) || 0;
+            const uid: number = Number(row.uid) || 0;
             const rawCount: number = Math.max(1, Number(row.count) || 0);
             const { type, perItemHours } = getFertilizerItemTypeAndHours(itemId);
             let useCount: number = rawCount;
@@ -422,10 +436,14 @@ async function autoOpenFertilizerGiftPacks(): Promise<number> {
             const itemName: string = itemInfo && itemInfo.name ? String(itemInfo.name) : `物品#${itemId}`;
             let used: number = 0;
             try {
-                await batchUseItems([{ itemId, count: useCount, uid: 0 }]);
-                used = useCount;
+                // 走 Use 协议（带真实 uid）；useItem 内部在 count≤单堆时会用 Use，
+                // 回包 used_items 才是服务器确认用掉的数量。
+                const reply: any = await useItem(itemId, useCount, [], uid);
+                const usedItems: any[] = Array.isArray(reply?.used_items) ? reply.used_items : [];
+                used = usedItems.reduce((sum: number, entry: any) => sum + Math.max(0, toNum(entry && entry.count)), 0);
+                if (used <= 0) used = useCount; // 回包未给 used_items 时按请求量记账（Use 成功即有 used_items）
             } catch {
-                // BatchUse 失败时直接跳过该条目，但记录失败用于冷却判定
+                // 使用失败时直接跳过该堆，但记录失败用于冷却判定
                 used = 0;
                 anyFailed = true;
             }
@@ -841,6 +859,7 @@ module.exports = {
     noteFertilizerGiftOutcome,
     resetFertilizerGiftCooldown,
     int64CountString,
+    collectFertilizerUsePayload,
     SPECIAL_GIFT_CHECK_COOLDOWN_MS,
     getFertilizerGiftDailyState: () => ({
         key: 'fertilizer_gift_open',

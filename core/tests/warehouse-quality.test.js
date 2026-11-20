@@ -57,3 +57,40 @@ test('冷却以最后一次失败重新计时', () => {
     assert.equal(isFertilizerGiftCooling(second + SPECIAL_GIFT_CHECK_COOLDOWN_MS - 1), true);
     assert.equal(isFertilizerGiftCooling(second + SPECIAL_GIFT_CHECK_COOLDOWN_MS), false);
 });
+
+const { collectFertilizerUsePayload } = require('../dist/services/warehouse');
+
+/**
+ * 化肥按 (id, uid) 逐堆收集，保留真实 uid。
+ * 背景：化肥须走 Use 协议并带 uid；BatchUse（无 uid）对化肥返回「不足」。
+ */
+test('化肥道具按 uid 逐堆保留，不合并不同堆', () => {
+    const items = [
+        { id: 80001, count: 5, uid: 100 },
+        { id: 80001, count: 3, uid: 200 }, // 同 id 不同 uid：必须分成两堆
+        { id: 80001, count: 2, uid: 100 }, // 同 uid 合并到 100 那堆 → 7
+        { id: 80011, count: 4, uid: 300 },
+    ];
+    const payloads = collectFertilizerUsePayload(items);
+    assert.deepEqual(
+        payloads.sort((a, b) => a.uid - b.uid),
+        [
+            { id: 80001, count: 7, uid: 100 },
+            { id: 80001, count: 3, uid: 200 },
+            { id: 80011, count: 4, uid: 300 },
+        ],
+    );
+});
+
+test('锁定堆与非化肥道具被忽略', () => {
+    const items = [
+        { id: 80001, count: 5, uid: 100, locked: true }, // 锁定 → 跳过
+        { id: 7004, count: 10, uid: 101 },               // 牧草，非化肥 → 跳过
+        { id: 1011, count: 100, uid: 102 },              // 容器道具 → 跳过
+        { id: 80001, count: 2, uid: 103 },               // 正常 → 保留
+    ];
+    // locked 判定依赖 isItemLocked，构造 locked 字段（测试里仓库锁定态来自字段）
+    const payloads = collectFertilizerUsePayload(items);
+    assert.equal(payloads.length, 1);
+    assert.deepEqual(payloads[0], { id: 80001, count: 2, uid: 103 });
+});
