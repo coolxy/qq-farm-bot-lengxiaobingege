@@ -138,164 +138,165 @@ onMounted(() => {
     </h3>
 
     <div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
-      <section class="farm-card rounded-lg p-4">
-        <div class="mb-4 flex items-start gap-3">
-          <div class="h-9 w-9 flex shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-900/25 dark:text-violet-400">
-            <span class="i-carbon-password text-xl" />
-          </div>
-          <div>
-            <h4 class="text-base text-gray-900 font-bold dark:text-gray-100">
-              修改管理员密码
-            </h4>
-            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-              更新后台管理登录凭据
-            </p>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <BaseInput
-            v-model="passwordForm.old"
-            label="当前密码"
-            type="password"
-            placeholder="当前管理员密码"
-          />
-          <BaseInput
-            v-model="passwordForm.new"
-            label="新密码"
-            type="password"
-            placeholder="至少 6 位"
-          />
-          <BaseInput
-            v-model="passwordForm.confirm"
-            label="确认新密码"
-            type="password"
-            placeholder="再次输入新密码"
-          />
-        </div>
-
-        <div class="mt-3 flex items-center justify-end border-t pt-3 dark:border-gray-700">
-          <BaseButton
-            variant="primary"
-            size="sm"
-            :loading="passwordSaving"
-            @click="handleChangePassword"
-          >
-            修改管理员密码
-          </BaseButton>
-        </div>
-      </section>
-
+      <!-- 左列：修改密码 + 事件通知；右列：登录安全。两列高度接近，避免左列大片留白。 -->
       <div class="min-w-0 space-y-4">
         <section class="farm-card rounded-lg p-4">
           <div class="mb-4 flex items-start gap-3">
-            <div class="h-9 w-9 flex items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-              <span class="i-carbon-security text-xl" />
+            <div class="h-9 w-9 flex shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-900/25 dark:text-violet-400">
+              <span class="i-carbon-password text-xl" />
             </div>
-            <div class="flex-1">
+            <div>
               <h4 class="text-base text-gray-900 font-bold dark:text-gray-100">
-                登录安全
+                修改管理员密码
               </h4>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                同一时间只允许一处登录；新设备登录需微信验证码；通过后 30 天内免验证
+              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                更新后台管理登录凭据
               </p>
             </div>
-            <BaseButton variant="text" size="sm" :loading="securityLoading" @click="loadSecurity">
-              刷新
+          </div>
+
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <BaseInput
+              v-model="passwordForm.old"
+              label="当前密码"
+              type="password"
+              placeholder="当前管理员密码"
+            />
+            <BaseInput
+              v-model="passwordForm.new"
+              label="新密码"
+              type="password"
+              placeholder="至少 6 位"
+            />
+            <BaseInput
+              v-model="passwordForm.confirm"
+              label="确认新密码"
+              type="password"
+              placeholder="再次输入新密码"
+            />
+          </div>
+
+          <div class="mt-3 flex items-center justify-end border-t pt-3 dark:border-gray-700">
+            <BaseButton
+              variant="primary"
+              size="sm"
+              :loading="passwordSaving"
+              @click="handleChangePassword"
+            >
+              修改管理员密码
             </BaseButton>
-          </div>
-
-          <div v-if="securityInfo" class="space-y-3">
-            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-800/40">
-              <div class="mb-2 text-xs text-gray-500 font-medium dark:text-gray-400">
-                当前会话
-              </div>
-              <div class="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-                <div>
-                  <div class="text-gray-400">
-                    设备
-                  </div>
-                  <div class="text-gray-800 dark:text-gray-200">
-                    {{ securityInfo.session?.device || '—' }}
-                  </div>
-                </div>
-                <div>
-                  <div class="text-gray-400">
-                    来源 IP
-                  </div>
-                  <div class="text-gray-800 dark:text-gray-200">
-                    {{ securityInfo.session?.ip || '—' }}
-                  </div>
-                </div>
-                <div>
-                  <div class="text-gray-400">
-                    自动续期至
-                  </div>
-                  <div class="text-gray-800 dark:text-gray-200">
-                    {{ daysLeft(securityInfo.session?.expiresAt) }}
-                  </div>
-                </div>
-                <div>
-                  <div class="text-gray-400">
-                    最迟重登
-                  </div>
-                  <div class="text-gray-800 dark:text-gray-200">
-                    {{ daysLeft(securityInfo.session?.absoluteExpiresAt) }}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-800/40">
-              <div class="mb-2 flex items-center justify-between">
-                <span class="text-xs text-gray-500 font-medium dark:text-gray-400">
-                  受信任设备（{{ securityInfo.devices?.length || 0 }}）
-                </span>
-                <span v-if="!securityInfo.deviceVerifyEnabled" class="text-xs text-amber-600">
-                  设备验证已通过环境变量关闭
-                </span>
-              </div>
-              <div v-if="!securityInfo.devices?.length" class="text-xs text-gray-400">
-                暂无受信任设备。下次在新浏览器登录会立刻信任该设备并推送通知。
-              </div>
-              <ul v-else class="space-y-2">
-                <li
-                  v-for="device in securityInfo.devices"
-                  :key="device.label + device.createdAt"
-                  class="flex items-center justify-between text-xs"
-                >
-                  <span class="text-gray-800 dark:text-gray-200">
-                    {{ device.label }}
-                  </span>
-                  <span class="text-gray-400">
-                    最近 {{ formatDateTime(device.lastSeenAt) }} · {{ daysLeft(device.expiresAt) }}失效
-                  </span>
-                </li>
-              </ul>
-            </div>
-
-            <div class="flex items-center justify-between border-t pt-3 dark:border-gray-700">
-              <span class="text-xs text-gray-500 dark:text-gray-400">
-                撤销后所有设备都要重新收验证码
-              </span>
-              <BaseButton
-                variant="outline"
-                size="sm"
-                :loading="securityRevoking"
-                :disabled="!securityInfo.devices?.length"
-                @click="handleRevokeDevices"
-              >
-                撤销全部设备
-              </BaseButton>
-            </div>
-          </div>
-          <div v-else class="text-xs text-gray-400">
-            加载中…
           </div>
         </section>
 
         <EventNotifyPanel />
       </div>
+
+      <section class="farm-card rounded-lg p-4">
+        <div class="mb-4 flex items-start gap-3">
+          <div class="h-9 w-9 flex items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+            <span class="i-carbon-security text-xl" />
+          </div>
+          <div class="flex-1">
+            <h4 class="text-base text-gray-900 font-bold dark:text-gray-100">
+              登录安全
+            </h4>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              同一时间只允许一处登录；新设备登录需微信验证码；通过后 30 天内免验证
+            </p>
+          </div>
+          <BaseButton variant="text" size="sm" :loading="securityLoading" @click="loadSecurity">
+            刷新
+          </BaseButton>
+        </div>
+
+        <div v-if="securityInfo" class="space-y-3">
+          <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-800/40">
+            <div class="mb-2 text-xs text-gray-500 font-medium dark:text-gray-400">
+              当前会话
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+              <div>
+                <div class="text-gray-400">
+                  设备
+                </div>
+                <div class="text-gray-800 dark:text-gray-200">
+                  {{ securityInfo.session?.device || '—' }}
+                </div>
+              </div>
+              <div>
+                <div class="text-gray-400">
+                  来源 IP
+                </div>
+                <div class="text-gray-800 dark:text-gray-200">
+                  {{ securityInfo.session?.ip || '—' }}
+                </div>
+              </div>
+              <div>
+                <div class="text-gray-400">
+                  自动续期至
+                </div>
+                <div class="text-gray-800 dark:text-gray-200">
+                  {{ daysLeft(securityInfo.session?.expiresAt) }}
+                </div>
+              </div>
+              <div>
+                <div class="text-gray-400">
+                  最迟重登
+                </div>
+                <div class="text-gray-800 dark:text-gray-200">
+                  {{ daysLeft(securityInfo.session?.absoluteExpiresAt) }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-800/40">
+            <div class="mb-2 flex items-center justify-between">
+              <span class="text-xs text-gray-500 font-medium dark:text-gray-400">
+                受信任设备（{{ securityInfo.devices?.length || 0 }}）
+              </span>
+              <span v-if="!securityInfo.deviceVerifyEnabled" class="text-xs text-amber-600">
+                设备验证已通过环境变量关闭
+              </span>
+            </div>
+            <div v-if="!securityInfo.devices?.length" class="text-xs text-gray-400">
+              暂无受信任设备。下次在新浏览器登录会立刻信任该设备并推送通知。
+            </div>
+            <ul v-else class="space-y-2">
+              <li
+                v-for="device in securityInfo.devices"
+                :key="device.label + device.createdAt"
+                class="flex items-center justify-between text-xs"
+              >
+                <span class="text-gray-800 dark:text-gray-200">
+                  {{ device.label }}
+                </span>
+                <span class="text-gray-400">
+                  最近 {{ formatDateTime(device.lastSeenAt) }} · {{ daysLeft(device.expiresAt) }}失效
+                </span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="flex items-center justify-between border-t pt-3 dark:border-gray-700">
+            <span class="text-xs text-gray-500 dark:text-gray-400">
+              撤销后所有设备都要重新收验证码
+            </span>
+            <BaseButton
+              variant="outline"
+              size="sm"
+              :loading="securityRevoking"
+              :disabled="!securityInfo.devices?.length"
+              @click="handleRevokeDevices"
+            >
+              撤销全部设备
+            </BaseButton>
+          </div>
+        </div>
+        <div v-else class="text-xs text-gray-400">
+          加载中…
+        </div>
+      </section>
     </div>
   </div>
 </template>
