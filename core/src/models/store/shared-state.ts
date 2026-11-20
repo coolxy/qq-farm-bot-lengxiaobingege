@@ -388,8 +388,9 @@ function normalizeAccountConfig(input: unknown, fallback: AccountConfig = accoun
             } else if (k === 'fertilizer_smart_seconds') {
                 cfg.automation.fertilizer_smart_seconds = Math.max(30, Math.min(3600, Number(v) || 300));
             } else if (k.startsWith('ranch_')
-                && ['ranch_strategy', 'ranch_bag_fallback', 'ranch_check_minutes', 'ranch_coop_animal', 'ranch_shed_animal'].includes(k)) {
+                && ['ranch_strategy', 'ranch_bag_fallback', 'ranch_check_minutes', 'ranch_coop_animal', 'ranch_shed_animal', 'ranch_coop_cub_priority', 'ranch_shed_cub_priority'].includes(k)) {
                 // 牧场这几个键不是布尔值，交给牧场配置模块做取值范围校验；非法值保留原值。
+                // 背包幼崽优先级数组必须走这里按数组归一化，否则会被下面的 !!v 压成 true。
                 try {
                     (cfg.automation as any)[k] = require('../../config/ranch-automation').normalizeRanchSetting(k, v);
                 } catch {

@@ -99,6 +99,8 @@ const localAutomationSettings = ref({
     ranch_bag_fallback: 'level' as 'level' | 'preferred',
     ranch_coop_animal: 0,
     ranch_shed_animal: 0,
+    ranch_coop_cub_priority: [] as number[],
+    ranch_shed_cub_priority: [] as number[],
   },
   fertilizerBuyOrganicCount: 10,
   fertilizerBuyOrganicThresholdHours: 10,
@@ -220,6 +222,8 @@ function syncLocalAutomationSettings() {
         ranch_bag_fallback: 'level' as 'level' | 'preferred',
         ranch_coop_animal: 0,
         ranch_shed_animal: 0,
+        ranch_coop_cub_priority: [] as number[],
+        ranch_shed_cub_priority: [] as number[],
       }
     }
     else {
@@ -276,6 +280,8 @@ function syncLocalAutomationSettings() {
         ranch_bag_fallback: 'level' as 'level' | 'preferred',
         ranch_coop_animal: 0,
         ranch_shed_animal: 0,
+        ranch_coop_cub_priority: [] as number[],
+        ranch_shed_cub_priority: [] as number[],
       }
       localAutomationSettings.value.automation = {
         ...defaults,

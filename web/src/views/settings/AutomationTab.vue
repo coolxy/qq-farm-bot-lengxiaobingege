@@ -15,12 +15,14 @@ import {
 } from '@/components/settings/settings-local-state'
 import { useAccountStore } from '@/stores/account'
 import { useSettingStore } from '@/stores/setting'
+import { useStatusStore } from '@/stores/status'
 
 const { showAlert } = useSettingsAlert()
 
 const accountStore = useAccountStore()
 const { accounts, currentAccountId } = storeToRefs(accountStore)
 const { loading: settingsLoading, loadedAccountId } = storeToRefs(useSettingStore())
+const { currentAccountConnected } = storeToRefs(useStatusStore())
 
 const currentAccountName = computed(() => {
   const acc = accounts.value.find((a: any) => a.id === currentAccountId.value)
@@ -119,6 +121,8 @@ onMounted(() => {
       v-else
       v-model="localAutomationSettings"
       :saving="automationSaving"
+      :account-id="currentAccountId"
+      :connected="currentAccountConnected"
       :fertilizer-land-type-options="fertilizerLandTypeOptions"
       :fertilizer-options="fertilizerOptions"
       @save="saveAutomationSettings"
