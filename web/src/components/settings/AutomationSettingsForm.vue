@@ -137,43 +137,47 @@ onMounted(async () => {
 
 // ── 设置中心：左侧分组导航 + 右侧单面板 ──
 // 策略类分组（planting / cadence）不是布尔开关集合，用「已配置」标记代替启用计数。
+// 每组图标统一用服务器同款道具图，语义与分组内容一一对应，且互不重复。
 const sectionConfig = [
   {
     id: 'planting', title: '种植策略', description: '选种策略、种子优先级与预留规则',
-    icon: 1008, tone: 'green', kind: 'strategy' as const,
+    icon: 1018, tone: 'green', kind: 'strategy' as const, // 幼苗：选种与种植
     keys: [] as readonly string[],
   },
   {
     id: 'cadence', title: '执行节奏', description: '巡查间隔、静默时段与种植/偷菜延迟',
-    icon: 1101, tone: 'blue', kind: 'strategy' as const,
+    icon: 4002, tone: 'blue', kind: 'strategy' as const, // 闪电：速度与节奏
     keys: [] as readonly string[],
   },
   {
     id: 'farm', title: '日常农场', description: '巡田、种植、任务与产出处理',
-    icon: 1101, tone: 'green', kind: 'automation' as const,
+    icon: 1021, tone: 'green', kind: 'automation' as const, // 叶片：农场作物与产出
     keys: farmSwitches.map(s => s.key),
   },
   {
     id: 'fertilizer', title: '施肥管理', description: '施肥策略、范围与化肥补充',
-    icon: 1011, tone: 'amber', kind: 'automation' as const,
+    icon: 1011, tone: 'amber', kind: 'automation' as const, // 化肥桶：施肥
     keys: fertilizerSwitches.map(s => s.key),
   },
   {
     id: 'friends', title: '好友互动', description: '好友农场互动与好友申请',
-    icon: 1013, tone: 'blue', kind: 'automation' as const,
+    icon: 1013, tone: 'blue', kind: 'automation' as const, // 爱心：好友互动
     keys: ['friend', ...friendActionSwitches.map(s => s.key), 'friend_auto_accept'],
   },
   {
     id: 'shop', title: '神秘商人', description: '自动购买与到货/购买提醒',
-    icon: 1041, tone: 'violet', kind: 'automation' as const,
+    icon: 1030, tone: 'violet', kind: 'automation' as const, // 宝箱：商人与购买
     keys: [...mysteryShopSwitches.map(s => s.key), ...mysteryShopCurrencySwitches.map(s => s.key)],
   },
   {
     id: 'ranch', title: '牧场', description: '收获、催产、补草、喂养与好友互动',
-    icon: 60001, tone: 'amber', kind: 'automation' as const,
+    icon: 60001, tone: 'amber', kind: 'automation' as const, // 小鸡：牧场
     keys: [...ranchSwitches.map(s => s.key), ...ranchFriendSwitches.map(s => s.key)],
   },
 ] as const
+
+// 自动化设置总图标：4001 金色齿轮星，顶栏标记与设置页入口一致。
+const automationMarkId = 4001
 
 // 服务器同款道具图：与全项目统一走 /game-config/seed_images_named/seed_images/{id}.png
 const gameImg = (id: number | string) => `/game-config/seed_images_named/seed_images/${id}.png`
@@ -191,7 +195,7 @@ function enabledCount(keys: readonly string[]): number {
     <!-- 顶部常驻保存栏 -->
     <div class="automation-topbar">
       <div class="automation-topbar__lead">
-        <span class="automation-topbar__mark"><span class="i-carbon-settings-adjust" /></span>
+        <span class="automation-topbar__mark"><img :src="gameImg(automationMarkId)" alt=""></span>
         <div class="min-w-0">
           <div class="automation-topbar__title">
             <span class="automation-topbar__account">{{ accountName || '未选择账号' }}</span>
@@ -242,7 +246,7 @@ function enabledCount(keys: readonly string[]): number {
         <!-- 种植策略 -->
         <section v-if="activeSection === 'planting'" class="automation-panel">
           <AutomationSectionHeader title="种植策略" description="选种策略、背包种子优先级与预留规则" tone="green">
-            <img :src="gameImg(1008)" alt="">
+            <img :src="gameImg(1018)" alt="">
           </AutomationSectionHeader>
 
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -365,7 +369,7 @@ function enabledCount(keys: readonly string[]): number {
         <!-- 执行节奏 -->
         <section v-else-if="activeSection === 'cadence'" class="automation-panel">
           <AutomationSectionHeader title="执行节奏" description="巡查间隔、静默时段与种植/偷菜延迟" tone="blue">
-            <img :src="gameImg(1101)" alt="">
+            <img :src="gameImg(4002)" alt="">
           </AutomationSectionHeader>
 
           <div class="panel-hint__heading">
@@ -425,7 +429,7 @@ function enabledCount(keys: readonly string[]): number {
         <!-- 日常农场 -->
         <section v-else-if="activeSection === 'farm'" class="automation-panel">
           <AutomationSectionHeader title="日常农场" description="管理巡田、种植、任务和产出处理" tone="green">
-            <img :src="gameImg(1101)" alt="">
+            <img :src="gameImg(1021)" alt="">
           </AutomationSectionHeader>
           <div class="setting-grid">
             <div
@@ -591,7 +595,7 @@ function enabledCount(keys: readonly string[]): number {
         <!-- 神秘商人 -->
         <section v-else-if="activeSection === 'shop'" class="automation-panel">
           <AutomationSectionHeader title="神秘商人" description="自动购买商品并接收相关提醒" tone="violet">
-            <img :src="gameImg(1041)" alt="">
+            <img :src="gameImg(1030)" alt="">
           </AutomationSectionHeader>
 
           <div class="setting-grid">
@@ -740,9 +744,13 @@ function enabledCount(keys: readonly string[]): number {
   align-items: center;
   justify-content: center;
   border-radius: 11px;
-  color: var(--ui-primary);
   background: var(--ui-primary-soft);
-  font-size: 20px;
+}
+
+.automation-topbar__mark img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
 }
 
 .automation-topbar__title {
