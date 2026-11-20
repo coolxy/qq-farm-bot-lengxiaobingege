@@ -8,12 +8,12 @@ import PageTabs from '@/components/PageTabs.vue'
 import { useSettingsAlert } from '@/components/settings/settings-alert'
 import { useAccountStore } from '@/stores/account'
 import AccountTab from '@/views/settings/AccountTab.vue'
-import AutomationTab from '@/views/settings/AutomationTab.vue'
-import StrategyTab from '@/views/settings/StrategyTab.vue'
+import AutomationCenterTab from '@/views/settings/AutomationCenterTab.vue'
 import SystemTab from '@/views/settings/SystemTab.vue'
 
 // 设置页薄壳：只负责 Tab 切换、账号列表初始化与提示弹窗渲染。
-// 各 Tab 的表单状态与逻辑见 src/views/settings/ 下的四个子组件；
+// 各 Tab 的表单状态与逻辑见 src/views/settings/ 下的子组件；
+// 「策略设置」与「自动控制」已合并为「自动化设置」（AutomationCenterTab），内部再分两个子视图；
 // 跨 Tab 共享的本地状态见 src/components/settings/settings-local-state.ts。
 const { modalVisible, modalConfig } = useSettingsAlert()
 
@@ -21,13 +21,20 @@ const router = useRouter()
 const route = useRoute()
 const accountStore = useAccountStore()
 
-type SettingsTab = 'account' | 'strategy' | 'automation' | 'system'
+type SettingsTab = 'account' | 'automation' | 'system'
+const settingsTabKeys: SettingsTab[] = ['account', 'automation', 'system']
+// 兼容旧链接/旧本地值：strategy、automation 都归入新的「自动化设置」。
+const LEGACY_AUTOMATION_TABS = new Set(['strategy', 'automation'])
+function normalizeTab(value: string): SettingsTab | null {
+  if (!value) return null
+  if (LEGACY_AUTOMATION_TABS.has(value)) return 'automation'
+  if (value === 'user') return 'system'
+  return settingsTabKeys.includes(value as SettingsTab) ? value as SettingsTab : null
+}
 const storedTab = localStorage.getItem('settings-active-tab')
-const settingsTabKeys: SettingsTab[] = ['account', 'strategy', 'automation', 'system']
-const queryTab = String(route.query.tab || '')
-const initialTab = settingsTabKeys.includes(queryTab as SettingsTab)
-  ? queryTab as SettingsTab
-  : storedTab === 'user' ? 'system' : (storedTab as SettingsTab) || 'account'
+const initialTab = normalizeTab(String(route.query.tab || ''))
+  || normalizeTab(storedTab || '')
+  || 'account'
 const activeTab = ref<SettingsTab>(initialTab)
 
 watch(activeTab, (newTab) => {
@@ -40,15 +47,14 @@ watch(activeTab, (newTab) => {
 })
 
 watch(() => route.query.tab, (value) => {
-  const nextTab = String(value || '')
-  if (settingsTabKeys.includes(nextTab as SettingsTab) && nextTab !== activeTab.value)
-    activeTab.value = nextTab as SettingsTab
+  const nextTab = normalizeTab(String(value || ''))
+  if (nextTab && nextTab !== activeTab.value)
+    activeTab.value = nextTab
 })
 
 const tabs = [
   { key: 'account', label: '账号管理', icon: 'i-carbon-user-profile' },
-  { key: 'strategy', label: '策略设置', icon: 'i-carbon-settings-adjust' },
-  { key: 'automation', label: '自动控制', icon: 'i-carbon-settings-adjust' },
+  { key: 'automation', label: '自动化设置', icon: 'i-carbon-settings-adjust' },
   { key: 'system', label: '系统设置', icon: 'i-carbon-settings' },
 ] as const
 
@@ -80,8 +86,7 @@ onMounted(async () => {
 
       <div class="settings-body">
         <AccountTab v-if="activeTab === 'account'" />
-        <StrategyTab v-else-if="activeTab === 'strategy'" />
-        <AutomationTab v-else-if="activeTab === 'automation'" />
+        <AutomationCenterTab v-else-if="activeTab === 'automation'" />
         <SystemTab v-else-if="activeTab === 'system'" />
       </div>
     </div>

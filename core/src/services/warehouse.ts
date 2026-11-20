@@ -6,7 +6,7 @@ export {};
  * 协议说明：BagReply 使用 item_bag（ItemBag），item_bag.items 才是背包物品列表
  */
 const { ignoreError } = require('../utils/ignore-error');
-const { getFruitName, getPlantByFruitId, getPlantBySeedId, getItemById, getItemImageById, getSeedImageBySeedId, getEffectiveSellInfo, getMutantEffectsByIds } = require('../config/gameConfig');
+const { getFruitName, getPlantByFruitId, getPlantBySeedId, getItemById, getItemDisplayName, getItemImageById, getSeedImageBySeedId, getEffectiveSellInfo, getMutantEffectsByIds } = require('../config/gameConfig');
 const { isAutomationOn } = require('../models/store');
 const { sendMsgAsync, networkEvents, getUserState } = require('../utils/network');
 const { types } = require('../utils/proto');
@@ -563,7 +563,7 @@ async function getBagDetail(): Promise<any> {
             const hoursText: string = interactionType === 'fertilizerbucket'
                 ? `${(Math.floor((count / 3600) * 10) / 10).toFixed(1)}小时`
                 : '';
-            return { id, count, name: info?.name || `物品${id}`, interactionType, hoursText };
+            return { id, count, name: info?.name || getItemDisplayName(id) || `物品${id}`, interactionType, hoursText };
         });
 
     // 保留原始物品列表（用于出售等操作）
@@ -599,7 +599,9 @@ async function getBagDetail(): Promise<any> {
         const mutantEffects = getMutantEffectsByIds(mutantTypes);
         const groupKey: string = `uid:${uid}`;
         const info: any = getItemById(id) || null;
-        let name: string = info && info.name ? String(info.name) : '';
+        // 用统一展示名兜底：背包作物/果实常以植株 id（1020xxx）出现，ItemInfo 无条目，
+        // 需从 Plant.json 植株主键取名，否则只能显示"物品<id>"。
+        let name: string = info && info.name ? String(info.name) : getItemDisplayName(id);
         const itemType: number = info ? (Number(info.type) || 0) : 0;
         let category: string = 'item';
         if (id === 1 || id === 1001) {

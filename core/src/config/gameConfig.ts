@@ -146,6 +146,9 @@ const seedToPlant = new Map<number, PlantItem>();
 const fruitToPlant = new Map<number, PlantItem>();
 let itemInfoConfig: ItemInfo[] | null = null;
 const itemInfoMap = new Map<number, ItemInfo>();
+// 牧场物品配置（MCItemInfo.json）：牧场所独有的幼崽/花卉/设施等 id 不在全局 ItemInfo 中，
+// 用于背包展示的名称/图标兜底。只在查询未命中 ItemInfo 时读取，避免影响图鉴/分析口径。
+const ranchItemInfoMap = new Map<number, ItemInfo>();
 // 商店商品配置（牧场补栏/升级要用商品的解锁条件与售价）。
 // 与其它配置一致走 runtime-paths 读取，避免 dist 目录下找不到 json。
 const shopGoodsMap = new Map<number, any>();
@@ -242,6 +245,23 @@ function loadConfigs(): void {
         }
     } catch (e: any) {
         console.warn('[配置] 加载 ItemInfo.json 失败:', e.message);
+    }
+
+    // 加载牧场物品配置（名称/图标兜底）。全局 ItemInfo 未覆盖的牧场专属物品靠它补齐展示。
+    try {
+        const ranchItemPath = path.join(configDir, 'ranch', 'MCItemInfo.json');
+        if (fs.existsSync(ranchItemPath)) {
+            const ranchItems: ItemInfo[] = JSON.parse(fs.readFileSync(ranchItemPath, 'utf8'));
+            ranchItemInfoMap.clear();
+            for (const item of ranchItems || []) {
+                const id = Number(item && item.id) || 0;
+                if (id <= 0 || itemInfoMap.has(id)) continue;
+                ranchItemInfoMap.set(id, item);
+            }
+            console.warn(`[配置] 已加载牧场物品配置 (${ranchItemInfoMap.size} 项)`);
+        }
+    } catch (e: any) {
+        console.warn('[配置] 加载牧场 MCItemInfo.json 失败:', e.message);
     }
 
     // 加载土地网格配置（多格作物布局）
@@ -469,7 +489,7 @@ function getItemImageById(itemId: number): string {
     if (!Number.isSafeInteger(id) || id <= 0) return '';
 
     let imageId = itemImageIds.has(id) ? id : 0;
-    const item = itemInfoMap.get(id);
+    const item = itemInfoMap.get(id) || ranchItemInfoMap.get(id);
     if (!imageId && item) {
         // 复用配置明确指向的同一图标；解锁卡也可使用其对应作物的模型图。
         imageId = iconImageIds.get(getItemImageKey(item, 'icon_res'))
@@ -506,6 +526,29 @@ function getShopGoodsById(goodsId: number): any {
 
 function getItemById(itemId: number): ItemInfo | undefined {
     return itemInfoMap.get(Number(itemId) || 0);
+}
+
+/**
+ * 背包物品展示名称。按数据来源依次兜底：
+ * 1) 全局 ItemInfo（绝大多数道具）；
+ * 2) Plant.json 植株主键——背包果实/作物常以植株 id 出现（如 1020001=草莓），
+ *    这类 id 在 ItemInfo 无条目，且 getFruitName 查的是果实 id（40001 段），故需单独查 plantMap；
+ * 3) 牧场 MCItemInfo（巨大幼崽/花卉/设施等牧场专属物品）；
+ * 4) 果实 id → 植株名。
+ * 返回空串表示所有来源都查不到，由调用方决定兜底文案。
+ */
+function getItemDisplayName(itemId: number): string {
+    const id = Number(itemId);
+    if (!Number.isSafeInteger(id) || id <= 0) return '';
+    const info = itemInfoMap.get(id);
+    if (info && info.name) return String(info.name);
+    const plant = plantMap.get(id);
+    if (plant && plant.name) return String(plant.name);
+    const ranchInfo = ranchItemInfoMap.get(id);
+    if (ranchInfo && ranchInfo.name) return String(ranchInfo.name);
+    const plantByFruit = fruitToPlant.get(id);
+    if (plantByFruit && plantByFruit.name) return String(plantByFruit.name);
+    return '';
 }
 
 /**
@@ -773,6 +816,7 @@ module.exports = {
     getFruitName,
     getPlantByFruitId,
     getItemById,
+    getItemDisplayName,
     getItemImageById,
     getShopGoodsById,
     getSeedPrice,

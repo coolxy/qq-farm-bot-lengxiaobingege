@@ -8,7 +8,7 @@ import mutations from '../../gameConfig/ranch/MCAnimalMutation.json';
 
 export {};
 
-const { getItemById, getItemImageById } = require('../../config/gameConfig');
+const { getItemById, getItemDisplayName, getItemImageById } = require('../../config/gameConfig');
 
 const canMap = new Map<number, any>(cans.map(row => [row.id, row]));
 const facilityMap = new Map<number, any>(facilities.map(row => [row.facility_id, row]));
@@ -41,7 +41,7 @@ function itemDto(item: any): any {
     const id = Number(item.id);
     const metadata = itemMap.get(id) || getItemById(id);
     if (id === 7003 || id === 7004) return { id, count: quantity(item.count), name: id === 7003 ? '普通罐头桶' : '有机罐头桶', image: getItemImageById(id === 7003 ? 80021 : 80031) };
-    return { id, count: quantity(item.count), name: metadata?.name || `物品${id}`, image: getItemImageById(id) };
+    return { id, count: quantity(item.count), name: metadata?.name || getItemDisplayName(id) || `物品${id}`, image: getItemImageById(id) };
 }
 
 function sumItems(items: any[]): any[] {
