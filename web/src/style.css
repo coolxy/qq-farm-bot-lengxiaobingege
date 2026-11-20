@@ -862,18 +862,28 @@ select:focus-visible {
   margin: 8px 0 0 !important;
 }
 
-/* 设置页三个 tab 等宽铺满,随页面宽度自适应(手机端也不会挤在一角)。 */
-.settings-page-tabs .n-tabs-nav {
-  width: 100%;
-}
+/* 设置页 tab:桌面端保持原生紧凑靠左(不铺满、不拉伸);
+   仅窄屏(手机)才把三个 tab 等宽铺满,避免挤在一角。 */
+@media (max-width: 640px) {
+  .settings-page-tabs .n-tabs-nav-scroll-content {
+    display: flex;
+    width: 100%;
+  }
 
-.settings-page-tabs .n-tabs-tab-wrapper {
-  flex: 1 1 0;
-}
+  .settings-page-tabs .n-tabs-tab-wrapper {
+    flex: 1 1 0;
+  }
 
-.settings-page-tabs .n-tabs-tab {
-  width: 100%;
-  justify-content: center;
+  .settings-page-tabs .n-tabs-tab {
+    width: 100%;
+    justify-content: center;
+    padding-inline: 4px;
+  }
+
+  /* 窄屏等宽后不再需要 tab 之间的 pad 占位,让三等分更均匀。 */
+  .settings-page-tabs .n-tabs-tab-pad {
+    display: none;
+  }
 }
 
 @media (min-width: 1024px) {

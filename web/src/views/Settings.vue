@@ -76,7 +76,7 @@ onMounted(async () => {
 <template>
   <div class="settings-page page-stack">
     <div class="settings-content">
-      <PageTabs :value="activeTab" class="settings-page-tabs" justify-content="space-evenly" @update:value="setActiveTab">
+      <PageTabs :value="activeTab" class="settings-page-tabs" @update:value="setActiveTab">
         <NTab v-for="tab in tabs" :key="tab.key" :name="tab.key">
           <span class="inline-flex items-center justify-center gap-2">
             <span :class="tab.icon" />
