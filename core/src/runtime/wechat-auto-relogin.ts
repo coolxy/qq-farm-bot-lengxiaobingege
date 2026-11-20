@@ -25,6 +25,10 @@ const PUSH_SESSION_REFRESH_SUCCESS = false;
 // 会话刷新失败提醒节流：同一账号 6 小时内只推一次。
 // 连续失败（会话已废、等扫码）每小时重复推没有增量信息，还会淹没掉线通知
 const REFRESH_FAIL_PUSH_THROTTLE_MS = 6 * 60 * 60 * 1000;
+// 会话刷新失败预警的观察窗口：刷新失败往往在几秒后引发掉线，随后自动重登
+// 约 75 秒会推一条更准确的「需要扫码」掉线通知。为此预警延迟一小段时间再推，
+// 若期间账号已进入掉线周期就取消本条，避免同一次登录故障推两条。
+const SESSION_FAIL_OBSERVE_MS = 20 * 1000;
 
 interface WechatAutoReloginOptions {
     store: any;
@@ -140,6 +144,33 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
         }
     }
 
+    // 会话刷新失败先观察一小段时间再决定推不推。刷新失败通常意味着会话作废，
+    // 账号会在数秒内掉线、自动重登约 75 秒后由 event-notify 推「需要扫码」。
+    // 若延迟期内已进入掉线周期（noticeSent 或终态），说明那条通知会覆盖本预警，
+    // 直接取消，避免同一次登录故障收到两条。未注入定时器时退化为立即推送，兼容旧调用。
+    function scheduleSessionFailNotice(account: any, push: { title: string; content: string }): void {
+        const id = String(account?.id || '');
+        const name = String(account?.name || id);
+        if (typeof setTimeoutTask !== 'function') {
+            void pushSessionRefresh(account, push);
+            return;
+        }
+        const task = `wx_session_fail_notice_${id}`;
+        clearTimeoutTask(task);
+        setTimeoutTask(task, SESSION_FAIL_OBSERVE_MS, () => {
+            const cycle = typeof getOfflineCycleState === 'function' ? getOfflineCycleState(id) : null;
+            if (cycle?.active) {
+                log('系统', `账号 ${name} 会话刷新失败预警已取消：已进入掉线周期，由掉线通知统一说明`, {
+                    accountId: id, accountName: name, reason: cycle.reason,
+                });
+                // 掉线通知已覆盖：释放节流标记，账号恢复后若再独立刷新失败仍可提醒
+                lastRefreshFailPushAt.delete(id);
+                return;
+            }
+            void pushSessionRefresh(account, push);
+        });
+    }
+
     async function refreshSessionIfNeeded(account: any): Promise<void> {
         const id = String(account.id || '');
         const name = String(account.name || id);
@@ -216,7 +247,7 @@ function createWechatAutoReloginService(options: WechatAutoReloginOptions) {
                 return;
             }
             lastRefreshFailPushAt.set(id, Date.now());
-            await pushSessionRefresh(account, buildSessionRefreshPush(account, { ok: false, error }));
+            scheduleSessionFailNotice(account, buildSessionRefreshPush(account, { ok: false, error }));
         }
     }
 

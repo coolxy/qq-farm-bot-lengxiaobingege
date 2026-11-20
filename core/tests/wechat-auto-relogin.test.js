@@ -106,6 +106,15 @@ function createHarness(overrides = {}) {
     };
 }
 
+// 会话刷新失败预警现在延迟一个观察窗口再决定是否推送，手动触发该定时任务。
+async function runSessionFailNotice(harness, accountId = '1') {
+    const task = harness.tasks.get(`wx_session_fail_notice_${accountId}`);
+    if (task) {
+        harness.tasks.delete(`wx_session_fail_notice_${accountId}`);
+        await task.fn();
+    }
+}
+
 test('schedules WeChat auto relogin and restarts with a fresh code', async () => {
     const harness = createHarness();
 
@@ -449,6 +458,8 @@ test('pushes a failure reminder when the hourly refresh fails', async () => {
     harness.setIssueWxLoginCode(async () => { throw new Error('session dead'); });
 
     await harness.service.refreshAllSessionsIfNeeded();
+    // 观察窗口内没有掉线周期：任务到期后应推送预警
+    await runSessionFailNotice(harness);
 
     assert.equal(harness.pushes.length, 1);
     assert.match(harness.pushes[0].title, /微信会话自动刷新失败/);
@@ -477,19 +488,22 @@ test('throttles repeated refresh-failure pushes to one per 6 hours, reset on suc
     primeWxSession(harness, Date.now() - 2 * 60 * 60 * 1000);
     harness.setIssueWxLoginCode(async () => { throw new Error('session dead'); });
 
-    // 第 1 个整点失败：推送
+    // 第 1 个整点失败：观察窗口到期后推送
     await harness.service.refreshAllSessionsIfNeeded();
+    await runSessionFailNotice(harness);
     assert.equal(harness.pushes.length, 1);
 
-    // 第 2 个整点仍失败：节流，不推
+    // 第 2 个整点仍失败：节流，连延迟任务都不排
     primeWxSession(harness, Date.now() - 2 * 60 * 60 * 1000);
     await harness.service.refreshAllSessionsIfNeeded();
+    await runSessionFailNotice(harness);
     assert.equal(harness.pushes.length, 1, '6 小时内的重复失败不应再推送');
 
     // 刷新成功后节流重置
     primeWxSession(harness, Date.now() - 2 * 60 * 60 * 1000);
     harness.setIssueWxLoginCode(async () => 'recovered-code');
     await harness.service.refreshAllSessionsIfNeeded();
+    await runSessionFailNotice(harness);
     assert.equal(harness.pushes.length, 1);
     assert.equal(harness.accounts[0].code, 'recovered-code');
 
@@ -497,7 +511,28 @@ test('throttles repeated refresh-failure pushes to one per 6 hours, reset on suc
     primeWxSession(harness, Date.now() - 2 * 60 * 60 * 1000);
     harness.setIssueWxLoginCode(async () => { throw new Error('dead again'); });
     await harness.service.refreshAllSessionsIfNeeded();
+    await runSessionFailNotice(harness);
     assert.equal(harness.pushes.length, 2, '成功后节流重置，新失败应推送');
+});
+
+test('cancels the session-failure warning once an offline cycle covers it (no double push)', async () => {
+    // 复现线上双推：会话刷新失败时账号还未掉线，预警先挂起；随后进入掉线周期，
+    // 掉线通知（需要扫码）会说明同一件事。观察窗口到期后必须取消这条预警。
+    let cycleActive = false;
+    const harness = createHarness({
+        getOfflineCycleState: () => ({ active: cycleActive, noticeSent: cycleActive, terminal: cycleActive, reason: 'auto_relogin_failed:400' }),
+    });
+    primeWxSession(harness, Date.now() - 2 * 60 * 60 * 1000);
+    harness.setIssueWxLoginCode(async () => { throw new Error('session dead'); });
+
+    // 刷新失败：排下延迟预警，此刻还没掉线
+    await harness.service.refreshAllSessionsIfNeeded();
+    assert.equal(harness.pushes.length, 0, '失败预警应先观察，不立即推');
+
+    // 观察窗口内账号掉线、进入掉线周期，掉线通知会覆盖
+    cycleActive = true;
+    await runSessionFailNotice(harness);
+    assert.equal(harness.pushes.length, 0, '掉线周期已覆盖预警，不应再推第二条');
 });
 
 after(() => {
