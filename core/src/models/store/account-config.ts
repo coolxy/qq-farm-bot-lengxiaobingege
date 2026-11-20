@@ -147,6 +147,16 @@ function applyConfigSnapshot(snapshot: Record<string, any> | undefined, options:
                 (next.automation as any)[k] = normalizeFertilizerLandTypes(v, next.automation.fertilizer_land_types);
             } else if (k === 'fertilizer_smart_seconds') {
                 (next.automation as any)[k] = Math.max(30, Math.min(3600, Number(v) || 300));
+            } else if (k.startsWith('ranch_')
+                && ['ranch_strategy', 'ranch_bag_fallback', 'ranch_check_minutes', 'ranch_coop_animal', 'ranch_shed_animal', 'ranch_coop_cub_priority', 'ranch_shed_cub_priority'].includes(k)) {
+                // 牧场非布尔字段（策略/间隔/动物/背包幼崽优先级数组）与 normalizeAccountConfig
+                // 使用同一套校验，否则会被下面的 !!v 压成 true，导致保存后策略回退、顺序丢失。
+                // master 保存(data-provider)与 worker 应用(runtime-config)都经过这里。
+                try {
+                    (next.automation as any)[k] = require('../../config/ranch-automation').normalizeRanchSetting(k, v);
+                } catch {
+                    // 非法配置直接忽略，沿用原值
+                }
             } else {
                 (next.automation as any)[k] = !!v;
             }
