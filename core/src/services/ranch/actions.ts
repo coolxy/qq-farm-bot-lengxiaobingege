@@ -57,9 +57,12 @@ async function planAction(action: string, input: any, raw: any): Promise<any> {
             const kind = good.animal.husbandry_type === '窝' ? 1 : 2;
             const room = raw.cells.facilities.filter((f: any) => f.ranch?.husbandry_type === kind).reduce((sum: number, f: any) => sum + f.ranch.capacity - f.ranch.animal_count, 0);
             if (room < count) throw error('RANCH_FULL', '窝或棚的空位不足，请减少数量或先放入背包');
-            plan.autoPlaceAnimalId = good.animal.id;
+            plan.autoPlaceCubItemId = Number(good.reward.id);
         }
-        plan.payload = { goods_id: goodsId, num: count, price: good.price.count, auto_add: input.autoPlace === true };
+        // 买放分离：购买永远只买进背包（auto_add=false），回包必带 get_items，可用签名可靠确认。
+        // 自动放养改为写入成功后的独立 place 操作（回包 op_results 可靠确认），不再依赖
+        // 「读栏位数目标动物数量」这种受快照时序影响、历史上反复误报的确认方式。
+        plan.payload = { goods_id: goodsId, num: count, price: good.price.count, auto_add: false };
         plan.costItems = [itemDto({ id: good.price.id, count: BigInt(good.price.count) * BigInt(count) })];
         plan.expectedRewards = [itemDto({ id: good.reward.id, count: BigInt(good.reward.count) * BigInt(count) })];
         plan.marker = shop.shopId;
@@ -283,10 +286,42 @@ function unknown(action: string, reason: string): never {
     throw error('RANCH_RESULT_UNKNOWN', `${LABELS[action]}结果未能确认：${reason}，请刷新核对，勿重复提交`);
 }
 
-/** 统计快照中指定动物的总只数（跨所有栏舍），用于自动放养到账的增量确认。 */
-function countAnimals(raw: any, animalId: number): number {
-    return (raw.cells.facilities || []).reduce((sum: number, facility: any) =>
-        sum + (facility.ranch?.animals || []).filter((animal: any) => Number(animal.animal_id) === animalId).length, 0);
+/**
+ * 为买放分离计算放养分配：把 num 只幼崽分配到同类有空位的栏舍。
+ * 只分配同类栏舍、按空位填满，数量凑不齐时返回 null（调用方据此判结果未知）。
+ * 导出供测试覆盖跨栏舍分配、精确数量与类型匹配。
+ */
+function allocatePlaceItems(raw: any, cub: any, num: number): any[] | null {
+    const kind = cub.husbandry_type === '窝' ? 1 : 2;
+    const items: any[] = [];
+    let remaining = num;
+    for (const facility of (raw.cells.facilities || [])) {
+        if (remaining <= 0) break;
+        const ranch = facility.ranch;
+        if (!ranch || ranch.husbandry_type !== kind) continue;
+        const room = Number(ranch.capacity) - Number(ranch.animal_count);
+        if (room <= 0) continue;
+        const take = Math.min(room, remaining);
+        for (let i = 0; i < take; i++) {
+            items.push({ ranch_inst_id: quantity(facility.instance_id), animal_id: cub.id, giant_cub_item_id: cub.giantCubItemId });
+        }
+        remaining -= take;
+    }
+    return remaining === 0 ? items : null;
+}
+
+/**
+ * 买放分离：把购买进背包的幼崽放养到同类有空位的栏舍。
+ * 确认依赖 place 回包自带的 op_results，而不是「读栏位数目标动物数量」——
+ * 后者受缓存快照时序影响，历史上多次产生假阴性、误判为结果未知并锁死商品。
+ */
+async function placeBoughtCubs(raw: any, cubItemId: number, num: number): Promise<void> {
+    const cub = cubMap.get(cubItemId);
+    if (!cub) unknown('buy', '自动放养的幼崽配置缺失');
+    const items = allocatePlaceItems(raw, cub, num);
+    if (!items) unknown('buy', '自动放养的空位不足');
+    const placeReply = await rpc('place', { items }, true);
+    if (!Array.isArray(placeReply?.op_results) || placeReply.op_results.length !== num) unknown('buy', '自动放养数量不匹配');
 }
 
 async function operate(action: string, input: any = {}): Promise<any> {
@@ -304,8 +339,6 @@ async function operate(action: string, input: any = {}): Promise<any> {
         if (input.expected?.signature !== plan.signature) throw error('RANCH_OFFER_CHANGED', '牧场状态、商品或费用已变化，请重新确认');
         return reservations.forCurrentAccount().spend({ target: `ranch:${action}:${input.goodsId || input.facilityId || input.uid || input.taskId || input.ranchId || 'all'}`, label: plan.label, costs: plan.costs, balances: plan.balances }, async () => {
             let reply: any; let rewards: any[] = []; let actualCosts = plan.costItems;
-            // 自动放养前的 fresh 动物数量基准（紧邻购买写请求读取，避免陈旧快照污染增量判定）。
-            let placeBaseline: number | null = null;
             if (action === 'claimDailyShare') {
                 const claimed = await require('./daily-share').claim();
                 rewards = claimed.rewards;
@@ -343,23 +376,15 @@ async function operate(action: string, input: any = {}): Promise<any> {
                 }
                 if (signature(rewards) !== signature(plan.expectedRewards)) unknown(action, '任务奖励不匹配');
             } else {
-                // 自动放养到账校验不能用 operate 入口的 before：它来自 20 秒缓存快照，
-                // 可能在收获腾栏/其它设备操作后陈旧，与购买后的 fresh 快照相减会产生假阴性。
-                // 紧邻写请求用 fresh 读一次目标动物数量作为基准，保证前后同一数据源、时间紧邻。
-                if (action === 'buy' && plan.autoPlaceAnimalId) {
-                    try {
-                        const baseRaw = await loadRaw(undefined, { fresh: true });
-                        placeBaseline = countAnimals(baseRaw, Number(plan.autoPlaceAnimalId));
-                    } catch { placeBaseline = null; }
-                }
                 reply = await rpc(plan.route, plan.payload, true);
                 if (action === 'buyCan') {
                     if (!reply.success || quantity(reply.goods_id) !== plan.payload.goods_id || signature(reply.reward_items) !== signature(plan.expectedRewards)) unknown(action, '商品或奖励不匹配');
                     rewards = reply.reward_items;
                 } else if (action === 'buy') {
                     if (quantity(reply.goods?.id) !== plan.payload.goods_id || signature(reply.cost_items) !== signature(plan.costItems)) unknown(action, '商品或扣费不匹配');
-                    // 自动放养返回放养经验，幼崽是否到账通过后续栏位状态确认。
-                    if (!plan.autoPlaceAnimalId && signature(reply.get_items) !== signature(plan.expectedRewards)) unknown(action, '入包物品不匹配');
+                    // 买放分离：无论是否自动放养，购买都只买进背包，回包必带 get_items。
+                    // 用签名直接确认入包物品，替代原来读栏位数动物数量的不可靠校验。
+                    if (signature(reply.get_items) !== signature(plan.expectedRewards)) unknown(action, '入包物品不匹配');
                     rewards = reply.get_items;
                 } else if (action === 'sell') {
                     const sold = (items: any[]) => items.map(item => `${quantity(item.id)}:${quantity(item.uid)}:${quantity(item.count)}`).sort().join('|');
@@ -425,17 +450,13 @@ async function operate(action: string, input: any = {}): Promise<any> {
             if (!after) {
                 try { after = await loadRaw(undefined, { fresh: true }); } catch { /* Confirmed receipts remain useful if the view refresh fails. */ }
             }
-            if (plan.autoPlaceAnimalId) {
-                if (!after) unknown(action, '自动放养后的栏位状态未能读取');
-                // 自动放养的 BuyGoods 回包不带栏舍，只能读栏位确认幼崽是否到账。
-                // 按 animal_id 统计该类动物的数量增量：只要求目标动物至少增加本次购买数即可，
-                // 对 inst_id 变化和成长/并发写入鲁棒；若数量没有增加才判结果未知（保留防重复扣款底线）。
-                // 基准优先用紧邻写请求前 fresh 读到的 placeBaseline；仅当该读取失败时才回退到
-                // operate 入口的缓存快照 before（后者可能因收获腾栏/其它设备操作而陈旧）。
-                const targetId = Number(plan.autoPlaceAnimalId);
-                const beforeCount = placeBaseline ?? countAnimals(before, targetId);
-                const afterCount = countAnimals(after, targetId);
-                if (afterCount - beforeCount < plan.payload.num) unknown(action, '自动放养的动物或数量不匹配');
+            if (plan.autoPlaceCubItemId) {
+                // 买放分离：购买只买进背包并已用 get_items 签名确认；这里单独发 place 放养，
+                // 用 place 回包的 op_results 确认，彻底摆脱读栏位数量的时序假阴性。
+                if (!after) unknown(action, '自动放养前的栏位状态未能读取');
+                await placeBoughtCubs(after, plan.autoPlaceCubItemId, Number(plan.payload.num));
+                // 放养改写了栏位与背包，重新读一次 fresh 快照让返回的 snapshot 反映最终状态。
+                try { after = await loadRaw(undefined, { fresh: true }); } catch { /* 回包已确认，快照刷新失败不影响操作结果 */ }
             }
             if (['place', 'addGrass', 'useCan', 'exchange', 'buyCan'].includes(action)) {
                 if (!after) unknown(action, '操作后的库存未能读取');
@@ -457,4 +478,4 @@ async function operate(action: string, input: any = {}): Promise<any> {
     }));
 }
 
-module.exports = { prepareAction, operate, ACTIONS, planAction };
+module.exports = { prepareAction, operate, ACTIONS, planAction, allocatePlaceItems };
