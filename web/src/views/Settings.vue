@@ -13,8 +13,8 @@ import SystemTab from '@/views/settings/SystemTab.vue'
 
 // 设置页薄壳：只负责 Tab 切换、账号列表初始化与提示弹窗渲染。
 // 各 Tab 的表单状态与逻辑见 src/views/settings/ 下的子组件；
-// 「策略设置」与「自动控制」已合并为「自动化设置」（AutomationCenterTab），内部再分两个子视图；
-// 跨 Tab 共享的本地状态见 src/components/settings/settings-local-state.ts。
+// 「策略设置」与「自动控制」已彻底合并为单一「自动化设置」（AutomationCenterTab），
+// 同一份表单、同一套分组导航、一次保存；跨 Tab 共享的本地状态见 settings-local-state.ts。
 const { modalVisible, modalConfig } = useSettingsAlert()
 
 const router = useRouter()

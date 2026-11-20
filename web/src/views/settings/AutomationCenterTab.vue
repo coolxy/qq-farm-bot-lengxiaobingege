@@ -1,147 +1,134 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import StrategyTab from '@/views/settings/StrategyTab.vue'
-import AutomationTab from '@/views/settings/AutomationTab.vue'
+import { storeToRefs } from 'pinia'
+import { computed, onMounted, watch } from 'vue'
+import api from '@/api'
+import AutomationSettingsForm from '@/components/settings/AutomationSettingsForm.vue'
+import { useSettingsAlert } from '@/components/settings/settings-alert'
+import {
+  automationSaving,
+  fertilizerLandTypeOptions,
+  fertilizerOptions,
+  loadAccountSettings,
+  localAutomationSettings,
+  localStrategySettings,
+  normalizeFertilizerLandTypes,
+  syncLocalAutomationSettings,
+  syncLocalStrategySettings,
+} from '@/components/settings/settings-local-state'
+import { useAccountStore } from '@/stores/account'
+import { useSettingStore } from '@/stores/setting'
+import { useStatusStore } from '@/stores/status'
 
 /**
- * 「自动化设置」容器：把原先并列的「策略设置」与「自动控制」两个顶层模块合并到一处。
- * 两块配置数据彼此独立（localStrategySettings / localAutomationSettings），因此这里
- * 只做界面承载与子视图切换，各自的加载/保存逻辑仍留在原组件内，避免触碰业务代码。
+ * 「自动化设置」统一容器：策略与自动控制已彻底合并为同一份表单、同一套导航。
+ * 两份本地状态（策略字段 / 自动控制字段）顶层互不重叠，加载一次、保存一次。
  */
-type SubView = 'strategy' | 'automation'
+const { showAlert } = useSettingsAlert()
 
-const STORAGE_KEY = 'settings-automation-view'
-const route = useRoute()
-const router = useRouter()
+const accountStore = useAccountStore()
+const { accounts, currentAccountId } = storeToRefs(accountStore)
+const { loading: settingsLoading, loadedAccountId } = storeToRefs(useSettingStore())
+const { currentAccountConnected } = storeToRefs(useStatusStore())
 
-function normalizeView(value: string): SubView | null {
-  if (value === 'strategy' || value === 'automation') return value
-  return null
-}
-
-const stored = normalizeView(String(route.query.view || '')) || normalizeView(localStorage.getItem(STORAGE_KEY) || '')
-const activeView = ref<SubView>(stored || 'strategy')
-
-const subViews = [
-  { key: 'strategy' as const, label: '策略配置', icon: 'i-carbon-sprout', hint: '种植策略、种子优先级与执行间隔' },
-  { key: 'automation' as const, label: '自动控制', icon: 'i-carbon-settings-adjust', hint: '农场、施肥、好友、商人与牧场开关' },
-]
-
-const currentHint = computed(() => subViews.find(v => v.key === activeView.value)?.hint || '')
-
-function selectView(key: SubView) {
-  if (activeView.value === key) return
-  activeView.value = key
-}
-
-watch(activeView, (view) => {
-  localStorage.setItem(STORAGE_KEY, view)
-  if (String(route.query.view || '') !== view) {
-    router.replace({ query: { ...route.query, view } })
-  }
+const currentAccountName = computed(() => {
+  const acc = accounts.value.find((a: any) => a.id === currentAccountId.value)
+  return acc ? (acc.name || acc.nick || acc.id) : null
 })
 
-watch(() => route.query.view, (value) => {
-  const next = normalizeView(String(value || ''))
-  if (next && next !== activeView.value)
-    activeView.value = next
+async function saveAllSettings() {
+  const accountId = currentAccountId.value
+  if (!accountId)
+    return
+  automationSaving.value = true
+  try {
+    // 两份 model 合并为单个 payload（字段不重叠），一次提交。
+    const payload = {
+      ...JSON.parse(JSON.stringify(localStrategySettings.value)),
+      ...JSON.parse(JSON.stringify(localAutomationSettings.value)),
+    }
+    payload.automation.fertilizer_land_types = normalizeFertilizerLandTypes(payload.automation.fertilizer_land_types)
+
+    const res = await useSettingStore().saveSettings(accountId, payload)
+    if (accountId !== currentAccountId.value)
+      return
+    if (res.ok) {
+      syncLocalStrategySettings()
+      syncLocalAutomationSettings()
+      showAlert('自动化设置已保存', 'primary')
+
+      // 启用了自动购买化肥时，保存后立即检测并购买。
+      if (payload.automation.fertilizer_buy_organic || payload.automation.fertilizer_buy_normal) {
+        try {
+          const buyRes = await api.post('/api/fertilizer/check-and-buy', {
+            buyOrganic: payload.automation.fertilizer_buy_organic,
+            buyNormal: payload.automation.fertilizer_buy_normal,
+            organicCount: payload.fertilizerBuyOrganicCount,
+            organicThresholdHours: payload.fertilizerBuyOrganicThresholdHours,
+            normalCount: payload.fertilizerBuyNormalCount,
+            normalThresholdHours: payload.fertilizerBuyNormalThresholdHours,
+          }, {
+            headers: { 'x-account-id': accountId },
+          })
+          if (accountId === currentAccountId.value && buyRes.data?.ok) {
+            const totalBought = (buyRes.data.organicBought || 0) + (buyRes.data.normalBought || 0)
+            if (totalBought > 0)
+              showAlert(`已自动购买 ${totalBought} 个化肥`, 'primary')
+          }
+        }
+        catch (e) {
+          console.error('检测购买化肥失败', e)
+        }
+      }
+    }
+    else {
+      const message = res.unconfirmed && res.saved
+        ? `设置已保存，但运行进程尚未确认应用：${res.error || '请稍后重试或重启账号'}`
+        : `保存失败: ${res.error}`
+      showAlert(message, res.unconfirmed && res.saved ? 'primary' : 'danger')
+    }
+  }
+  finally {
+    if (accountId === currentAccountId.value)
+      automationSaving.value = false
+  }
+}
+
+watch(currentAccountId, (accountId) => {
+  automationSaving.value = false
+  if (accountId)
+    loadAccountSettings(accountId)
+})
+
+onMounted(() => {
+  const accountId = currentAccountId.value
+  if (accountId && loadedAccountId.value !== accountId)
+    loadAccountSettings(accountId)
 })
 </script>
 
 <template>
-  <div class="automation-center-tab">
-    <div class="ac-switcher" role="tablist" aria-label="自动化设置子模块">
-      <button
-        v-for="view in subViews"
-        :key="view.key"
-        type="button"
-        role="tab"
-        :aria-selected="activeView === view.key"
-        class="ac-switcher__item"
-        :class="{ 'is-active': activeView === view.key }"
-        @click="selectView(view.key)"
-      >
-        <span :class="view.icon" class="ac-switcher__icon" />
-        <span class="ac-switcher__label">{{ view.label }}</span>
-      </button>
+  <div class="space-y-4">
+    <div v-if="settingsLoading" class="py-4 text-center text-gray-500">
+      <span class="i-carbon-circle-dash mx-auto mb-2 inline-block animate-spin text-2xl" />
+      <p>加载中...</p>
     </div>
 
-    <p class="ac-hint">{{ currentHint }}</p>
-
-    <div class="ac-body">
-      <StrategyTab v-if="activeView === 'strategy'" />
-      <AutomationTab v-else />
+    <div v-else-if="!currentAccountId || loadedAccountId !== currentAccountId" class="py-8 text-center text-gray-500">
+      <div class="i-carbon-settings mx-auto mb-2 text-3xl text-gray-400" />
+      <p>{{ currentAccountId ? '账号设置加载失败，请切换账号或刷新页面重试' : '请先选择账号' }}</p>
     </div>
+
+    <AutomationSettingsForm
+      v-else
+      v-model="localAutomationSettings"
+      v-model:strategy="localStrategySettings"
+      :saving="automationSaving"
+      :account-id="currentAccountId"
+      :account-name="currentAccountName || ''"
+      :connected="currentAccountConnected"
+      :fertilizer-land-type-options="fertilizerLandTypeOptions"
+      :fertilizer-options="fertilizerOptions"
+      @save="saveAllSettings"
+    />
   </div>
 </template>
-
-<style scoped>
-.automation-center-tab {
-  min-width: 0;
-}
-
-.ac-switcher {
-  display: inline-flex;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--ui-border);
-  border-radius: 12px;
-  background: var(--ui-surface-soft);
-}
-
-.ac-switcher__item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 18px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--ui-muted);
-  font-size: 14px;
-  font-weight: var(--fw-600);
-  cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-.ac-switcher__item:hover {
-  color: var(--ui-ink);
-}
-
-.ac-switcher__item.is-active {
-  color: var(--ui-primary);
-  background: var(--ui-surface-strong, var(--ui-surface));
-  box-shadow: 0 1px 4px rgb(0 0 0 / 8%);
-}
-
-.ac-switcher__icon {
-  font-size: 17px;
-}
-
-.ac-hint {
-  margin: 10px 2px 0;
-  color: var(--ui-muted);
-  font-size: 12px;
-}
-
-.ac-body {
-  margin-top: 12px;
-}
-
-@media (max-width: 640px) {
-  .ac-switcher {
-    display: flex;
-    width: 100%;
-  }
-
-  .ac-switcher__item {
-    flex: 1;
-    justify-content: center;
-    padding: 8px 10px;
-  }
-}
-</style>

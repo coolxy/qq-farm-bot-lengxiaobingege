@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import type { SettingsState } from '@/stores/setting'
+import { NButton } from 'naive-ui/es/button'
 import { NCheckbox, NCheckboxGroup } from 'naive-ui/es/checkbox'
 import { NInputNumber } from 'naive-ui/es/input-number'
-import { computed, onMounted, ref } from 'vue'
+import { NTimePicker } from 'naive-ui/es/time-picker'
+import { computed, onMounted, ref, toRef } from 'vue'
 import api from '@/api'
+import BagSeedPriorityItem from '@/components/settings/BagSeedPriorityItem.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import AutomationSectionHeader from './AutomationSectionHeader.vue'
 import RanchCubPriority from './RanchCubPriority.vue'
+import { type StrategyFormModel, useStrategyForm } from './useStrategyForm'
 
 export type AutomationSettingsFormModel = Pick<
   SettingsState,
@@ -26,7 +30,7 @@ export type AutomationSettingsFormModel = Pick<
   | 'autoAcceptHarvestStealSteal'
 >
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   accountId?: string
   accountName?: string
   connected?: boolean
@@ -40,6 +44,13 @@ const emit = defineEmits<{
 }>()
 
 const settings = defineModel<AutomationSettingsFormModel>({ required: true })
+const strategy = defineModel<StrategyFormModel>('strategy', { required: true })
+
+// 策略表单逻辑（种子/排序/预览），与原策略页完全同源。
+const strategyForm = useStrategyForm({
+  model: strategy,
+  currentAccountId: toRef(props, 'accountId'),
+})
 
 const ripeningOnly = computed(() => ['normal_ripen', 'organic_ripen'].includes(settings.value.automation.fertilizer ?? 'none'))
 const ripeningEnabled = computed(() => ripeningOnly.value || settings.value.automation.fertilizer === 'smart')
@@ -125,30 +136,41 @@ onMounted(async () => {
 })
 
 // ── 设置中心：左侧分组导航 + 右侧单面板 ──
+// 策略类分组（planting / cadence）不是布尔开关集合，用「已配置」标记代替启用计数。
 const sectionConfig = [
   {
+    id: 'planting', title: '种植策略', description: '选种策略、种子优先级与预留规则',
+    icon: 1008, tone: 'green', kind: 'strategy' as const,
+    keys: [] as readonly string[],
+  },
+  {
+    id: 'cadence', title: '执行节奏', description: '巡查间隔、静默时段与种植/偷菜延迟',
+    icon: 1101, tone: 'blue', kind: 'strategy' as const,
+    keys: [] as readonly string[],
+  },
+  {
     id: 'farm', title: '日常农场', description: '巡田、种植、任务与产出处理',
-    icon: 1101, tone: 'green',
+    icon: 1101, tone: 'green', kind: 'automation' as const,
     keys: farmSwitches.map(s => s.key),
   },
   {
     id: 'fertilizer', title: '施肥管理', description: '施肥策略、范围与化肥补充',
-    icon: 1011, tone: 'amber',
+    icon: 1011, tone: 'amber', kind: 'automation' as const,
     keys: fertilizerSwitches.map(s => s.key),
   },
   {
     id: 'friends', title: '好友互动', description: '好友农场互动与好友申请',
-    icon: 1013, tone: 'blue',
+    icon: 1013, tone: 'blue', kind: 'automation' as const,
     keys: ['friend', ...friendActionSwitches.map(s => s.key), 'friend_auto_accept'],
   },
   {
     id: 'shop', title: '神秘商人', description: '自动购买与到货/购买提醒',
-    icon: 1041, tone: 'violet',
+    icon: 1041, tone: 'violet', kind: 'automation' as const,
     keys: [...mysteryShopSwitches.map(s => s.key), ...mysteryShopCurrencySwitches.map(s => s.key)],
   },
   {
     id: 'ranch', title: '牧场', description: '收获、催产、补草、喂养与好友互动',
-    icon: 60001, tone: 'amber',
+    icon: 60001, tone: 'amber', kind: 'automation' as const,
     keys: [...ranchSwitches.map(s => s.key), ...ranchFriendSwitches.map(s => s.key)],
   },
 ] as const
@@ -156,7 +178,7 @@ const sectionConfig = [
 // 服务器同款道具图：与全项目统一走 /game-config/seed_images_named/seed_images/{id}.png
 const gameImg = (id: number | string) => `/game-config/seed_images_named/seed_images/${id}.png`
 
-const activeSection = ref<string>('farm')
+const activeSection = ref<string>('planting')
 const activeSectionMeta = computed(() => sectionConfig.find(s => s.id === activeSection.value) ?? sectionConfig[0])
 
 function enabledCount(keys: readonly string[]): number {
@@ -177,7 +199,7 @@ function enabledCount(keys: readonly string[]): number {
             <span>{{ activeSectionMeta.title }}</span>
           </div>
           <div class="automation-topbar__crumb">
-            共 {{ sectionConfig.length }} 组设置 · 修改后点击右侧保存生效
+            共 {{ sectionConfig.length }} 组设置 · 修改后点击右上角一次保存全部
           </div>
         </div>
       </div>
@@ -186,7 +208,7 @@ function enabledCount(keys: readonly string[]): number {
           <template #icon>
             <span class="i-carbon-save" />
           </template>
-          保存自动控制
+          保存设置
         </BaseButton>
       </div>
     </div>
@@ -210,14 +232,198 @@ function enabledCount(keys: readonly string[]): number {
             <span class="automation-nav__title">{{ section.title }}</span>
             <span class="automation-nav__desc">{{ section.description }}</span>
           </span>
-          <span class="automation-nav__count">{{ enabledCount(section.keys) }}/{{ section.keys.length }}</span>
+          <span v-if="section.kind === 'strategy'" class="automation-nav__tag">设置</span>
+          <span v-else class="automation-nav__count">{{ enabledCount(section.keys) }}/{{ section.keys.length }}</span>
         </button>
       </nav>
 
       <!-- 右侧单面板 -->
       <div class="automation-panels">
+        <!-- 种植策略 -->
+        <section v-if="activeSection === 'planting'" class="automation-panel">
+          <AutomationSectionHeader title="种植策略" description="选种策略、背包种子优先级与预留规则" tone="green">
+            <img :src="gameImg(1008)" alt="">
+          </AutomationSectionHeader>
+
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <BaseSelect
+              v-model="strategy.plantingStrategy"
+              label="种植策略"
+              :options="strategyForm.plantingStrategyOptions"
+            />
+            <BaseSelect
+              v-if="strategy.plantingStrategy === 'preferred'"
+              v-model="strategy.preferredSeedId"
+              label="优先种植种子"
+              :options="strategyForm.preferredSeedOptions.value"
+            />
+            <BaseSelect
+              v-else-if="strategy.plantingStrategy === 'bag_priority' && strategy.bagSeedFallbackStrategy === 'preferred'"
+              v-model="strategy.preferredSeedId"
+              label="优先种植种子"
+              :options="strategyForm.preferredSeedOptions.value"
+              @change="strategyForm.handlePreferredSeedChange"
+            />
+            <div v-else class="flex flex-col gap-1.5">
+              <label class="text-sm text-gray-700 font-medium dark:text-gray-300">
+                {{ strategy.plantingStrategy === 'bag_priority' ? '第二优先策略预览' : '策略选种预览' }}
+              </label>
+              <div class="w-full flex items-center justify-between border border-gray-200 rounded-lg bg-gray-50 px-3 py-2 text-gray-500 dark:border-gray-600 dark:bg-gray-800/50 dark:text-gray-400">
+                <span class="truncate">{{ strategyForm.strategyPreviewLabel.value ?? '加载中...' }}</span>
+                <span class="shrink-0 text-lg text-gray-400">▼</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="strategy.plantingStrategy === 'bag_priority'" class="panel-stack">
+            <BaseSelect
+              v-model="strategy.bagSeedFallbackStrategy"
+              label="第二优先策略"
+              :options="strategyForm.bagFallbackStrategyOptions"
+              @change="strategyForm.handleBagFallbackStrategyChange"
+            />
+            <div class="panel-hint panel-hint--amber">
+              <BaseSwitch
+                v-model="strategy.bagSeedMultiLandReservationEnabled"
+                label="为高优先级多格种子预留土地"
+              />
+              <p class="panel-note">
+                开启后可能暂时留空部分土地，直到明确排在前面的多格种子凑齐连续布局。默认关闭。
+              </p>
+            </div>
+            <div class="panel-hint panel-hint--amber">
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div class="panel-hint__heading">
+                    背包种子优先顺序
+                  </div>
+                  <p class="panel-note">
+                    先按下方顺序消耗背包中的 1x1 / 2x2 种子；背包种子不足时，再按第二优先策略补种。
+                  </p>
+                  <p class="panel-note">
+                    配了土地限制的种子会先占用它能种的地块，再由不限制的种子使用剩余空地。
+                  </p>
+                </div>
+                <NButton size="tiny" type="warning" secondary @click="strategyForm.resetBagSeedPriority">
+                  重置顺序
+                </NButton>
+              </div>
+              <div v-if="strategyForm.bagSeedsLoading.value" class="py-4 text-center text-sm text-amber-700 dark:text-amber-300">
+                加载中...
+              </div>
+              <div v-else-if="strategyForm.bagSeedsError.value" class="py-4 text-center text-sm text-red-600 dark:text-red-400">
+                {{ strategyForm.bagSeedsError.value }}
+              </div>
+              <div v-else-if="strategyForm.bagSeeds.value.length === 0" class="py-4 text-center text-sm text-amber-700 dark:text-amber-300">
+                背包中暂无 1x1 / 2x2 种子
+              </div>
+              <div v-else class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                <BagSeedPriorityItem
+                  v-for="(seed, index) in strategyForm.sortedBagSeeds.value"
+                  :key="seed.seedId"
+                  :seed="seed"
+                  :index="index"
+                  :land-types="strategy.bagSeedLandTypes[String(seed.seedId)]"
+                  :land-type-options="fertilizerLandTypeOptions"
+                  :dragging="strategyForm.draggingBagSeedId.value === seed.seedId"
+                  :can-move-up="index > 0"
+                  :can-move-down="index < strategyForm.sortedBagSeeds.value.length - 1"
+                  @move-up="strategyForm.moveBagSeedUp(seed.seedId)"
+                  @move-down="strategyForm.moveBagSeedDown(seed.seedId)"
+                  @update:land-types="strategyForm.setBagSeedLandTypes(seed.seedId, $event)"
+                  @drag-start="strategyForm.startBagSeedDrag(seed.seedId, $event)"
+                  @drag-end="strategyForm.endBagSeedDrag"
+                  @drag-over="strategyForm.dragOverBagSeed(seed.seedId, $event)"
+                  @drop="strategyForm.dropBagSeed(seed.seedId, $event)"
+                />
+              </div>
+              <div v-if="strategyForm.orphanRestrictedSeeds.value.length > 0" class="border-t border-amber-200 pt-2 dark:border-amber-800/50">
+                <div class="text-xs text-amber-800 dark:text-amber-300">
+                  未持有但已配限制
+                </div>
+                <div class="mt-2 flex flex-wrap gap-1.5">
+                  <span
+                    v-for="item in strategyForm.orphanRestrictedSeeds.value"
+                    :key="item.seedId"
+                    class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-[11px] text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                  >
+                    {{ item.name }} · {{ item.scope }}
+                    <button
+                      type="button"
+                      class="i-carbon-close text-amber-600 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100"
+                      :title="`清除 ${item.name} 的土地限制`"
+                      :aria-label="`清除 ${item.name} 的土地限制`"
+                      @click="strategyForm.setBagSeedLandTypes(item.seedId, [])"
+                    />
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 执行节奏 -->
+        <section v-else-if="activeSection === 'cadence'" class="automation-panel">
+          <AutomationSectionHeader title="执行节奏" description="巡查间隔、静默时段与种植/偷菜延迟" tone="blue">
+            <img :src="gameImg(1101)" alt="">
+          </AutomationSectionHeader>
+
+          <div class="panel-hint__heading">
+            巡查间隔
+          </div>
+          <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <BaseInput v-model.number="strategy.intervals.farmMin" label="农场巡查最小 (秒)" type="number" min="1" />
+            <BaseInput v-model.number="strategy.intervals.farmMax" label="农场巡查最大 (秒)" type="number" min="1" />
+            <BaseInput v-model.number="strategy.intervals.friendMin" label="好友任务最小 (秒)" type="number" min="1" />
+            <BaseInput v-model.number="strategy.intervals.friendMax" label="好友任务最大 (秒)" type="number" min="1" />
+          </div>
+
+          <div class="panel-subsection">
+            <div class="flex flex-wrap items-center gap-4">
+              <BaseSwitch v-model="strategy.friendQuietHours.enabled" label="启用静默时段" />
+              <div class="flex items-center gap-2">
+                <NTimePicker
+                  v-model:formatted-value="strategy.friendQuietHours.start"
+                  class="w-28"
+                  format="HH:mm"
+                  value-format="HH:mm"
+                  :clearable="false"
+                  :disabled="!strategy.friendQuietHours.enabled"
+                  size="small"
+                />
+                <span class="text-xs text-gray-500">-</span>
+                <NTimePicker
+                  v-model:formatted-value="strategy.friendQuietHours.end"
+                  class="w-28"
+                  format="HH:mm"
+                  value-format="HH:mm"
+                  :clearable="false"
+                  :disabled="!strategy.friendQuietHours.enabled"
+                  size="small"
+                />
+              </div>
+              <BaseSwitch
+                v-model="strategy.friendQuietHours.continueFarm"
+                label="静默时继续农场巡查"
+                :disabled="!strategy.friendQuietHours.enabled"
+              />
+            </div>
+          </div>
+
+          <div class="panel-subsection">
+            <h4 class="panel-subsection__title">
+              种植与偷菜延迟
+            </h4>
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <BaseSwitch v-model="strategy.plantOrderRandom" label="种植顺序随机" />
+              <BaseInput v-model.number="strategy.plantDelaySeconds" label="种植延迟 (秒)" type="number" min="0" max="60" />
+              <BaseInput v-model.number="strategy.stealDelaySeconds" label="偷菜延迟 (秒)" type="number" min="0" max="300" />
+            </div>
+          </div>
+        </section>
+
         <!-- 日常农场 -->
-        <section v-if="activeSection === 'farm'" class="automation-panel">
+        <section v-else-if="activeSection === 'farm'" class="automation-panel">
           <AutomationSectionHeader title="日常农场" description="管理巡田、种植、任务和产出处理" tone="green">
             <img :src="gameImg(1101)" alt="">
           </AutomationSectionHeader>
@@ -672,6 +878,20 @@ function enabledCount(keys: readonly string[]): number {
 .automation-nav__item.is-active .automation-nav__count {
   color: var(--ui-primary);
   font-weight: var(--fw-700);
+}
+
+.automation-nav__tag {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 6px;
+  color: var(--ui-muted);
+  background: var(--ui-surface-soft);
+  font-size: 10px;
+}
+
+.automation-nav__item.is-active .automation-nav__tag {
+  color: var(--ui-primary);
+  background: color-mix(in srgb, var(--ui-primary) 12%, transparent);
 }
 
 /* ── 右侧面板 ── */
